@@ -24,7 +24,7 @@ kotlin {
     
     sourceSets {
         commonMain.dependencies {
-            // put your Multiplatform dependencies here
+            implementation("org.rust-nostr:nostr-sdk-kmp:0.44.3")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
