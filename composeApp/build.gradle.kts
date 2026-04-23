@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    kotlin("plugin.serialization") version libs.versions.kotlin.get()
 }
 
 kotlin {
@@ -18,6 +19,8 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
+            implementation("androidx.navigation:navigation-compose:2.8.8")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
             implementation("androidx.datastore:datastore-preferences:1.2.1")
             implementation("androidx.datastore:datastore-preferences-core:1.2.1")
         }
