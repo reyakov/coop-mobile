@@ -24,6 +24,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
             implementation("org.rust-nostr:nostr-sdk-kmp:0.44.3")
         }
         commonTest.dependencies {

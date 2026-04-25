@@ -5,13 +5,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
+import su.reya.coop.storage.SecretStorage
 
 private val Context.dataStore by preferencesDataStore("secret_store")
 
-class SecretStore(private val context: Context) {
+class SecretStore(private val context: Context) : SecretStorage {
     private val crypto = SecretCrypto()
 
-    suspend fun set(key: String, value: String) {
+    override suspend fun set(key: String, value: String) {
         val entry = crypto.encrypt(value)
 
         context.dataStore.edit { prefs ->
@@ -20,7 +21,7 @@ class SecretStore(private val context: Context) {
         }
     }
 
-    suspend fun get(key: String): String? {
+    override suspend fun get(key: String): String? {
         val prefs = context.dataStore.data.first()
         val encrypted = prefs[stringPreferencesKey("${key}_encrypted")] ?: return null
         val iv = prefs[stringPreferencesKey("${key}_iv")] ?: return null
@@ -28,15 +29,15 @@ class SecretStore(private val context: Context) {
         return crypto.decrypt(SecretEntry(encrypted, iv))
     }
 
-    suspend fun clear(name: String) {
+    override suspend fun clear(key: String) {
         context.dataStore.edit { prefs ->
-            prefs.remove(stringPreferencesKey("${name}_encrypted"))
-            prefs.remove(stringPreferencesKey("${name}_iv"))
+            prefs.remove(stringPreferencesKey("${key}_encrypted"))
+            prefs.remove(stringPreferencesKey("${key}_iv"))
         }
     }
 
-    suspend fun has(name: String): Boolean {
+    override suspend fun has(key: String): Boolean {
         val prefs = context.dataStore.data.first()
-        return prefs[stringPreferencesKey("${name}_encrypted")] != null
+        return prefs[stringPreferencesKey("${key}_encrypted")] != null
     }
 }

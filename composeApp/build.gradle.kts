@@ -23,6 +23,7 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
             implementation("androidx.datastore:datastore-preferences:1.2.1")
             implementation("androidx.datastore:datastore-preferences-core:1.2.1")
+            implementation("org.jetbrains.compose.material3:material3*:1.10.0-alpha05")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

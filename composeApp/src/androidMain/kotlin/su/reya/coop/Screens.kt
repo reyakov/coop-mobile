@@ -15,9 +15,6 @@ import kotlinx.serialization.Serializable
 
 sealed interface Screen {
     @Serializable
-    data object Welcome : Screen
-
-    @Serializable
     data object Home : Screen
 
     @Serializable
@@ -31,19 +28,6 @@ sealed interface Screen {
 
     @Serializable
     data object New : Screen
-}
-
-@Composable
-fun WelcomeScreen(onContinue: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Welcome Screen")
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onContinue) {
-                Text("Get Started")
-            }
-        }
-    }
 }
 
 @Composable

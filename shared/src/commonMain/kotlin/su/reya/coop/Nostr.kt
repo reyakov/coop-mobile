@@ -25,4 +25,8 @@ class Nostr {
         this.client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
         this.client?.connect()
     }
+
+    suspend fun disconnect() {
+        this.client?.shutdown()
+    }
 }
