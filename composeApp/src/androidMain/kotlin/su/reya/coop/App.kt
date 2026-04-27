@@ -1,6 +1,7 @@
 package su.reya.coop
 
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,7 +16,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.flow
 import su.reya.coop.coop.storage.SecretStore
+import su.reya.coop.screens.ChatScreen
+import su.reya.coop.screens.HomeScreen
+import su.reya.coop.screens.ImportScreen
+import su.reya.coop.screens.NewIdentityScreen
+import su.reya.coop.screens.OnboardingScreen
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun App(dbPath: String) {
     val context = LocalContext.current
@@ -27,7 +34,7 @@ fun App(dbPath: String) {
         viewModel.initAndConnect(dbPath)
     }
 
-    MaterialTheme {
+    MaterialExpressiveTheme {
         rememberCoroutineScope()
         val navController = rememberNavController()
 
@@ -41,24 +48,32 @@ fun App(dbPath: String) {
 
         if (hasSecret == null) {
             // Loading state
-            return@MaterialTheme
+            return@MaterialExpressiveTheme
         }
 
         NavHost(
             navController = navController,
-            startDestination = if (hasSecret == true) Screen.Onboarding else Screen.Home
+            startDestination = if (hasSecret == true) Screen.Home else Screen.Onboarding
         ) {
             composable<Screen.Onboarding> { backStackEntry ->
                 OnboardingScreen(
                     onOpenImport = { navController.navigate(Screen.Import) },
-                    onOpenNew = { navController.navigate(Screen.New) }
+                    onOpenNew = { navController.navigate(Screen.NewIdentity) }
                 )
             }
             composable<Screen.Import> { backStackEntry ->
                 ImportScreen()
             }
-            composable<Screen.New> { backStackEntry ->
-                NewScreen()
+            composable<Screen.NewIdentity> { backStackEntry ->
+                val isCreating by viewModel.isCreating.collectAsState()
+
+                NewIdentityScreen(
+                    isLoading = isCreating,
+                    onSave = { name, bio, uri ->
+                        viewModel.createIdentity(name, bio, uri?.toString())
+                        navController.navigate(Screen.Home)
+                    }
+                )
             }
             composable<Screen.Home> { backStackEntry ->
                 HomeScreen(
