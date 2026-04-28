@@ -14,7 +14,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
-import kotlinx.coroutines.flow.flow
 import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
@@ -37,19 +36,23 @@ fun App(dbPath: String) {
     MaterialExpressiveTheme {
         rememberCoroutineScope()
         val navController = rememberNavController()
+        val hasSecret by viewModel.hasSecret.collectAsState(initial = null)
 
-        // Get user's signer status
-        val hasSecretFlow = remember {
-            flow {
-                emit(secretStore.has("user_signer"))
+        LaunchedEffect(hasSecret) {
+            // Navigate to the home screen if the secret is already set
+            if (hasSecret == true) {
+                // Start a background notification handler
+                viewModel.startNotificationHandler()
+
+                // Navigate to the home screen
+                navController.navigate(Screen.Home) {
+                    popUpTo(Screen.Onboarding) { inclusive = true }
+                }
             }
         }
-        val hasSecret by hasSecretFlow.collectAsState(initial = null)
 
-        if (hasSecret == null) {
-            // Loading state
-            return@MaterialExpressiveTheme
-        }
+        // Show loading screen while initializing
+        if (hasSecret == null) return@MaterialExpressiveTheme
 
         NavHost(
             navController = navController,
@@ -71,7 +74,6 @@ fun App(dbPath: String) {
                     isLoading = isCreating,
                     onSave = { name, bio, uri ->
                         viewModel.createIdentity(name, bio, uri?.toString())
-                        navController.navigate(Screen.Home)
                     }
                 )
             }

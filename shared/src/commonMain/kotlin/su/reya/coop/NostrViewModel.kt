@@ -8,14 +8,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rust.nostr.sdk.Keys
+import rust.nostr.sdk.NostrConnect
+import rust.nostr.sdk.NostrConnectUri
 import su.reya.coop.storage.SecretStorage
+import kotlin.time.Duration
 
 class NostrViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage
 ) : ViewModel() {
-    private val _isConnected = MutableStateFlow(false)
-    val isConnected = _isConnected.asStateFlow()
+    private val _hasSecret = MutableStateFlow<Boolean?>(null)
+    val hasSecret = _hasSecret.asStateFlow()
 
     private val _isCreating = MutableStateFlow(false)
     val isCreating = _isCreating.asStateFlow()
@@ -28,12 +31,59 @@ class NostrViewModel(
             try {
                 // Connect to bootstrap relays
                 nostr.connect()
-                _isConnected.value = true
+
+                // Get user's signer secret
+                val secret = secretStore.get("user_signer")
+
+                // If no secret is found, show onboarding screen
+                if (secret == null) {
+                    _hasSecret.value = false
+                    return@launch
+                }
+                _hasSecret.value = true
+
+                // Handle different signer types
+                if (secret.startsWith("nsec1")) {
+                    val keys = Keys.parse(secret)
+                    nostr.setKeySigner(keys)
+                } else if (secret.startsWith("bunker://")) {
+                    val appKeys = getOrInitAppKeys()
+                    val bunker = NostrConnectUri.parse(secret)
+                    val remote = NostrConnect(
+                        uri = bunker,
+                        appKeys = appKeys,
+                        timeout = Duration.parse("5"),
+                        opts = null
+                    )
+                    nostr.setRemoteSigner(remote)
+                } else {
+                    throw IllegalArgumentException("Invalid secret format: $secret")
+                }
             } catch (e: Exception) {
-                _isConnected.value = false
-                println(e)
+                println("Failed to connect: ${e.message}")
             }
         }
+    }
+
+    fun startNotificationHandler() {
+        viewModelScope.launch {
+            nostr.handleNotifications()
+        }
+    }
+
+    suspend fun getOrInitAppKeys(): Keys {
+        val secret = secretStore.get("app_keys")
+
+        // If app keys are already stored, use them
+        if (secret != null) {
+            return Keys.parse(secret)
+        }
+
+        // Generate new app keys and save to the secret storage
+        val keys = Keys.generate()
+        secretStore.set("app_keys", keys.secretKey().toBech32())
+
+        return keys
     }
 
     fun createIdentity(name: String, bio: String, picture: String?) {
@@ -48,8 +98,7 @@ class NostrViewModel(
                 // Save secret to the secret storage
                 secretStore.set("user_signer", secret)
             } catch (e: Exception) {
-                _isCreating.value = false
-                println(e)
+                println("Create identity failed: $e")
             }
         }
     }
