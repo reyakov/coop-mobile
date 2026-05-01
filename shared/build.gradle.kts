@@ -26,7 +26,7 @@ kotlin {
         commonMain.dependencies {
             implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-            implementation("org.rust-nostr:nostr-sdk-kmp:0.44.3")
+            implementation("su.reya:nostr-sdk-kmp:0.1")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

@@ -24,11 +24,11 @@ class NostrViewModel(
     val isCreating = _isCreating.asStateFlow()
 
     fun initAndConnect(dbPath: String) {
-        // Initialize nostr client
-        nostr.init(dbPath)
-
         viewModelScope.launch {
             try {
+                // Initialize nostr client
+                nostr.init(dbPath)
+
                 // Connect to bootstrap relays
                 nostr.connect()
 
