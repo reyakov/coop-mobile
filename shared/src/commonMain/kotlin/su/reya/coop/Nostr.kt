@@ -4,7 +4,9 @@ import rust.nostr.sdk.Client
 import rust.nostr.sdk.ClientBuilder
 import rust.nostr.sdk.ClientNotification
 import rust.nostr.sdk.Contact
+import rust.nostr.sdk.Event
 import rust.nostr.sdk.EventBuilder
+import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Filter
 import rust.nostr.sdk.GossipConfig
 import rust.nostr.sdk.Keys
@@ -18,17 +20,23 @@ import rust.nostr.sdk.NostrGossip
 import rust.nostr.sdk.NostrSigner
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayCapabilities
+import rust.nostr.sdk.RelayMessageEnum
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.SubscribeAutoCloseOptions
+import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
+import rust.nostr.sdk.UnsignedEvent
+import rust.nostr.sdk.UnwrappedGift
 
 class Nostr {
     var client: Client? = null
         private set
     var signer: NostrSigner? = null
+        private set
+    var deviceSigner: NostrSigner? = null
         private set
 
     suspend fun init(dbPath: String) {
@@ -83,21 +91,26 @@ class Nostr {
     suspend fun getUserMetadata() {
         val userPubkey = signer?.getPublicKey() ?: return
 
-        val filter = Filter().author(userPubkey).limit(10u).kinds(
-            listOf(
-                Kind.fromStd(KindStandard.METADATA),
-                Kind.fromStd(KindStandard.CONTACT_LIST),
-                Kind.fromStd(KindStandard.INBOX_RELAYS)
-            )
-        )
+        // Get the latest metadata event
+        val metadataFilter =
+            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
 
-        val target = ReqTarget.auto(listOf(filter))
+        // Get the latest contact list event
+        val contactFilter =
+            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.CONTACT_LIST))
+
+        // Get the latest messaging relay list event
+        val msgRelayFilter =
+            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
+
+        // Construct a target that includes all filters
+        val target = ReqTarget.auto(listOf(metadataFilter, contactFilter, msgRelayFilter))
         val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
         client?.subscribe(target = target, id = "user-metadata", closeOn = opts)
     }
 
-    suspend fun handleNotifications() {
+    suspend fun handleNotifications(onMetadataUpdate: (PublicKey, Metadata) -> Unit) {
         val now = Timestamp.now()
         val notifications = client?.notifications()
 
@@ -106,7 +119,42 @@ class Nostr {
 
             when (notification) {
                 is ClientNotification.Message -> {
-                    // TODO: Handle message
+                    val relayUrl = notification.relayUrl
+                    val message = notification.message.asEnum()
+
+                    when (message) {
+                        is RelayMessageEnum.EventMsg -> {
+                            val event = message.event
+
+
+                            if (event.kind().asStd() == KindStandard.METADATA) {
+                                try {
+                                    val metadata = Metadata.fromJson(event.content())
+                                    onMetadataUpdate(event.author(), metadata)
+                                } catch (e: Exception) {
+                                    println("Failed to parse metadata: $e")
+                                }
+                            }
+
+                            if (event.kind().asStd() == KindStandard.GIFT_WRAP) {
+                                try {
+                                    val rumor = extractRumor(event)
+                                    // TODO: Handle rumor
+                                } catch (e: Exception) {
+                                    println("Failed to extract rumor: $e")
+                                }
+                            }
+                        }
+
+                        is RelayMessageEnum.EndOfStoredEvents -> {
+                            val subscriptionId = message.subscriptionId
+                            // TODO: Handle end of stored events
+                        }
+
+                        else -> {
+                            /* Ignore other message types */
+                        }
+                    }
                 }
 
                 is ClientNotification.NewEvent -> {
@@ -118,6 +166,73 @@ class Nostr {
                 }
             }
         }
+    }
+
+    suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
+        try {
+            val filter = Filter().identifier(giftId.toBech32())
+            val event = client?.database()?.query(filter)?.first()
+
+            return event?.content()?.let { UnsignedEvent.fromJson(it) }
+        } catch (e: Exception) {
+            // TODO: log error
+        }
+        return null
+    }
+
+    suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
+        if (rumor.id() == null) return
+        try {
+            val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
+            val tags = listOf(Tag.identifier(giftId.toBech32()), Tag.event(rumor.id()!!))
+            val event = EventBuilder(kind, rumor.asJson()).tags(tags).signWithKeys(Keys.generate())
+
+            client?.database()?.saveEvent(event)
+        } catch (e: Exception) {
+            // TODO: log error
+        }
+    }
+
+    suspend fun extractRumor(event: Event): UnsignedEvent? {
+        if (event.kind().asStd() != KindStandard.GIFT_WRAP) return null
+
+        // Check if the rumor is already cached
+        val cachedRumor = getCachedRumor(event.id())
+        if (cachedRumor != null) return cachedRumor
+
+        // Get all signers
+        val signers = listOfNotNull(signer, deviceSigner)
+        if (signers.isEmpty()) return null
+
+        // Try to unwrap the gift with each signer
+        for (signer in signers) {
+            try {
+                // TODO: custom unwrapping logic
+                val gift = UnwrappedGift.fromGiftWrap(signer = signer, giftWrap = event)
+                val rumor = gift.rumor()
+                // Save the rumor to the database
+                setCachedRumor(event.id(), rumor)
+                // Return the rumor
+                return rumor
+            } catch (e: Exception) {
+                // TODO: log error
+                continue
+            }
+        }
+
+        return null
+    }
+
+    fun conversationId(rumor: UnsignedEvent): Long {
+        val pubkeys: MutableList<PublicKey> = rumor.tags().publicKeys().toMutableList()
+        pubkeys.add(rumor.author())
+
+        val uniqueSortedKeys = pubkeys
+            .map { it.toHex() }
+            .distinct()
+            .sorted()
+
+        return uniqueSortedKeys.hashCode().toLong()
     }
 
     suspend fun getDefaultRelayList(): Map<RelayUrl, RelayMetadata> {

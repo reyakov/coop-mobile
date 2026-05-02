@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rust.nostr.sdk.Keys
+import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
+import rust.nostr.sdk.PublicKey
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Duration
 
@@ -22,6 +25,17 @@ class NostrViewModel(
 
     private val _isCreating = MutableStateFlow(false)
     val isCreating = _isCreating.asStateFlow()
+
+    // User metadata store
+    private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
+
+    fun getMetadata(pubkey: PublicKey): StateFlow<Metadata?> {
+        return _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.asStateFlow()
+    }
+
+    fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
+        _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
+    }
 
     fun initAndConnect(dbPath: String) {
         viewModelScope.launch {
@@ -67,7 +81,9 @@ class NostrViewModel(
 
     fun startNotificationHandler() {
         viewModelScope.launch {
-            nostr.handleNotifications()
+            nostr.handleNotifications { pubkey, metadata ->
+                updateMetadata(pubkey, metadata)
+            }
         }
     }
 
