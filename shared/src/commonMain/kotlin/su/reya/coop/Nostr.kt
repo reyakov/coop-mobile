@@ -30,6 +30,7 @@ import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
+import rust.nostr.sdk.extractMessagingRelayList
 
 class Nostr {
     var client: Client? = null
@@ -88,6 +89,14 @@ class Nostr {
         getUserMetadata()
     }
 
+    suspend fun isSignedByUser(event: Event): Boolean {
+        return try {
+            signer?.getPublicKey()?.toBech32() == event.author().toBech32()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     suspend fun getUserMetadata() {
         val userPubkey = signer?.getPublicKey() ?: return
 
@@ -110,9 +119,34 @@ class Nostr {
         client?.subscribe(target = target, id = "user-metadata", closeOn = opts)
     }
 
+    suspend fun getUserMessages(msgRelayList: Event) {
+        val userPubkey = signer?.getPublicKey() ?: return
+        val relays = extractMessagingRelayList(msgRelayList)
+
+        // Ensure relay connections
+        relays.forEach { relay ->
+            client?.addRelay(relay, RelayCapabilities.none())
+            client?.connectRelay(relay)
+        }
+
+        // Construct a filter for gift wrap events
+        val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(userPubkey)
+        val target = mutableMapOf<RelayUrl, List<Filter>>()
+        relays.forEach { relay ->
+            target[relay] = listOf(filter)
+        }
+
+        client?.subscribe(
+            target = ReqTarget.manual(target),
+            id = "user-messages",
+            closeOn = null
+        )
+    }
+
     suspend fun handleNotifications(onMetadataUpdate: (PublicKey, Metadata) -> Unit) {
         val now = Timestamp.now()
         val notifications = client?.notifications()
+        val processedEvent = mutableSetOf<EventId>()
 
         while (true) {
             val notification = notifications?.next() ?: break
@@ -126,6 +160,9 @@ class Nostr {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
 
+                            // Prevent processing duplicate events
+                            if (processedEvent.contains(event.id())) continue
+                            processedEvent.add(event.id())
 
                             if (event.kind().asStd() == KindStandard.METADATA) {
                                 try {
@@ -133,6 +170,12 @@ class Nostr {
                                     onMetadataUpdate(event.author(), metadata)
                                 } catch (e: Exception) {
                                     println("Failed to parse metadata: $e")
+                                }
+                            }
+
+                            if (event.kind().asStd() == KindStandard.INBOX_RELAYS) {
+                                if (isSignedByUser(event = event)) {
+                                    getUserMessages(msgRelayList = event)
                                 }
                             }
 
