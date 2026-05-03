@@ -1,7 +1,12 @@
 package su.reya.coop
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,11 +34,23 @@ fun App(dbPath: String) {
     val secretStore = remember { SecretStore(context) }
     val viewModel: NostrViewModel = viewModel { NostrViewModel(nostr, secretStore) }
 
+    val darkMode = isSystemInDarkTheme()
+    val colorScheme = when {
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
+            if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+
+        darkMode -> darkColorScheme()
+        else -> lightColorScheme()
+    }
+
     LaunchedEffect(Unit) {
         viewModel.initAndConnect(dbPath)
     }
 
-    MaterialExpressiveTheme {
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+    ) {
         rememberCoroutineScope()
         val navController = rememberNavController()
         val hasSecret by viewModel.hasSecret.collectAsState(initial = null)
@@ -65,7 +82,14 @@ fun App(dbPath: String) {
                 )
             }
             composable<Screen.Import> { backStackEntry ->
-                ImportScreen()
+                val isCreating by viewModel.isCreating.collectAsState()
+
+                ImportScreen(
+                    isLoading = isCreating,
+                    onSave = { secret ->
+                        viewModel.import(secret)
+                    }
+                )
             }
             composable<Screen.NewIdentity> { backStackEntry ->
                 val isCreating by viewModel.isCreating.collectAsState()

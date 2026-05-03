@@ -45,7 +45,7 @@ class NostrViewModel(
 
                 // Connect to bootstrap relays
                 nostr.connect()
-
+                
                 // Get user's signer secret
                 val secret = secretStore.get("user_signer")
 
@@ -117,6 +117,10 @@ class NostrViewModel(
                 println("Create identity failed: $e")
             }
         }
+    }
+
+    fun import(secret: String) {
+        // TODO: Implement import
     }
 
     override fun onCleared() {

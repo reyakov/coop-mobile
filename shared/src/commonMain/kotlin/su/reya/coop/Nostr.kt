@@ -56,23 +56,23 @@ class Nostr {
     }
 
     suspend fun connect() {
-        client?.addRelay(
-            url = RelayUrl.parse("wss://relay.damus.io"),
-            capabilities = RelayCapabilities.none()
-        )
-        client?.addRelay(
-            url = RelayUrl.parse("wss://relay.primal.net"),
-            capabilities = RelayCapabilities.none()
-        )
-        client?.addRelay(
-            url = RelayUrl.parse("wss://user.kindpag.es"),
-            capabilities = RelayCapabilities.none()
-        )
-        client?.addRelay(
-            url = RelayUrl.parse("https://indexer.coracle.social"),
-            capabilities = RelayCapabilities.gossip()
-        )
-        client?.connect()
+        try {
+            client?.addRelay(
+                url = RelayUrl.parse("wss://relay.primal.net"),
+                capabilities = RelayCapabilities.none()
+            )
+            client?.addRelay(
+                url = RelayUrl.parse("wss://user.kindpag.es"),
+                capabilities = RelayCapabilities.none()
+            )
+            client?.addRelay(
+                url = RelayUrl.parse("wss://indexer.coracle.social"),
+                capabilities = RelayCapabilities.gossip()
+            )
+            client?.connect()
+        } catch (e: Exception) {
+            println("Failed to connect to relays: ${e.message}")
+        }
     }
 
     suspend fun disconnect() {
