@@ -38,7 +38,10 @@ fun HomeScreen(onOpenChat: (String) -> Unit) {
                 searchBarState = searchState,
                 onSearch = { scope.launch { searchState.animateToCollapsed() } },
                 placeholder = {
-                    Text(modifier = Modifier.clearAndSetSemantics() {}, text = "Search")
+                    Text(
+                        modifier = Modifier.clearAndSetSemantics() {},
+                        text = "Find or start a conversation"
+                    )
                 },
             )
         }

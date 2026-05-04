@@ -30,10 +30,13 @@ import su.reya.coop.screens.OnboardingScreen
 @Composable
 fun App(dbPath: String) {
     val context = LocalContext.current
+
+    // Initialize Nostr and SecretStore
     val nostr = remember { Nostr() }
     val secretStore = remember { SecretStore(context) }
     val viewModel: NostrViewModel = viewModel { NostrViewModel(nostr, secretStore) }
 
+    // Dynamic color scheme
     val darkMode = isSystemInDarkTheme()
     val colorScheme = when {
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
@@ -46,6 +49,7 @@ fun App(dbPath: String) {
 
     LaunchedEffect(Unit) {
         viewModel.initAndConnect(dbPath)
+        viewModel.getChatRooms()
     }
 
     MaterialExpressiveTheme(
@@ -60,7 +64,8 @@ fun App(dbPath: String) {
             if (hasSecret == true) {
                 // Start a background notification handler
                 viewModel.startNotificationHandler()
-
+                // Get chat rooms
+                viewModel.getChatRooms()
                 // Navigate to the home screen
                 navController.navigate(Screen.Home) {
                     popUpTo(Screen.Onboarding) { inclusive = true }

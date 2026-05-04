@@ -39,6 +39,8 @@ class Nostr {
         private set
     var deviceSigner: NostrSigner? = null
         private set
+    var contactList: List<PublicKey> = emptyList()
+        private set
 
     suspend fun init(dbPath: String) {
         val lmdb = NostrDatabase.lmdb(dbPath)
@@ -211,7 +213,7 @@ class Nostr {
         }
     }
 
-    suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
+    private suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
         try {
             val filter = Filter().identifier(giftId.toBech32())
             val event = client?.database()?.query(filter)?.first()
@@ -223,20 +225,22 @@ class Nostr {
         return null
     }
 
-    suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
+    private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         if (rumor.id() == null) return
         try {
+            val rngKeys = Keys.generate()
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
             val tags = listOf(Tag.identifier(giftId.toBech32()), Tag.event(rumor.id()!!))
-            val event = EventBuilder(kind, rumor.asJson()).tags(tags).signWithKeys(Keys.generate())
+            val event = EventBuilder(kind, rumor.asJson()).tags(tags).signWithKeys(rngKeys)
 
             client?.database()?.saveEvent(event)
+            client?.database()?.saveEvent(rumor.signWithKeys(rngKeys))
         } catch (e: Exception) {
             // TODO: log error
         }
     }
 
-    suspend fun extractRumor(event: Event): UnsignedEvent? {
+    private suspend fun extractRumor(event: Event): UnsignedEvent? {
         if (event.kind().asStd() != KindStandard.GIFT_WRAP) return null
 
         // Check if the rumor is already cached
@@ -266,7 +270,7 @@ class Nostr {
         return null
     }
 
-    fun conversationId(rumor: UnsignedEvent): Long {
+    private fun conversationId(rumor: UnsignedEvent): Long {
         val pubkeys: MutableList<PublicKey> = rumor.tags().publicKeys().toMutableList()
         pubkeys.add(rumor.author())
 
@@ -278,7 +282,8 @@ class Nostr {
         return uniqueSortedKeys.hashCode().toLong()
     }
 
-    suspend fun getDefaultRelayList(): Map<RelayUrl, RelayMetadata> {
+
+    private suspend fun getDefaultRelayList(): Map<RelayUrl, RelayMetadata> {
         // Construct a list of relays
         val relayList = mapOf<RelayUrl, RelayMetadata>(
             RelayUrl.parse("wss://relay.damus.io") to RelayMetadata.READ,
@@ -302,7 +307,7 @@ class Nostr {
         return relayList
     }
 
-    suspend fun getMsgRelayList(): List<RelayUrl> {
+    private suspend fun getMsgRelayList(): List<RelayUrl> {
         // Construct a list of messaging relays
         val msgRelayList = listOf(
             RelayUrl.parse("wss://relay.0xchat.com"),
@@ -343,5 +348,68 @@ class Nostr {
             listOf(Contact(publicKey = PublicKey.parse("npub1j3rz3ndl902lya6ywxvy5c983lxs8mpukqnx4pa4lt5wrykwl5ys7wpw3x")))
         val contactListEvent = EventBuilder.contactList(defaultContact).sign(signer!!)
         client?.sendEventNoWait(contactListEvent)
+    }
+
+    suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
+        val filter =
+            Filter()
+                .kind(Kind.fromStd(KindStandard.METADATA))
+                .authors(keys)
+                .limit(keys.size.toULong())
+        val target =
+            ReqTarget.manual(mapOf(RelayUrl.parse("wss://user.kindpag.es") to listOf(filter)))
+        val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+
+        client?.subscribe(target = target, id = "metadata-reqs", closeOn = opts)
+    }
+
+    suspend fun getChatRooms(): Set<Room>? {
+        try {
+            val userPubkey = signer?.getPublicKey() ?: return null
+            val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
+
+            // Get all events sent by the user
+            val sendFilter = Filter().kind(kind).author(userPubkey)
+            val sendEvents = client?.database()?.query(sendFilter);
+
+            // Get all events sent to the user
+            val recvFilter = Filter().kind(kind).pubkey(userPubkey)
+            val recvEvents = client?.database()?.query(recvFilter);
+
+            // Collect all events
+            val events = sendEvents?.merge(recvEvents!!)?.toVec();
+            val rooms: MutableSet<Room> = mutableSetOf()
+
+            events
+                ?.filter { it.tags().publicKeys().isNotEmpty() }
+                ?.sortedByDescending { it.createdAt().asSecs() }
+                ?.forEach { event ->
+                    val room = Room.new(rumor = event, userPubkey = userPubkey)
+
+                    // Check if the room already exists
+                    if (rooms.contains(room)) return@forEach
+
+                    val filter =
+                        Filter().kind(kind).author(userPubkey).pubkeys(room.members.toList());
+
+                    // Check if the user is interacting with the room's members
+                    val isInteracting = client?.database()?.query(filter)?.isEmpty() == false;
+
+                    // Check if the room's members are in the contact list
+                    val isContact = contactList.containsAll(room.members)
+
+                    // Set the room kind based on interaction status
+                    if (isInteracting || isContact) {
+                        room.kind(RoomKind.Ongoing)
+                    }
+
+                    rooms.add(room)
+                }
+
+            return rooms
+        } catch (e: Exception) {
+            println("Failed to get chat rooms: ${e.message}")
+        }
+        return null
     }
 }
