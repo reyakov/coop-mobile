@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -23,8 +24,8 @@ class NostrViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage
 ) : ViewModel() {
-    private val _hasSecret = MutableStateFlow<Boolean?>(null)
-    val hasSecret = _hasSecret.asStateFlow()
+    private val _emptySecret = MutableStateFlow<Boolean?>(null)
+    val emptySecret = _emptySecret.asStateFlow()
 
     private val _isCreating = MutableStateFlow(false)
     val isCreating = _isCreating.asStateFlow()
@@ -32,12 +33,21 @@ class NostrViewModel(
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
 
+    private val _errorEvents = Channel<String>(Channel.BUFFERED)
+    val errorEvents = _errorEvents.receiveAsFlow()
+
     private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
         startMetadataBatchProcessor()
+    }
+
+    private fun showError(message: String) {
+        viewModelScope.launch {
+            _errorEvents.send(message)
+        }
     }
 
     private fun startMetadataBatchProcessor() {
@@ -91,11 +101,7 @@ class NostrViewModel(
     }
 
     fun getUserProfile(): StateFlow<Metadata?> {
-        return try {
-            getMetadata(nostr.userPubkey!!)
-        } catch (e: Exception) {
-            MutableStateFlow(null)
-        }
+        return getMetadata(nostr.userPubkey!!)
     }
 
     fun initAndConnect(dbPath: String) {
@@ -108,7 +114,7 @@ class NostrViewModel(
                 // Get user's secret
                 getUserSecret()
             } catch (e: Exception) {
-                println("Failed to connect: ${e.message}")
+                showError("Failed to initialize Nostr: ${e.message}")
             }
         }
     }
@@ -121,31 +127,43 @@ class NostrViewModel(
         }
     }
 
+    fun logout() {
+        viewModelScope.launch {
+            _emptySecret.value = true
+            _chatRooms.value = emptySet()
+            secretStore.clear("user_signer")
+            nostr.exit()
+        }
+    }
+
     suspend fun getUserSecret() {
         // Get user's signer secret
         val secret = secretStore.get("user_signer")
 
         // If no secret is found, show onboarding screen
-        if (secret == null) {
-            _hasSecret.value = false
-            return
+        when (secret) {
+            null -> {
+                _emptySecret.value = true
+                return
+            }
+
+            else -> _emptySecret.value = false
         }
-        _hasSecret.value = true
 
         // Handle different signer types
         if (secret.startsWith("nsec1")) {
             val keys = Keys.parse(secret)
             nostr.setKeySigner(keys)
         } else if (secret.startsWith("bunker://")) {
-            val appKeys = getOrInitAppKeys()
-            val bunker = NostrConnectUri.parse(secret)
-            val remote = NostrConnect(
-                uri = bunker,
-                appKeys = appKeys,
-                timeout = Duration.parse("5"),
-                opts = null
-            )
-            nostr.setRemoteSigner(remote)
+            try {
+                val appKeys = getOrInitAppKeys()
+                val bunker = NostrConnectUri.parse(secret)
+                val timeout = Duration.parse("50") // 50 seconds timeout
+                val remote = NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
+                nostr.setRemoteSigner(remote)
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
         } else {
             throw IllegalArgumentException("Invalid secret format: $secret")
         }
@@ -178,21 +196,32 @@ class NostrViewModel(
                 // Save secret to the secret storage
                 secretStore.set("user_signer", secret)
             } catch (e: Exception) {
-                println("Create identity failed: $e")
+                showError("Error: ${e.message}")
             }
         }
     }
 
     fun importIdentity(secret: String) {
-        // TODO: Implement import
-    }
-
-    fun logout() {
         viewModelScope.launch {
-            _hasSecret.value = false
-            _chatRooms.value = emptySet()
-            secretStore.clear("user_signer")
-            nostr.exit()
+            if (secret.startsWith("nsec1")) {
+                val keys = Keys.parse(secret)
+                nostr.setKeySigner(keys)
+                secretStore.set("user_signer", secret)
+            } else if (secret.startsWith("bunker://")) {
+                try {
+                    val appKeys = getOrInitAppKeys()
+                    val bunker = NostrConnectUri.parse(secret)
+                    val timeout = Duration.parse("50") // 50 seconds timeout
+                    val remote =
+                        NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
+                    nostr.setRemoteSigner(remote)
+                    secretStore.set("user_signer", secret)
+                } catch (e: Exception) {
+                    showError("Error: ${e.message}")
+                }
+            } else {
+                showError("Please enter a valid Secret or Bunker URI.")
+            }
         }
     }
 
@@ -201,7 +230,7 @@ class NostrViewModel(
             try {
                 _chatRooms.value = nostr.getChatRooms() ?: emptySet()
             } catch (e: Exception) {
-                println("Failed to get chat rooms: ${e.message}")
+                showError("Error: ${e.message}")
             }
         }
     }
