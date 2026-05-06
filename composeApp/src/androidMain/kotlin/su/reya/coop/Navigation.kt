@@ -7,7 +7,7 @@ sealed interface Screen {
     data object Home : Screen
 
     @Serializable
-    data class Chat(val id: String) : Screen
+    data class Chat(val id: Long) : Screen
 
     @Serializable
     data object Onboarding : Screen

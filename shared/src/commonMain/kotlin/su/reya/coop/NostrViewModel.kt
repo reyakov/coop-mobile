@@ -90,6 +90,14 @@ class NostrViewModel(
         _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
     }
 
+    fun getUserProfile(): StateFlow<Metadata?> {
+        return try {
+            getMetadata(nostr.userPubkey!!)
+        } catch (e: Exception) {
+            MutableStateFlow(null)
+        }
+    }
+
     fun initAndConnect(dbPath: String) {
         viewModelScope.launch {
             try {
@@ -175,9 +183,10 @@ class NostrViewModel(
         }
     }
 
-    fun import(secret: String) {
+    fun importIdentity(secret: String) {
         // TODO: Implement import
     }
+
 
     fun getChatRooms() {
         viewModelScope.launch {

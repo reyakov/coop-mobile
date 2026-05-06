@@ -26,6 +26,7 @@ kotlin {
             implementation("org.jetbrains.compose.material3:material3:1.11.0-alpha07")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
+            implementation("su.reya:nostr-sdk-kmp:0.1.2")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

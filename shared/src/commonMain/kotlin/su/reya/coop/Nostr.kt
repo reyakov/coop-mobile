@@ -39,6 +39,8 @@ class Nostr {
         private set
     var deviceSigner: NostrSigner? = null
         private set
+    var userPubkey: PublicKey? = null
+        private set
     var contactList: List<PublicKey> = emptyList()
         private set
 
@@ -82,13 +84,23 @@ class Nostr {
     }
 
     suspend fun setKeySigner(keys: Keys) {
-        signer = NostrSigner.keys(keys)
-        getUserMetadata()
+        try {
+            signer = NostrSigner.keys(keys)
+            userPubkey = signer?.getPublicKey()
+            getUserMetadata()
+        } catch (e: Exception) {
+            println("Failed to set signer: ${e.message}")
+        }
     }
 
     suspend fun setRemoteSigner(remote: NostrConnect) {
-        signer = NostrSigner.nostrConnect(remote)
-        getUserMetadata()
+        try {
+            signer = NostrSigner.nostrConnect(remote)
+            userPubkey = signer?.getPublicKey()
+            getUserMetadata()
+        } catch (e: Exception) {
+            println("Failed to set remote signer: ${e.message}")
+        }
     }
 
     suspend fun isSignedByUser(event: Event): Boolean {
