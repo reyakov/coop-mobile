@@ -83,6 +83,13 @@ class Nostr {
         client?.shutdown()
     }
 
+    fun exit() {
+        signer = null
+        deviceSigner = null
+        userPubkey = null
+        contactList = emptyList()
+    }
+
     suspend fun setKeySigner(keys: Keys) {
         try {
             signer = NostrSigner.keys(keys)

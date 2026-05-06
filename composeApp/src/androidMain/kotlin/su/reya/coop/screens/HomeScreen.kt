@@ -10,21 +10,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,9 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
     val viewModel = LocalNostrViewModel.current
     val userProfile by viewModel.getUserProfile().collectAsState(initial = null)
     val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
+
+    val sheetState = rememberModalBottomSheetState()
+    var showBottomSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -67,7 +77,7 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                         )
                     }
                     // User
-                    IconButton(onClick = { /* TODO: Open profile */ }) {
+                    IconButton(onClick = { showBottomSheet = true }) {
                         if (userProfile?.asRecord()?.picture != null) {
                             AsyncImage(
                                 model = userProfile?.asRecord()?.picture,
@@ -121,6 +131,51 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                             ChatRoom(
                                 room = room,
                                 onClick = { onOpenChat(room.id) }
+                            )
+                        }
+                    }
+                }
+
+                if (showBottomSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showBottomSheet = false },
+                        sheetState = sheetState,
+                    ) {
+                        val userName =
+                            userProfile?.asRecord()?.displayName
+                                ?: userProfile?.asRecord()?.name
+                                ?: "No name"
+
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = userName,
+                                        style = MaterialTheme.typography.titleMediumEmphasized
+                                    )
+                                },
+                                leadingContent = {
+                                    if (userProfile?.asRecord()?.picture != null) {
+                                        AsyncImage(
+                                            model = userProfile?.asRecord()?.picture,
+                                            contentDescription = "User Avatar",
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(
+                                            painter = painterResource(Res.drawable.ic_avatar),
+                                            contentDescription = "User"
+                                        )
+                                    }
+                                }
+                            )
+                            HorizontalDivider()
+                            Button(
+                                onClick = { viewModel.logout() },
+                                content = { Text("Logout") }
                             )
                         }
                     }

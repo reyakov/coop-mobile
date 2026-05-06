@@ -187,6 +187,14 @@ class NostrViewModel(
         // TODO: Implement import
     }
 
+    fun logout() {
+        viewModelScope.launch {
+            _hasSecret.value = false
+            _chatRooms.value = emptySet()
+            secretStore.clear("user_signer")
+            nostr.exit()
+        }
+    }
 
     fun getChatRooms() {
         viewModelScope.launch {
