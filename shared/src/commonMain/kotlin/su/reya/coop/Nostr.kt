@@ -25,12 +25,14 @@ import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
+import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
 import rust.nostr.sdk.extractMessagingRelayList
+import kotlin.time.Duration
 
 class Nostr {
     var client: Client? = null
@@ -47,6 +49,7 @@ class Nostr {
     suspend fun init(dbPath: String) {
         val lmdb = NostrDatabase.lmdb(dbPath)
         val gossip = NostrGossip.inMemory()
+        val idleTimeout = Duration.parse("5m")
 
         client =
             ClientBuilder()
@@ -56,6 +59,7 @@ class Nostr {
                 .maxRelays(20u)
                 .verifySubscriptions(false)
                 .automaticAuthentication(false)
+                .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                 .build()
     }
 
@@ -343,30 +347,30 @@ class Nostr {
     }
 
     suspend fun createIdentity(keys: Keys, name: String, bio: String, picture: String?) {
-        // Set signer
-        signer = NostrSigner.keys(keys)
-
         // Send relay list event
         val relayList = getDefaultRelayList()
-        val relayListEvent = EventBuilder.relayList(relayList).sign(signer!!);
+        val relayListEvent = EventBuilder.relayList(relayList).signWithKeys(keys);
         client?.sendEvent(relayListEvent)
 
         // Send messaging relay list event
         val msgRelayList = getMsgRelayList()
-        val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).sign(signer!!)
+        val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).signWithKeys(keys)
         client?.sendEventNoWait(msgRelayListEvent)
 
         // Send metadata event
         val metadata =
             Metadata.fromRecord(MetadataRecord(name = name, about = bio, picture = picture))
-        val metadataEvent = EventBuilder.metadata(metadata).sign(signer!!)
+        val metadataEvent = EventBuilder.metadata(metadata).signWithKeys(keys)
         client?.sendEventNoWait(metadataEvent)
 
         // Send contact list event
         val defaultContact =
             listOf(Contact(publicKey = PublicKey.parse("npub1j3rz3ndl902lya6ywxvy5c983lxs8mpukqnx4pa4lt5wrykwl5ys7wpw3x")))
-        val contactListEvent = EventBuilder.contactList(defaultContact).sign(signer!!)
+        val contactListEvent = EventBuilder.contactList(defaultContact).signWithKeys(keys)
         client?.sendEventNoWait(contactListEvent)
+
+        // Set signer
+        setKeySigner(keys)
     }
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {

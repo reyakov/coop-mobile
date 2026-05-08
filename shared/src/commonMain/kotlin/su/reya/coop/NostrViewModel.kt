@@ -158,7 +158,7 @@ class NostrViewModel(
             try {
                 val appKeys = getOrInitAppKeys()
                 val bunker = NostrConnectUri.parse(secret)
-                val timeout = Duration.parse("50") // 50 seconds timeout
+                val timeout = Duration.parse("50s") // 50 seconds timeout
                 val remote = NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
                 nostr.setRemoteSigner(remote)
             } catch (e: Exception) {
@@ -189,12 +189,18 @@ class NostrViewModel(
             try {
                 val keys = Keys.generate()
                 val secret = keys.secretKey().toBech32()
+
                 // Set loading state
                 _isCreating.value = true
+
                 // Create identity
                 nostr.createIdentity(keys, name, bio, picture)
+
                 // Save secret to the secret storage
                 secretStore.set("user_signer", secret)
+
+                // Set an empty secret state
+                _emptySecret.value = false
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -207,15 +213,19 @@ class NostrViewModel(
                 val keys = Keys.parse(secret)
                 nostr.setKeySigner(keys)
                 secretStore.set("user_signer", secret)
+                // Set an empty secret state
+                _emptySecret.value = false
             } else if (secret.startsWith("bunker://")) {
                 try {
                     val appKeys = getOrInitAppKeys()
                     val bunker = NostrConnectUri.parse(secret)
-                    val timeout = Duration.parse("50") // 50 seconds timeout
+                    val timeout = Duration.parse("50s") // 50 seconds timeout
                     val remote =
                         NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
                     nostr.setRemoteSigner(remote)
                     secretStore.set("user_signer", secret)
+                    // Set an empty secret state
+                    _emptySecret.value = false
                 } catch (e: Exception) {
                     showError("Error: ${e.message}")
                 }

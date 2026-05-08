@@ -121,6 +121,7 @@ fun App(dbPath: String) {
 
                     NewIdentityScreen(
                         isLoading = isCreating,
+                        onBack = { navController.popBackStack() },
                         onSave = { name, bio, uri ->
                             viewModel.createIdentity(name, bio, uri?.toString())
                         }

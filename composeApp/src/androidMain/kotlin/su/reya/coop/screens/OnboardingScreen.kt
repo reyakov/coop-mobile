@@ -3,21 +3,16 @@ package su.reya.coop.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -34,7 +29,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
-import coop.composeapp.generated.resources.ic_scanner
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalSnackbarHostState
 
@@ -92,36 +86,20 @@ fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
                                 )
                             }
                             Spacer(modifier = Modifier.size(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
+                            FilledTonalButton(
+                                onClick = onOpenImport,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(ButtonDefaults.LargeContainerHeight),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                ),
                             ) {
-                                FilledTonalButton(
-                                    onClick = onOpenImport,
-                                    modifier = Modifier
-                                        .weight(2f)
-                                        .height(ButtonDefaults.MediumContainerHeight),
-                                ) {
-                                    Text(
-                                        text = "Import identity",
-                                        style = MaterialTheme.typography.titleMediumEmphasized,
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                FilledTonalIconButton(
-                                    onClick = onOpenImport,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(ButtonDefaults.MediumContainerHeight),
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
-                                ) {
-                                    Icon(
-                                        painter = painterResource(Res.drawable.ic_scanner),
-                                        contentDescription = "Scan QR"
-                                    )
-                                }
+                                Text(
+                                    text = "Import identity",
+                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                )
                             }
                         }
                     }

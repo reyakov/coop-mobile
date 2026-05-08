@@ -3,6 +3,7 @@ package su.reya.coop.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,9 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -24,6 +29,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,12 +42,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_arrow_back
+import coop.composeapp.generated.resources.ic_avatar
+import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NewIdentityScreen(
     isLoading: Boolean,
+    onBack: () -> Unit,
     onSave: (name: String, bio: String, picture: Uri?) -> Unit
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
@@ -56,17 +68,34 @@ fun NewIdentityScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Create a new identity") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_arrow_back),
+                            contentDescription = "User"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                )
+            )
+        },
         content = { innerPadding ->
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp)
+                        .padding(24.dp)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -74,7 +103,8 @@ fun NewIdentityScreen(
                     Box(
                         modifier = Modifier
                             .size(120.dp)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .clickable { launcher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
                         if (picture != null) {
@@ -90,7 +120,14 @@ fun NewIdentityScreen(
                                 modifier = Modifier.fillMaxSize()
 
                             ) {
-                                //
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(Res.drawable.ic_avatar),
+                                        contentDescription = "Pick avatar",
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -115,13 +152,18 @@ fun NewIdentityScreen(
                         onClick = {
                             onSave(name, bio, picture)
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(ButtonDefaults.LargeContainerHeight),
                         enabled = name.isNotBlank() && !isLoading,
                     ) {
                         if (isLoading) {
                             LoadingIndicator()
                         } else {
-                            Text("Save & Continue")
+                            Text(
+                                text = "Save & Continue",
+                                style = MaterialTheme.typography.titleLargeEmphasized,
+                            )
                         }
                     }
                 }
