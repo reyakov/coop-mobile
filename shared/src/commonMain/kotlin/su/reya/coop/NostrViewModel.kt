@@ -101,21 +101,17 @@ class NostrViewModel(
     }
 
     fun getUserProfile(): StateFlow<Metadata?> {
-        return getMetadata(nostr.userPubkey!!)
+        return nostr.userPubkey?.let { getMetadata(it) } ?: MutableStateFlow(null).asStateFlow()
     }
 
-    fun initAndConnect(dbPath: String) {
-        viewModelScope.launch {
-            try {
-                // Initialize nostr client
-                nostr.init(dbPath)
-                // Connect to bootstrap relays
-                nostr.connect()
-                // Get user's secret
-                getUserSecret()
-            } catch (e: Exception) {
-                showError("Failed to initialize Nostr: ${e.message}")
-            }
+    suspend fun initAndConnect(dbPath: String) {
+        try {
+            // Initialize nostr client
+            nostr.init(dbPath)
+            // Get user's secret
+            getUserSecret()
+        } catch (e: Exception) {
+            showError("Failed to initialize Nostr: ${e.message}")
         }
     }
 

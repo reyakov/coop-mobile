@@ -111,6 +111,7 @@ fun App(dbPath: String) {
 
                     ImportScreen(
                         isLoading = isCreating,
+                        onBack = { navController.popBackStack() },
                         onSave = { secret ->
                             viewModel.importIdentity(secret)
                         }

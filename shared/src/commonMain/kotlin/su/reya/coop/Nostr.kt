@@ -1,5 +1,7 @@
 package su.reya.coop
 
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.websocket.WebSockets
 import rust.nostr.sdk.Client
 import rust.nostr.sdk.ClientBuilder
 import rust.nostr.sdk.ClientNotification
@@ -12,6 +14,7 @@ import rust.nostr.sdk.GossipConfig
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Kind
 import rust.nostr.sdk.KindStandard
+import rust.nostr.sdk.LogLevel
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.MetadataRecord
 import rust.nostr.sdk.NostrConnect
@@ -32,6 +35,7 @@ import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
 import rust.nostr.sdk.extractMessagingRelayList
+import rust.nostr.sdk.initLogger
 import kotlin.time.Duration
 
 class Nostr {
@@ -47,39 +51,37 @@ class Nostr {
         private set
 
     suspend fun init(dbPath: String) {
-        val lmdb = NostrDatabase.lmdb(dbPath)
-        val gossip = NostrGossip.inMemory()
-        val idleTimeout = Duration.parse("5m")
-
-        client =
-            ClientBuilder()
-                .database(lmdb)
-                .gossip(gossip)
-                .gossipConfig(GossipConfig().noBackgroundRefresh())
-                .maxRelays(20u)
-                .verifySubscriptions(false)
-                .automaticAuthentication(false)
-                .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
-                .build()
-    }
-
-    suspend fun connect() {
         try {
-            client?.addRelay(
-                url = RelayUrl.parse("wss://relay.primal.net"),
-                capabilities = RelayCapabilities.none()
-            )
-            client?.addRelay(
-                url = RelayUrl.parse("wss://user.kindpag.es"),
-                capabilities = RelayCapabilities.none()
-            )
+            // Initialize the logger for nostr client
+            initLogger(LogLevel.DEBUG)
+
+            val lmdb = NostrDatabase.lmdb(dbPath)
+            val gossip = NostrGossip.inMemory()
+            val idleTimeout = Duration.parse("5m")
+            val httpClient = HttpClient {
+                install(WebSockets)
+            }
+
+            client =
+                ClientBuilder()
+                    .websocketTransport(CoopWebSocketClient(httpClient))
+                    .database(lmdb)
+                    .gossip(gossip)
+                    .gossipConfig(GossipConfig().noBackgroundRefresh())
+                    .verifySubscriptions(false)
+                    .automaticAuthentication(false)
+                    .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
+                    .build()
+
+            client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
+            client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
             client?.addRelay(
                 url = RelayUrl.parse("wss://indexer.coracle.social"),
                 capabilities = RelayCapabilities.gossip()
             )
-            client?.connect()
+            client?.connect(Duration.parse("10s"))
         } catch (e: Exception) {
-            println("Failed to connect to relays: ${e.message}")
+            println("Failed to initialize client: ${e.message}")
         }
     }
 
@@ -98,6 +100,8 @@ class Nostr {
         try {
             signer = NostrSigner.keys(keys)
             userPubkey = signer?.getPublicKey()
+
+            // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
             println("Failed to set signer: ${e.message}")
@@ -108,6 +112,8 @@ class Nostr {
         try {
             signer = NostrSigner.nostrConnect(remote)
             userPubkey = signer?.getPublicKey()
+
+            // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
             println("Failed to set remote signer: ${e.message}")
@@ -123,19 +129,17 @@ class Nostr {
     }
 
     suspend fun getUserMetadata() {
-        val userPubkey = signer?.getPublicKey() ?: return
-
         // Get the latest metadata event
         val metadataFilter =
-            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
+            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
 
         // Get the latest contact list event
         val contactFilter =
-            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.CONTACT_LIST))
+            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.CONTACT_LIST))
 
         // Get the latest messaging relay list event
         val msgRelayFilter =
-            Filter().author(userPubkey).limit(1u).kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
+            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
 
         // Construct a target that includes all filters
         val target = ReqTarget.auto(listOf(metadataFilter, contactFilter, msgRelayFilter))
@@ -170,11 +174,11 @@ class Nostr {
 
     suspend fun handleNotifications(onMetadataUpdate: (PublicKey, Metadata) -> Unit) {
         val now = Timestamp.now()
-        val notifications = client?.notifications()
         val processedEvent = mutableSetOf<EventId>()
-
+        val notifications = client?.notifications() ?: return
+        
         while (true) {
-            val notification = notifications?.next() ?: break
+            val notification = notifications.next() ?: continue
 
             when (notification) {
                 is ClientNotification.Message -> {
@@ -189,7 +193,7 @@ class Nostr {
                             if (processedEvent.contains(event.id())) continue
                             processedEvent.add(event.id())
 
-                            if (event.kind().asStd() == KindStandard.METADATA) {
+                            if (event.kind().asStd()?.equals(KindStandard.METADATA) == true) {
                                 try {
                                     val metadata = Metadata.fromJson(event.content())
                                     onMetadataUpdate(event.author(), metadata)
@@ -198,13 +202,13 @@ class Nostr {
                                 }
                             }
 
-                            if (event.kind().asStd() == KindStandard.INBOX_RELAYS) {
+                            if (event.kind().asStd()?.equals(KindStandard.INBOX_RELAYS) == true) {
                                 if (isSignedByUser(event = event)) {
                                     getUserMessages(msgRelayList = event)
                                 }
                             }
 
-                            if (event.kind().asStd() == KindStandard.GIFT_WRAP) {
+                            if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
                                 try {
                                     val rumor = extractRumor(event)
                                     // TODO: Handle rumor

@@ -75,7 +75,7 @@ fun NewIdentityScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
-                            contentDescription = "User"
+                            contentDescription = "Back"
                         )
                     }
                 },
