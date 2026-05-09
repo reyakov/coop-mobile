@@ -124,7 +124,14 @@ fun App(dbPath: String) {
                         isLoading = isCreating,
                         onBack = { navController.popBackStack() },
                         onSave = { name, bio, uri ->
-                            viewModel.createIdentity(name, bio, uri?.toString())
+                            val contentType = uri?.let { context.contentResolver.getType(it) }
+                            val picture = uri?.let {
+                                context.contentResolver.openInputStream(it)?.use { input ->
+                                    input.readBytes()
+                                }
+                            }
+
+                            viewModel.createIdentity(name, bio, picture, contentType)
                         }
                     )
                 }

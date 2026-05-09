@@ -2,6 +2,9 @@ package su.reya.coop
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,11 +14,14 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
+import rust.nostr.sdk.NostrSigner
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -47,6 +53,10 @@ class NostrViewModel(
     private fun showError(message: String) {
         viewModelScope.launch {
             _errorEvents.send(message)
+
+            if (isCreating.value) {
+                _isCreating.value = false
+            }
         }
     }
 
@@ -180,17 +190,47 @@ class NostrViewModel(
         return keys
     }
 
-    fun createIdentity(name: String, bio: String, picture: String?) {
+    fun createIdentity(
+        name: String,
+        bio: String,
+        picture: ByteArray?,
+        contentType: String?
+    ) {
         viewModelScope.launch {
             try {
                 val keys = Keys.generate()
                 val secret = keys.secretKey().toBech32()
+                var avatarUrl = ""
 
                 // Set loading state
                 _isCreating.value = true
 
+                // Upload picture to Blossom
+                if (picture != null) {
+                    val blossom = BlossomClient(
+                        url = "https://blossom.band",
+                        client = HttpClient {
+                            install(ContentNegotiation) {
+                                json(Json {
+                                    ignoreUnknownKeys = true
+                                    prettyPrint = true
+                                    isLenient = true
+                                })
+                            }
+                        }
+                    )
+
+                    val descriptor = blossom.upload(
+                        file = picture,
+                        contentType = contentType,
+                        signer = NostrSigner.keys(keys)
+                    )
+
+                    avatarUrl = descriptor?.url ?: ""
+                }
+
                 // Create identity
-                nostr.createIdentity(keys, name, bio, picture)
+                nostr.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
 
                 // Save secret to the secret storage
                 secretStore.set("user_signer", secret)
