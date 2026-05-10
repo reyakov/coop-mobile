@@ -73,15 +73,20 @@ class Nostr {
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                     .build()
 
+            // Bootstrap relays
             client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
             client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
+
+            // Indexer relay for NIP-65 discovery
             client?.addRelay(
                 url = RelayUrl.parse("wss://indexer.coracle.social"),
                 capabilities = RelayCapabilities.gossip()
             )
+
+            // Connect to all bootstrap relays and wait for all connections to be established
             client?.connect(Duration.parse("10s"))
         } catch (e: Exception) {
-            println("Failed to initialize client: ${e.message}")
+            throw IllegalStateException("Failed to initialize Nostr client: ${e.message}", e)
         }
     }
 
@@ -104,7 +109,7 @@ class Nostr {
             // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
-            println("Failed to set signer: ${e.message}")
+            throw IllegalStateException("Failed to set key signer: ${e.message}", e)
         }
     }
 
@@ -116,7 +121,7 @@ class Nostr {
             // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
-            println("Failed to set remote signer: ${e.message}")
+            throw IllegalStateException("Failed to set remote signer: ${e.message}", e)
         }
     }
 
@@ -124,59 +129,73 @@ class Nostr {
         return try {
             signer?.getPublicKey()?.toBech32() == event.author().toBech32()
         } catch (e: Exception) {
+            println("Failed to check if event is signed by user: ${e.message}")
             false
         }
     }
 
     suspend fun getUserMetadata() {
-        // Get the latest metadata event
-        val metadataFilter =
-            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
+        if (userPubkey == null) return
+        
+        try {
+            // Get the latest metadata event
+            val metadataFilter =
+                Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
 
-        // Get the latest contact list event
-        val contactFilter =
-            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.CONTACT_LIST))
+            // Get the latest contact list event
+            val contactFilter =
+                Filter().author(userPubkey!!).limit(1u)
+                    .kind(Kind.fromStd(KindStandard.CONTACT_LIST))
 
-        // Get the latest messaging relay list event
-        val msgRelayFilter =
-            Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
+            // Get the latest messaging relay list event
+            val msgRelayFilter =
+                Filter().author(userPubkey!!).limit(1u)
+                    .kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
 
-        // Construct a target that includes all filters
-        val target = ReqTarget.auto(listOf(metadataFilter, contactFilter, msgRelayFilter))
-        val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+            // Construct a target that includes all filters
+            val target = ReqTarget.auto(listOf(metadataFilter, contactFilter, msgRelayFilter))
+            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
-        client?.subscribe(target = target, id = "user-metadata", closeOn = opts)
+            client?.subscribe(target = target, id = "user-metadata", closeOn = opts)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch user metadata: ${e.message}", e)
+        }
     }
 
     suspend fun getUserMessages(msgRelayList: Event) {
-        val userPubkey = signer?.getPublicKey() ?: return
-        val relays = extractMessagingRelayList(msgRelayList)
+        try {
+            val userPubkey = signer?.getPublicKey() ?: return
+            val relays = extractMessagingRelayList(msgRelayList)
 
-        // Ensure relay connections
-        relays.forEach { relay ->
-            client?.addRelay(relay, RelayCapabilities.none())
-            client?.connectRelay(relay)
+            // Ensure relay connections
+            relays.forEach { relay ->
+                client?.addRelay(relay, RelayCapabilities.none())
+                client?.connectRelay(relay)
+            }
+
+            // Construct a filter for gift wrap events
+            val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(userPubkey)
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            relays.forEach { relay ->
+                target[relay] = listOf(filter)
+            }
+
+            client?.subscribe(
+                target = ReqTarget.manual(target),
+                id = "user-messages",
+                closeOn = null
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
+
         }
-
-        // Construct a filter for gift wrap events
-        val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(userPubkey)
-        val target = mutableMapOf<RelayUrl, List<Filter>>()
-        relays.forEach { relay ->
-            target[relay] = listOf(filter)
-        }
-
-        client?.subscribe(
-            target = ReqTarget.manual(target),
-            id = "user-messages",
-            closeOn = null
-        )
     }
 
     suspend fun handleNotifications(onMetadataUpdate: (PublicKey, Metadata) -> Unit) {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
         val notifications = client?.notifications() ?: return
-        
+
         while (true) {
             val notification = notifications.next() ?: continue
 
@@ -247,9 +266,9 @@ class Nostr {
 
             return event?.content()?.let { UnsignedEvent.fromJson(it) }
         } catch (e: Exception) {
-            // TODO: log error
+            println("Failed to get cached rumor: ${e.message}")
+            return null
         }
-        return null
     }
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
@@ -263,7 +282,7 @@ class Nostr {
             client?.database()?.saveEvent(event)
             client?.database()?.saveEvent(rumor.signWithKeys(rngKeys))
         } catch (e: Exception) {
-            // TODO: log error
+            println("Failed to set cached rumor: ${e.message}")
         }
     }
 
@@ -289,7 +308,7 @@ class Nostr {
                 // Return the rumor
                 return rumor
             } catch (e: Exception) {
-                // TODO: log error
+                println("Failed to unwrap gift: ${e.message}")
                 continue
             }
         }
@@ -378,13 +397,13 @@ class Nostr {
     }
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
-        val filter =
-            Filter()
-                .kind(Kind.fromStd(KindStandard.METADATA))
-                .authors(keys)
-                .limit(keys.size.toULong())
-        val target =
-            ReqTarget.manual(mapOf(RelayUrl.parse("wss://user.kindpag.es") to listOf(filter)))
+        val filter = Filter()
+            .kind(Kind.fromStd(KindStandard.METADATA))
+            .authors(keys)
+            .limit(keys.size.toULong())
+
+        val metadataRelay = RelayUrl.parse("wss://user.kindpag.es")
+        val target = ReqTarget.manual(mapOf(metadataRelay to listOf(filter)))
         val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
         client?.subscribe(target = target, id = "metadata-reqs", closeOn = opts)
@@ -427,7 +446,7 @@ class Nostr {
 
                     // Set the room kind based on interaction status
                     if (isInteracting || isContact) {
-                        room.kind(RoomKind.Ongoing)
+                        room.setKind(RoomKind.Ongoing)
                     }
 
                     rooms.add(room)
@@ -436,7 +455,7 @@ class Nostr {
             return rooms
         } catch (e: Exception) {
             println("Failed to get chat rooms: ${e.message}")
+            return null
         }
-        return null
     }
 }

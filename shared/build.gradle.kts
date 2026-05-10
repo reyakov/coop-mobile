@@ -27,6 +27,7 @@ kotlin {
         commonMain.dependencies {
             implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
             implementation("su.reya:nostr-sdk-kmp:0.1.5")
             implementation("com.squareup.okio:okio:3.16.2")
             implementation(libs.ktor.client.core)

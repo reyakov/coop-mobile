@@ -20,7 +20,6 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation("androidx.navigation:navigation-compose:2.8.8")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
             implementation("androidx.datastore:datastore-preferences:1.2.1")
             implementation("androidx.datastore:datastore-preferences-core:1.2.1")
             implementation("org.jetbrains.compose.material3:material3:1.11.0-alpha07")

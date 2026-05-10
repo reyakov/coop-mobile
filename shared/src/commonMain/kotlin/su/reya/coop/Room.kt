@@ -1,9 +1,13 @@
 package su.reya.coop
 
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.Event
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 enum class RoomKind {
     Ongoing,
@@ -40,7 +44,7 @@ data class Room(
             val subject = rumor.tags().find(TagKind.Subject)?.content()
 
             // Collect the author's public key and all public keys from tags
-            // Also remove the user's public key from the list
+            // Also remove the user's public key from the list, current user is always a member
             val pubkeys: MutableSet<PublicKey> = mutableSetOf()
             pubkeys.add(rumor.author())
             pubkeys.addAll(rumor.tags().publicKeys())
@@ -56,8 +60,20 @@ data class Room(
         }
     }
 
-    fun kind(kind: RoomKind): Room {
+    fun setKind(kind: RoomKind): Room {
         return this.copy(kind = kind)
+    }
+
+    fun setCreatedAt(createdAt: Timestamp): Room {
+        return this.copy(createdAt = createdAt)
+    }
+
+    fun setSubject(subject: String?): Room {
+        return this.copy(subject = subject)
+    }
+
+    fun isGroup(): Boolean {
+        return members.size > 1
     }
 }
 
@@ -73,4 +89,29 @@ fun Event.roomId(): Long {
         .sortedBy { it.toBech32() }
 
     return sortedUniqueKeys.hashCode().toLong()
+}
+
+fun Timestamp.ago(): String {
+    val SECONDS_IN_MINUTE = 60L
+    val MINUTES_IN_HOUR = 60L
+    val HOURS_IN_DAY = 24L
+    val DAYS_IN_MONTH = 30L
+
+    val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
+    val now = Clock.System.now()
+    val duration = now - inputInstant
+
+    return when {
+        duration.inWholeSeconds < SECONDS_IN_MINUTE -> "now"
+        duration.inWholeMinutes < MINUTES_IN_HOUR -> "${duration.inWholeMinutes}m"
+        duration.inWholeHours < HOURS_IN_DAY -> "${duration.inWholeHours}h"
+        duration.inWholeDays < DAYS_IN_MONTH -> "${duration.inWholeDays}d"
+        else -> {
+            val localDateTime = inputInstant.toLocalDateTime(TimeZone.currentSystemDefault())
+            val month =
+                localDateTime.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            val day = localDateTime.dayOfMonth.toString().padStart(2, '0')
+            "$month $day"
+        }
+    }
 }
