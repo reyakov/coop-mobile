@@ -10,8 +10,8 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.utils.io.core.toByteArray
 import okio.ByteString.Companion.toByteString
+import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.EventBuilder
-import rust.nostr.sdk.NostrSigner
 import rust.nostr.sdk.Timestamp
 import kotlin.io.encoding.Base64
 import kotlin.time.Duration
@@ -23,7 +23,7 @@ class BlossomClient(
     suspend fun upload(
         file: ByteArray,
         contentType: String? = null,
-        signer: NostrSigner? = null
+        signer: AsyncNostrSigner? = null
     ): BlobDescriptor? {
         val url = "$url/upload"
         val hash = file.toByteString().sha256().hex()
@@ -71,8 +71,11 @@ class BlossomClient(
         )
     }
 
-    suspend fun buildAuthHeader(signer: NostrSigner, authz: BlossomAuthorization): HeaderValue {
-        val authEvent = EventBuilder.blossomAuth(authz).sign(signer)
+    suspend fun buildAuthHeader(
+        signer: AsyncNostrSigner,
+        authz: BlossomAuthorization
+    ): HeaderValue {
+        val authEvent = EventBuilder.blossomAuth(authz).signAsync(signer)
         val encodedAuth = Base64.encode(authEvent.asJson().toByteArray())
         val value = "Nostr $encodedAuth"
         return HeaderValue(value)

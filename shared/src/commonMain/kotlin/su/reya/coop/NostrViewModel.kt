@@ -15,11 +15,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import rust.nostr.sdk.Event
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
-import rust.nostr.sdk.NostrSigner
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
@@ -90,7 +90,7 @@ class NostrViewModel(
         }
     }
 
-    fun requestMetadata(pubkey: PublicKey) {
+    private fun requestMetadata(pubkey: PublicKey) {
         if (seenPublicKeys.add(pubkey)) {
             viewModelScope.launch {
                 metadataRequestChannel.send(pubkey)
@@ -106,12 +106,8 @@ class NostrViewModel(
         return flow.asStateFlow()
     }
 
-    fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
+    private fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
         _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
-    }
-
-    fun getUserProfile(): StateFlow<Metadata?> {
-        return nostr.userPubkey?.let { getMetadata(it) } ?: MutableStateFlow(null).asStateFlow()
     }
 
     suspend fun initAndConnect(dbPath: String) {
@@ -131,6 +127,10 @@ class NostrViewModel(
                 updateMetadata(pubkey, metadata)
             }
         }
+    }
+
+    fun currentUser(): PublicKey? {
+        return nostr.signer.currentUser
     }
 
     fun logout() {
@@ -159,14 +159,14 @@ class NostrViewModel(
         // Handle different signer types
         if (secret.startsWith("nsec1")) {
             val keys = Keys.parse(secret)
-            nostr.setKeySigner(keys)
+            nostr.setSigner(keys)
         } else if (secret.startsWith("bunker://")) {
             try {
                 val appKeys = getOrInitAppKeys()
                 val bunker = NostrConnectUri.parse(secret)
                 val timeout = Duration.parse("50s") // 50 seconds timeout
                 val remote = NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
-                nostr.setRemoteSigner(remote)
+                nostr.setSigner(remote)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -223,7 +223,7 @@ class NostrViewModel(
                     val descriptor = blossom.upload(
                         file = picture,
                         contentType = contentType,
-                        signer = NostrSigner.keys(keys)
+                        signer = keys
                     )
 
                     avatarUrl = descriptor?.url ?: ""
@@ -247,7 +247,7 @@ class NostrViewModel(
         viewModelScope.launch {
             if (secret.startsWith("nsec1")) {
                 val keys = Keys.parse(secret)
-                nostr.setKeySigner(keys)
+                nostr.setSigner(keys)
                 secretStore.set("user_signer", secret)
                 // Set an empty secret state
                 _emptySecret.value = false
@@ -258,7 +258,7 @@ class NostrViewModel(
                     val timeout = Duration.parse("50s") // 50 seconds timeout
                     val remote =
                         NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
-                    nostr.setRemoteSigner(remote)
+                    nostr.setSigner(remote)
                     secretStore.set("user_signer", secret)
                     // Set an empty secret state
                     _emptySecret.value = false
@@ -281,6 +281,19 @@ class NostrViewModel(
         }
     }
 
+    suspend fun getChatRoomMessages(roomId: Long): List<Event> {
+        try {
+            val room = chatRooms.value.firstOrNull { it.id == roomId } ?: return emptyList()
+            val members = room.members
+
+            return nostr.getChatRoomMessages(members.toList())
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+
+        return emptyList()
+    }
+
     override fun onCleared() {
         super.onCleared()
         // Ensure all relays are disconnect
@@ -290,4 +303,9 @@ class NostrViewModel(
             }
         }
     }
+}
+
+fun PublicKey.short(): String {
+    val bech32 = toBech32()
+    return bech32.substring(0, 6) + "..." + bech32.substring(bech32.length - 4)
 }

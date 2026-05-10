@@ -2,6 +2,8 @@ package su.reya.coop
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
+import rust.nostr.sdk.AckPolicy
+import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Client
 import rust.nostr.sdk.ClientBuilder
 import rust.nostr.sdk.ClientNotification
@@ -17,10 +19,8 @@ import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.LogLevel
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.MetadataRecord
-import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrDatabase
 import rust.nostr.sdk.NostrGossip
-import rust.nostr.sdk.NostrSigner
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayCapabilities
 import rust.nostr.sdk.RelayMessageEnum
@@ -28,24 +28,23 @@ import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
+import rust.nostr.sdk.SendEventTarget
 import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
-import rust.nostr.sdk.extractMessagingRelayList
 import rust.nostr.sdk.initLogger
+import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
 
 class Nostr {
     var client: Client? = null
         private set
-    var signer: NostrSigner? = null
+    var signer: UniversalSigner = UniversalSigner(Keys.generate())
         private set
-    var deviceSigner: NostrSigner? = null
-        private set
-    var userPubkey: PublicKey? = null
+    var deviceSigner: AsyncNostrSigner? = null
         private set
     var contactList: List<PublicKey> = emptyList()
         private set
@@ -64,12 +63,13 @@ class Nostr {
 
             client =
                 ClientBuilder()
+                    .signer(signer)
                     .websocketTransport(CoopWebSocketClient(httpClient))
                     .database(lmdb)
                     .gossip(gossip)
                     .gossipConfig(GossipConfig().noBackgroundRefresh())
                     .verifySubscriptions(false)
-                    .automaticAuthentication(false)
+                    .automaticAuthentication(true)
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                     .build()
 
@@ -84,7 +84,7 @@ class Nostr {
             )
 
             // Connect to all bootstrap relays and wait for all connections to be established
-            client?.connect(Duration.parse("10s"))
+            client?.connect(Duration.parse("3s"))
         } catch (e: Exception) {
             throw IllegalStateException("Failed to initialize Nostr client: ${e.message}", e)
         }
@@ -95,39 +95,23 @@ class Nostr {
     }
 
     fun exit() {
-        signer = null
         deviceSigner = null
-        userPubkey = null
         contactList = emptyList()
     }
 
-    suspend fun setKeySigner(keys: Keys) {
+    suspend fun setSigner(keys: AsyncNostrSigner) {
         try {
-            signer = NostrSigner.keys(keys)
-            userPubkey = signer?.getPublicKey()
-
+            signer.switch(keys)
             // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to set key signer: ${e.message}", e)
+            throw IllegalStateException("Failed to set signer: ${e.message}", e)
         }
     }
 
-    suspend fun setRemoteSigner(remote: NostrConnect) {
-        try {
-            signer = NostrSigner.nostrConnect(remote)
-            userPubkey = signer?.getPublicKey()
-
-            // Fetch metadata for current user
-            getUserMetadata()
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to set remote signer: ${e.message}", e)
-        }
-    }
-
-    suspend fun isSignedByUser(event: Event): Boolean {
+    fun isSignedByUser(event: Event): Boolean {
         return try {
-            signer?.getPublicKey()?.toBech32() == event.author().toBech32()
+            signer.currentUser == event.author()
         } catch (e: Exception) {
             println("Failed to check if event is signed by user: ${e.message}")
             false
@@ -135,22 +119,20 @@ class Nostr {
     }
 
     suspend fun getUserMetadata() {
-        if (userPubkey == null) return
-        
         try {
+            val author = signer.currentUser ?: throw IllegalStateException("User not signed in")
+
             // Get the latest metadata event
             val metadataFilter =
-                Filter().author(userPubkey!!).limit(1u).kind(Kind.fromStd(KindStandard.METADATA))
+                Filter().kind(Kind.fromStd(KindStandard.METADATA)).author(author).limit(1u)
 
             // Get the latest contact list event
             val contactFilter =
-                Filter().author(userPubkey!!).limit(1u)
-                    .kind(Kind.fromStd(KindStandard.CONTACT_LIST))
+                Filter().kind(Kind.fromStd(KindStandard.CONTACT_LIST)).author(author).limit(1u)
 
             // Get the latest messaging relay list event
             val msgRelayFilter =
-                Filter().author(userPubkey!!).limit(1u)
-                    .kind(Kind.fromStd(KindStandard.INBOX_RELAYS))
+                Filter().kind(Kind.fromStd(KindStandard.INBOX_RELAYS)).author(author).limit(1u)
 
             // Construct a target that includes all filters
             val target = ReqTarget.auto(listOf(metadataFilter, contactFilter, msgRelayFilter))
@@ -164,17 +146,17 @@ class Nostr {
 
     suspend fun getUserMessages(msgRelayList: Event) {
         try {
-            val userPubkey = signer?.getPublicKey() ?: return
-            val relays = extractMessagingRelayList(msgRelayList)
+            val author = signer.currentUser ?: throw IllegalStateException("User not signed in")
+            val relays = nip17ExtractRelayList(msgRelayList)
 
             // Ensure relay connections
             relays.forEach { relay ->
-                client?.addRelay(relay, RelayCapabilities.none())
+                client?.addRelay(relay)
                 client?.connectRelay(relay)
             }
 
             // Construct a filter for gift wrap events
-            val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(userPubkey)
+            val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(author)
             val target = mutableMapOf<RelayUrl, List<Filter>>()
             relays.forEach { relay ->
                 target[relay] = listOf(filter)
@@ -182,12 +164,10 @@ class Nostr {
 
             client?.subscribe(
                 target = ReqTarget.manual(target),
-                id = "user-messages",
-                closeOn = null
+                id = "user-messages"
             )
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
-
         }
     }
 
@@ -273,6 +253,7 @@ class Nostr {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         if (rumor.id() == null) return
+
         try {
             val rngKeys = Keys.generate()
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
@@ -287,8 +268,6 @@ class Nostr {
     }
 
     private suspend fun extractRumor(event: Event): UnsignedEvent? {
-        if (event.kind().asStd() != KindStandard.GIFT_WRAP) return null
-
         // Check if the rumor is already cached
         val cachedRumor = getCachedRumor(event.id())
         if (cachedRumor != null) return cachedRumor
@@ -301,7 +280,7 @@ class Nostr {
         for (signer in signers) {
             try {
                 // TODO: custom unwrapping logic
-                val gift = UnwrappedGift.fromGiftWrap(signer = signer, giftWrap = event)
+                val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
                 val rumor = gift.rumor()
                 // Save the rumor to the database
                 setCachedRumor(event.id(), rumor)
@@ -373,27 +352,47 @@ class Nostr {
         // Send relay list event
         val relayList = getDefaultRelayList()
         val relayListEvent = EventBuilder.relayList(relayList).signWithKeys(keys);
-        client?.sendEvent(relayListEvent)
+
+        client?.sendEvent(
+            event = relayListEvent,
+            target = SendEventTarget.broadcast(),
+            ackPolicy = AckPolicy.all(),
+            okTimeout = Duration.parse("3s")
+        )
 
         // Send messaging relay list event
         val msgRelayList = getMsgRelayList()
         val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).signWithKeys(keys)
-        client?.sendEventNoWait(msgRelayListEvent)
+
+        client?.sendEvent(
+            event = msgRelayListEvent,
+            target = SendEventTarget.toNip65(),
+            ackPolicy = AckPolicy.none()
+        )
 
         // Send metadata event
         val metadata =
             Metadata.fromRecord(MetadataRecord(name = name, about = bio, picture = picture))
         val metadataEvent = EventBuilder.metadata(metadata).signWithKeys(keys)
-        client?.sendEventNoWait(metadataEvent)
+
+        client?.sendEvent(
+            event = metadataEvent,
+            target = SendEventTarget.toNip65(),
+            ackPolicy = AckPolicy.none()
+        )
 
         // Send contact list event
         val defaultContact =
             listOf(Contact(publicKey = PublicKey.parse("npub1j3rz3ndl902lya6ywxvy5c983lxs8mpukqnx4pa4lt5wrykwl5ys7wpw3x")))
         val contactListEvent = EventBuilder.contactList(defaultContact).signWithKeys(keys)
-        client?.sendEventNoWait(contactListEvent)
 
-        // Set signer
-        setKeySigner(keys)
+        client?.sendEvent(
+            event = contactListEvent,
+            target = SendEventTarget.toNip65(),
+            ackPolicy = AckPolicy.none()
+        )
+
+        setSigner(keys)
     }
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
@@ -411,7 +410,7 @@ class Nostr {
 
     suspend fun getChatRooms(): Set<Room>? {
         try {
-            val userPubkey = signer?.getPublicKey() ?: return null
+            val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
             val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
 
             // Get all events sent by the user
@@ -457,5 +456,24 @@ class Nostr {
             println("Failed to get chat rooms: ${e.message}")
             return null
         }
+    }
+
+    suspend fun getChatRoomMessages(members: List<PublicKey>): List<Event> {
+        try {
+            val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
+
+            val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
+            val sendFilter = Filter().kind(kind).author(userPubkey).pubkeys(members)
+            val recvFilter = Filter().kind(kind).pubkey(userPubkey).authors(members)
+
+            val sendEvents = client?.database()?.query(sendFilter)
+            val recvEvents = client?.database()?.query(recvFilter)
+
+            sendEvents?.merge(recvEvents!!)?.toVec()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
+        }
+
+        return emptyList()
     }
 }
