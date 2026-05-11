@@ -80,7 +80,7 @@ class NostrViewModel(
                     }
 
                     val now = Clock.System.now().toEpochMilliseconds()
-                    if (batch.size >= 20 || (now - lastFlushTime) >= timeout || nextKey == null) {
+                    if (batch.size >= 10 || (now - lastFlushTime) >= timeout || nextKey == null) {
                         val keysToRequest = batch.toList()
                         batch.clear()
                         nostr.fetchMetadataBatch(keysToRequest)
@@ -269,6 +269,11 @@ class NostrViewModel(
                 showError("Please enter a valid Secret or Bunker URI.")
             }
         }
+    }
+
+    fun getChatRoom(id: Long): Room {
+        return chatRooms.value.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Room not found")
     }
 
     fun getChatRooms() {

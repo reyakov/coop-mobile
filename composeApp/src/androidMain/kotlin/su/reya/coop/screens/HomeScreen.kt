@@ -56,6 +56,8 @@ import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.shared.displayNameFlow
+import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -240,37 +242,11 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val viewModel = LocalNostrViewModel.current
-
-    val memberMetadataList = room.members.map { pubkey ->
-        viewModel.getMetadata(pubkey).collectAsState()
-    }
-
-    val displayName = if (!room.subject.isNullOrBlank()) {
-        room.subject
-    } else if (room.isGroup()) {
-        val profiles = memberMetadataList.map { it.value?.asRecord() }
-        val names = profiles.take(2).mapNotNull { it?.name ?: it?.displayName }
-
-        var combined = names.joinToString(", ")
-        if (profiles.size > 2) {
-            combined += ", +${profiles.size - 2}"
-        }
-        combined.ifBlank { "Unknown group" }
-    } else {
-        val firstMember = room.members.firstOrNull()
-        val profile = memberMetadataList.firstOrNull()?.value?.asRecord()
-        profile?.name ?: profile?.displayName ?: firstMember?.short() ?: "Unknown"
-    }
-
-    val firstMemberMetadata by if (room.members.isNotEmpty()) {
-        viewModel.getMetadata(room.members.first()).collectAsState()
-    } else {
-        remember { mutableStateOf(null) }
-    }
-    val picture = firstMemberMetadata?.asRecord()?.picture
+    val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
+    val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)
 
     ListItem(
-        modifier = Modifier.clickable { onClick },
+        modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
             if (!picture.isNullOrBlank()) {
                 AsyncImage(

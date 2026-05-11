@@ -130,7 +130,6 @@ fun App(dbPath: String) {
                                     input.readBytes()
                                 }
                             }
-
                             viewModel.createIdentity(name, bio, picture, contentType)
                         }
                     )
@@ -142,7 +141,10 @@ fun App(dbPath: String) {
                 }
                 composable<Screen.Chat> { backStackEntry ->
                     val chat: Screen.Chat = backStackEntry.toRoute()
-                    ChatScreen(id = chat.id)
+                    ChatScreen(
+                        id = chat.id,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
         }

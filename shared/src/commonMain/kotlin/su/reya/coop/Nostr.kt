@@ -182,9 +182,8 @@ class Nostr {
             when (notification) {
                 is ClientNotification.Message -> {
                     val relayUrl = notification.relayUrl
-                    val message = notification.message.asEnum()
-
-                    when (message) {
+                    
+                    when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
 
@@ -396,16 +395,29 @@ class Nostr {
     }
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
-        val filter = Filter()
-            .kind(Kind.fromStd(KindStandard.METADATA))
-            .authors(keys)
-            .limit(keys.size.toULong())
+        try {
+            val limit = keys.size.toULong();
+            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
-        val metadataRelay = RelayUrl.parse("wss://user.kindpag.es")
-        val target = ReqTarget.manual(mapOf(metadataRelay to listOf(filter)))
-        val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+            // Construct a filter for metadata events
+            val filter = Filter()
+                .kind(Kind.fromStd(KindStandard.METADATA))
+                .authors(keys)
+                .limit(limit)
 
-        client?.subscribe(target = target, id = "metadata-reqs", closeOn = opts)
+            // Construct a target that includes all filters
+            val target =
+                ReqTarget.manual(
+                    mapOf(
+                        RelayUrl.parse("wss://user.kindpag.es") to listOf(filter),
+                        RelayUrl.parse("wss://relay.primal.net") to listOf(filter)
+                    )
+                )
+
+            client?.subscribe(target = target, id = "metadata-reqs", closeOn = opts)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
+        }
     }
 
     suspend fun getChatRooms(): Set<Room>? {
@@ -468,12 +480,11 @@ class Nostr {
 
             val sendEvents = client?.database()?.query(sendFilter)
             val recvEvents = client?.database()?.query(recvFilter)
+            val events = sendEvents?.merge(recvEvents!!)?.toVec()
 
-            sendEvents?.merge(recvEvents!!)?.toVec()
+            return events ?: emptyList()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
         }
-
-        return emptyList()
     }
 }
