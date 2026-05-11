@@ -23,7 +23,8 @@ data class Room(
     val createdAt: Timestamp,
     val subject: String?,
     val members: Set<PublicKey>,
-    val kind: RoomKind = RoomKind.default()
+    val kind: RoomKind = RoomKind.default(),
+    val lastMessage: String? = null
 ) : Comparable<Room> {
     override fun hashCode(): Int = id.hashCode()
 
@@ -55,7 +56,8 @@ data class Room(
                 id = id,
                 createdAt = createdAt,
                 subject = subject,
-                members = pubkeys as Set<PublicKey>
+                members = pubkeys as Set<PublicKey>,
+                lastMessage = rumor.content()
             )
         }
     }

@@ -239,15 +239,68 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
-    val title = room.subject ?: "Room"
+    val viewModel = LocalNostrViewModel.current
+
+    val memberMetadataList = room.members.map { pubkey ->
+        viewModel.getMetadata(pubkey).collectAsState()
+    }
+
+    val displayName = if (!room.subject.isNullOrBlank()) {
+        room.subject
+    } else if (room.isGroup()) {
+        val profiles = memberMetadataList.map { it.value?.asRecord() }
+        val names = profiles.take(2).mapNotNull { it?.name ?: it?.displayName }
+
+        var combined = names.joinToString(", ")
+        if (profiles.size > 2) {
+            combined += ", +${profiles.size - 2}"
+        }
+        combined.ifBlank { "Unknown group" }
+    } else {
+        val firstMember = room.members.firstOrNull()
+        val profile = memberMetadataList.firstOrNull()?.value?.asRecord()
+        profile?.name ?: profile?.displayName ?: firstMember?.short() ?: "Unknown"
+    }
+
+    val firstMemberMetadata by if (room.members.isNotEmpty()) {
+        viewModel.getMetadata(room.members.first()).collectAsState()
+    } else {
+        remember { mutableStateOf(null) }
+    }
+    val picture = firstMemberMetadata?.asRecord()?.picture
 
     ListItem(
         modifier = Modifier.clickable { onClick },
+        leadingContent = {
+            if (!picture.isNullOrBlank()) {
+                AsyncImage(
+                    model = picture,
+                    contentDescription = "Room Avatar",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_avatar),
+                    contentDescription = "User"
+                )
+            }
+        },
         headlineContent = {
             Text(
-                text = title,
+                text = displayName ?: "Unknown",
                 style = MaterialTheme.typography.titleMediumEmphasized
             )
+        },
+        supportingContent = {
+            if (!room.lastMessage.isNullOrBlank()) {
+                Text(
+                    text = room.lastMessage!!,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface
