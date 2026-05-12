@@ -1,6 +1,9 @@
 package su.reya.coop
 
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.Event
 import rust.nostr.sdk.PublicKey
@@ -114,6 +117,38 @@ fun Timestamp.ago(): String {
                 localDateTime.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
             val day = localDateTime.dayOfMonth.toString().padStart(2, '0')
             "$month $day"
+        }
+    }
+}
+
+fun Timestamp.humanReadable(): String {
+    val timeZone = TimeZone.currentSystemDefault()
+    val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
+    val inputDateTime = inputInstant.toLocalDateTime(timeZone)
+    val inputDate = inputDateTime.date
+
+    val now = Clock.System.now()
+    val today = now.toLocalDateTime(timeZone).date
+    val yesterday = today.minus(1, DateTimeUnit.DAY)
+
+    val hour = inputDateTime.hour
+    val minute = inputDateTime.minute.toString().padStart(2, '0')
+    val amPm = if (hour < 12) "AM" else "PM"
+    val hour12 = when {
+        hour == 0 -> 12
+        hour > 12 -> hour - 12
+        else -> hour
+    }
+    val timeFormat = "$hour12:$minute $amPm"
+
+    return when (inputDate) {
+        today -> "Today at $timeFormat"
+        yesterday -> "Yesterday at $timeFormat"
+        else -> {
+            val day = inputDateTime.day.toString().padStart(2, '0')
+            val month = inputDateTime.month.number.toString().padStart(2, '0')
+            val year = inputDateTime.year.toString().takeLast(2)
+            "$day/$month/$year, $timeFormat"
         }
     }
 }

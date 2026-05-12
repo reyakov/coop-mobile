@@ -48,6 +48,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Event
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.humanReadable
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
 
@@ -177,9 +178,9 @@ fun ChatMessage(
         RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
     }
 
-    val alignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     val containerColor =
         if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+
     val contentColor =
         if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 
@@ -187,19 +188,26 @@ fun ChatMessage(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        contentAlignment = alignment
+        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Surface(
-            color = containerColor,
-            contentColor = contentColor,
-            shape = bubbleShape,
-            modifier = Modifier.widthIn(max = 280.dp)
-        ) {
+        Column {
             Text(
-                text = event.content(),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.bodyMedium
+                text = event.createdAt().humanReadable(),
+                style = MaterialTheme.typography.labelSmall,
             )
+            Spacer(modifier = Modifier.size(4.dp))
+            Surface(
+                color = containerColor,
+                contentColor = contentColor,
+                shape = bubbleShape,
+                modifier = Modifier.widthIn(max = 280.dp)
+            ) {
+                Text(
+                    text = event.content(),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }

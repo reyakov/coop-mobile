@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,7 @@ import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.ago
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
@@ -265,10 +267,21 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
             }
         },
         headlineContent = {
-            Text(
-                text = displayName ?: "Unknown",
-                style = MaterialTheme.typography.titleMediumEmphasized
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = room.createdAt.ago(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         },
         supportingContent = {
             if (!room.lastMessage.isNullOrBlank()) {
