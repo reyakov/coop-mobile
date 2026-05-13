@@ -7,8 +7,10 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -16,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import rust.nostr.sdk.Event
+import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
@@ -38,6 +41,9 @@ class NostrViewModel(
 
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
+
+    private val _newEvents = MutableSharedFlow<Event>(extraBufferCapacity = 100)
+    val newEvents = _newEvents.asSharedFlow()
 
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
     val errorEvents = _errorEvents.receiveAsFlow()
@@ -123,9 +129,19 @@ class NostrViewModel(
 
     fun startNotificationHandler() {
         viewModelScope.launch {
-            nostr.handleNotifications { pubkey, metadata ->
-                updateMetadata(pubkey, metadata)
-            }
+            nostr.handleNotifications(
+                onMetadataUpdate = { pubkey, metadata ->
+                    updateMetadata(pubkey, metadata)
+                },
+                onEose = {
+                    getChatRooms()
+                },
+                onNewMessage = { event ->
+                    viewModelScope.launch {
+                        _newEvents.emit(event)
+                    }
+                },
+            )
         }
     }
 
@@ -297,6 +313,35 @@ class NostrViewModel(
         }
 
         return emptyList()
+    }
+
+    fun chatRoomConnect(roomId: Long) {
+        viewModelScope.launch {
+            try {
+                val room = getChatRoom(roomId)
+                val members = room.members
+
+                nostr.chatRoomConnect(members.toList())
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
+        }
+    }
+
+    fun sendMessage(roomId: Long, message: String, replies: List<EventId> = emptyList()) {
+        viewModelScope.launch {
+            try {
+                val room = getChatRoom(roomId)
+                nostr.sendMessage(
+                    to = room.members.toList(),
+                    content = message,
+                    subject = room.subject,
+                    replies = replies
+                )
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
+        }
     }
 
     override fun onCleared() {

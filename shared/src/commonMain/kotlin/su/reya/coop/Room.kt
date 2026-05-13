@@ -77,6 +77,10 @@ data class Room(
         return this.copy(subject = subject)
     }
 
+    fun setLastMessage(message: String?): Room {
+        return this.copy(lastMessage = message)
+    }
+
     fun isGroup(): Boolean {
         return members.size > 1
     }

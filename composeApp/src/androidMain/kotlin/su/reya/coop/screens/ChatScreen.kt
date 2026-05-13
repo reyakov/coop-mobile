@@ -2,12 +2,15 @@ package su.reya.coop.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -15,8 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -31,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,16 +45,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_avatar
+import coop.composeapp.generated.resources.ic_send
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Event
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.humanReadable
+import su.reya.coop.roomId
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
 
@@ -59,18 +68,41 @@ fun ChatScreen(
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
+
     val room = viewModel.getChatRoom(id)
     val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
     val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)
 
     var text by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf<List<Event>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
+    val messages = remember { mutableStateListOf<Event>() }
+
+    fun setLoading(value: Boolean) {
+        loading = value
+    }
+
     LaunchedEffect(id) {
-        loading = true
-        messages = viewModel.getChatRoomMessages(id)
-        loading = false
+        // Start loading spinner
+        setLoading(true)
+
+        // Get messages
+        val initialMessages = viewModel.getChatRoomMessages(id)
+        messages.clear()
+        messages.addAll(initialMessages)
+
+        // Get msg relays for each member
+        viewModel.chatRoomConnect(id)
+
+        // Stop loading spinner
+        setLoading(false)
+
+        // Handle new messages
+        viewModel.newEvents.collect { event ->
+            if (event.roomId() == id) {
+                messages.add(0, event)
+            }
+        }
     }
 
     Scaffold(
@@ -153,7 +185,7 @@ fun ChatScreen(
                             value = text,
                             onValueChange = { text = it },
                             onSend = {
-                                // TODO: Implement send logic
+                                viewModel.sendMessage(id, text)
                                 text = ""
                             }
                         )
@@ -190,10 +222,13 @@ fun ChatMessage(
             .padding(vertical = 4.dp),
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Column {
+        Column(
+            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
+        ) {
             Text(
                 text = event.createdAt().humanReadable(),
                 style = MaterialTheme.typography.labelSmall,
+                textAlign = if (isMine) TextAlign.End else TextAlign.Start,
             )
             Spacer(modifier = Modifier.size(4.dp))
             Surface(
@@ -218,24 +253,41 @@ fun ChatInput(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
+
     Surface(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
-                .imePadding(),
-            verticalAlignment = Alignment.CenterVertically
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.Bottom
         ) {
             TextField(
                 value = value,
                 onValueChange = onValueChange,
                 placeholder = { Text("Message") },
-                modifier = Modifier.weight(1f),
-                shape = CircleShape,
+                shape = RoundedCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
-                )
+                ),
+                modifier = Modifier.weight(1f)
             )
+            Spacer(modifier = Modifier.size(8.dp))
+            FilledTonalIconButton(
+                onClick = onSend,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(1f),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_send),
+                    contentDescription = "Send"
+                )
+            }
         }
     }
 }

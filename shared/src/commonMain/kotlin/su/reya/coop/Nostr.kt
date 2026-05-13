@@ -2,6 +2,10 @@ package su.reya.coop
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import rust.nostr.sdk.AckPolicy
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Client
@@ -32,10 +36,12 @@ import rust.nostr.sdk.SendEventTarget
 import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
+import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
 import rust.nostr.sdk.initLogger
+import rust.nostr.sdk.makePrivateMsgAsync
 import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
 
@@ -45,6 +51,8 @@ class Nostr {
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
         private set
     var deviceSigner: AsyncNostrSigner? = null
+        private set
+    var msgRelayList: Map<PublicKey, List<RelayUrl>> = emptyMap()
         private set
     var contactList: List<PublicKey> = emptyList()
         private set
@@ -94,7 +102,8 @@ class Nostr {
         client?.shutdown()
     }
 
-    fun exit() {
+    suspend fun exit() {
+        signer.switch(Keys.generate())
         deviceSigner = null
         contactList = emptyList()
     }
@@ -164,17 +173,23 @@ class Nostr {
 
             client?.subscribe(
                 target = ReqTarget.manual(target),
-                id = "user-messages"
+                id = "messages"
             )
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
         }
     }
 
-    suspend fun handleNotifications(onMetadataUpdate: (PublicKey, Metadata) -> Unit) {
+    suspend fun handleNotifications(
+        onMetadataUpdate: (PublicKey, Metadata) -> Unit,
+        onEose: () -> Unit,
+        onNewMessage: (Event) -> Unit
+    ) = coroutineScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
-        val notifications = client?.notifications() ?: return
+        val notifications = client?.notifications() ?: return@coroutineScope
+
+        var eoseTrackerJob: Job? = null
 
         while (true) {
             val notification = notifications.next() ?: continue
@@ -182,7 +197,7 @@ class Nostr {
             when (notification) {
                 is ClientNotification.Message -> {
                     val relayUrl = notification.relayUrl
-                    
+
                     when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
@@ -204,12 +219,30 @@ class Nostr {
                                 if (isSignedByUser(event = event)) {
                                     getUserMessages(msgRelayList = event)
                                 }
+                                // Cache the relay list for future use
+                                setMsgRelay(pubkey = event.author(), event = event)
                             }
 
                             if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
                                 try {
                                     val rumor = extractRumor(event)
-                                    // TODO: Handle rumor
+
+                                    // Logic to notify UI after processing
+                                    // Cancel previous tracker if it exists
+                                    eoseTrackerJob?.cancel()
+                                    // Start a new tracker
+                                    eoseTrackerJob = launch {
+                                        delay(10000) // Wait for 10 seconds
+                                        onEose()
+                                    }
+
+                                    // Handle new message
+                                    rumor?.createdAt()?.asSecs()?.let {
+                                        if (it >= now.asSecs()) {
+                                            // TODO: only send unsigned event
+                                            onNewMessage(rumor.signWithKeys(Keys.generate()))
+                                        }
+                                    }
                                 } catch (e: Exception) {
                                     println("Failed to extract rumor: $e")
                                 }
@@ -218,7 +251,10 @@ class Nostr {
 
                         is RelayMessageEnum.EndOfStoredEvents -> {
                             val subscriptionId = message.subscriptionId
-                            // TODO: Handle end of stored events
+
+                            if (subscriptionId == "messages") {
+                                onEose()
+                            }
                         }
 
                         else -> {
@@ -238,6 +274,11 @@ class Nostr {
         }
     }
 
+    private fun setMsgRelay(pubkey: PublicKey, event: Event) {
+        val relays = nip17ExtractRelayList(event)
+        msgRelayList = msgRelayList + (pubkey to relays)
+    }
+
     private suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
         try {
             val filter = Filter().identifier(giftId.toBech32())
@@ -245,16 +286,18 @@ class Nostr {
 
             return event?.content()?.let { UnsignedEvent.fromJson(it) }
         } catch (e: Exception) {
-            println("Failed to get cached rumor: ${e.message}")
-            return null
+            throw IllegalStateException("Failed to get cached rumor: ${e.message}", e)
         }
     }
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
-        if (rumor.id() == null) return
-
         try {
             val rngKeys = Keys.generate()
+
+            // Ensure the rumor ID is set
+            val rumor = rumor.ensureId()
+
+            // Construct a reference event
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
             val tags = listOf(Tag.identifier(giftId.toBech32()), Tag.event(rumor.id()!!))
             val event = EventBuilder(kind, rumor.asJson()).tags(tags).signWithKeys(rngKeys)
@@ -444,7 +487,10 @@ class Nostr {
                     val room = Room.new(rumor = event, userPubkey = userPubkey)
 
                     // Check if the room already exists
-                    if (rooms.contains(room)) return@forEach
+                    if (rooms.contains(room)) {
+                        room.setCreatedAt(room.createdAt)
+                        room.setLastMessage(room.lastMessage)
+                    }
 
                     val filter =
                         Filter().kind(kind).author(userPubkey).pubkeys(room.members.toList());
@@ -473,18 +519,95 @@ class Nostr {
     suspend fun getChatRoomMessages(members: List<PublicKey>): List<Event> {
         try {
             val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
-
             val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
-            val sendFilter = Filter().kind(kind).author(userPubkey).pubkeys(members)
-            val recvFilter = Filter().kind(kind).pubkey(userPubkey).authors(members)
 
+            val sendFilter = Filter().kind(kind).author(userPubkey).pubkeys(members)
             val sendEvents = client?.database()?.query(sendFilter)
+
+            val recvFilter = Filter().kind(kind).authors(members).pubkey(userPubkey)
             val recvEvents = client?.database()?.query(recvFilter)
-            val events = sendEvents?.merge(recvEvents!!)?.toVec()
+
+            // Merge the events
+            val events = sendEvents
+                ?.merge(recvEvents!!)
+                ?.toVec()
+                ?.sortedByDescending { it.createdAt().asSecs() }
 
             return events ?: emptyList()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
+        }
+    }
+
+    suspend fun chatRoomConnect(members: List<PublicKey>) {
+        try {
+            members.forEach { member ->
+                val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
+                val filter = Filter().kind(kind).author(member).limit(1u)
+                val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+
+                client?.subscribe(
+                    target = ReqTarget.auto(listOf(filter)),
+                    closeOn = opts
+                )
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to connect to chat room: ${e.message}", e)
+        }
+    }
+
+    suspend fun sendMessage(
+        to: List<PublicKey>,
+        content: String,
+        subject: String? = null,
+        replies: List<EventId> = emptyList()
+    ) {
+        try {
+            val currentUser =
+                signer.currentUser ?: throw IllegalStateException("User not signed in")
+
+            val tags = mutableListOf<Tag>()
+
+            // Add a subject tag if provided
+            if (subject != null) {
+                tags.add(Tag.custom(TagKind.Subject, listOf(subject)))
+            }
+
+            // Add event tags for replies
+            if (replies.isNotEmpty()) {
+                replies.forEach { replyId ->
+                    tags.add(Tag.event(replyId))
+                }
+            }
+
+            // Add public key tags for each recipient
+            to.forEach { pubkey ->
+                if (pubkey != currentUser) {
+                    tags.add(Tag.publicKey(pubkey))
+                }
+            }
+
+            for (receiver in to.plus(currentUser)) {
+                // Construct the gift wrap event
+                val event = makePrivateMsgAsync(
+                    signer = signer,
+                    receiver = receiver,
+                    message = content,
+                    rumorExtraTags = tags
+                )
+
+                println("Sending message to: ${receiver.toBech32()}")
+
+                // Send the event to receiver's NIP-17 relays
+                client?.sendEvent(
+                    event = event,
+                    target = SendEventTarget.toNip17(),
+                    ackPolicy = AckPolicy.none(),
+                    authenticationTimeout = Duration.parse("2s")
+                )
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to send message: ${e.message}", e)
         }
     }
 }
