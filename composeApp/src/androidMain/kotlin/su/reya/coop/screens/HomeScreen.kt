@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -44,13 +43,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
-import coop.composeapp.generated.resources.ic_avatar
 import coop.composeapp.generated.resources.ic_search
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -58,6 +54,7 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.ago
+import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
@@ -103,21 +100,11 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                     }
                     // User
                     IconButton(onClick = { showBottomSheet = true }) {
-                        if (userProfile?.asRecord()?.picture != null) {
-                            AsyncImage(
-                                model = userProfile?.asRecord()?.picture,
-                                contentDescription = "User Avatar",
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                painter = painterResource(Res.drawable.ic_avatar),
-                                contentDescription = "User"
-                            )
-                        }
+                        Avatar(
+                            picture = userProfile?.asRecord()?.picture,
+                            description = userProfile?.asRecord()?.displayName,
+                            size = 32.dp,
+                        )
                     }
                 }
             )
@@ -188,19 +175,11 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                                         .clip(MaterialShapes.Cookie9Sided.toShape()),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (userProfile?.asRecord()?.picture != null) {
-                                        AsyncImage(
-                                            model = userProfile?.asRecord()?.picture,
-                                            contentDescription = "User Avatar",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Icon(
-                                            painter = painterResource(Res.drawable.ic_avatar),
-                                            contentDescription = "User"
-                                        )
-                                    }
+                                    Avatar(
+                                        picture = userProfile?.asRecord()?.picture,
+                                        description = userProfile?.asRecord()?.displayName,
+                                        shape = MaterialShapes.Cookie9Sided.toShape(),
+                                    )
                                 }
                                 Spacer(modifier = Modifier.size(8.dp))
                                 Box(
@@ -250,21 +229,7 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
-            if (!picture.isNullOrBlank()) {
-                AsyncImage(
-                    model = picture,
-                    contentDescription = "Room Avatar",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_avatar),
-                    contentDescription = "User"
-                )
-            }
+            Avatar(picture = picture, description = displayName)
         },
         headlineContent = {
             Row(

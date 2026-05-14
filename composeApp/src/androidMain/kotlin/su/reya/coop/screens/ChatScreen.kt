@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -42,15 +41,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
-import coop.composeapp.generated.resources.ic_avatar
 import coop.composeapp.generated.resources.ic_send
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
@@ -58,6 +53,7 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.humanReadable
 import su.reya.coop.roomId
+import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
 
@@ -113,21 +109,11 @@ fun ChatScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box {
-                            if (!picture.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = picture,
-                                    contentDescription = "Room Avatar",
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    painter = painterResource(Res.drawable.ic_avatar),
-                                    contentDescription = "User"
-                                )
-                            }
+                            Avatar(
+                                picture = picture,
+                                description = displayName,
+                                size = 32.dp,
+                            )
                         }
                         Spacer(modifier = Modifier.size(8.dp))
                         Text(
