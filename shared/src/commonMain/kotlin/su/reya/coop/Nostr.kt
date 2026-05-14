@@ -7,6 +7,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import rust.nostr.sdk.AckPolicy
+import rust.nostr.sdk.Alphabet
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Client
 import rust.nostr.sdk.ClientBuilder
@@ -33,6 +34,7 @@ import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.SendEventTarget
+import rust.nostr.sdk.SingleLetterTag
 import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
@@ -182,8 +184,8 @@ class Nostr {
 
     suspend fun handleNotifications(
         onMetadataUpdate: (PublicKey, Metadata) -> Unit,
+        onNewMessage: (UnsignedEvent) -> Unit,
         onEose: () -> Unit,
-        onNewMessage: (Event) -> Unit
     ) = coroutineScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
@@ -239,8 +241,7 @@ class Nostr {
                                     // Handle new message
                                     rumor?.createdAt()?.asSecs()?.let {
                                         if (it >= now.asSecs()) {
-                                            // TODO: only send unsigned event
-                                            onNewMessage(rumor.signWithKeys(Keys.generate()))
+                                            onNewMessage(rumor)
                                         }
                                     }
                                 } catch (e: Exception) {
@@ -281,7 +282,7 @@ class Nostr {
 
     private suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
         try {
-            val filter = Filter().identifier(giftId.toBech32())
+            val filter = Filter().identifier(giftId.toHex())
             val event = client?.database()?.query(filter)?.first()
 
             return event?.content()?.let { UnsignedEvent.fromJson(it) }
@@ -292,18 +293,30 @@ class Nostr {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         try {
-            val rngKeys = Keys.generate()
+            val currentUser =
+                signer.currentUser ?: throw IllegalStateException("User not signed in")
 
             // Ensure the rumor ID is set
             val rumor = rumor.ensureId()
+            val roomId = rumor.roomId()
 
-            // Construct a reference event
+            // Construct reference tags
+            val tags = listOf(
+                Tag.identifier(giftId.toHex()),
+                Tag.event(rumor.id()!!),
+                Tag.reference(roomId.toString()),
+                Tag.custom(TagKind.Unknown("k"), listOf("dm"))
+            )
+
+            // Set event kind
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
-            val tags = listOf(Tag.identifier(giftId.toBech32()), Tag.event(rumor.id()!!))
-            val event = EventBuilder(kind, rumor.asJson()).tags(tags).signWithKeys(rngKeys)
+
+            val event = EventBuilder(kind, rumor.asJson())
+                .tags(tags)
+                .build(currentUser)
+                .signWithKeys(Keys.generate())
 
             client?.database()?.saveEvent(event)
-            client?.database()?.saveEvent(rumor.signWithKeys(rngKeys))
         } catch (e: Exception) {
             println("Failed to set cached rumor: ${e.message}")
         }
@@ -336,19 +349,6 @@ class Nostr {
 
         return null
     }
-
-    private fun conversationId(rumor: UnsignedEvent): Long {
-        val pubkeys: MutableList<PublicKey> = rumor.tags().publicKeys().toMutableList()
-        pubkeys.add(rumor.author())
-
-        val uniqueSortedKeys = pubkeys
-            .map { it.toHex() }
-            .distinct()
-            .sorted()
-
-        return uniqueSortedKeys.hashCode().toLong()
-    }
-
 
     private suspend fun getDefaultRelayList(): Map<RelayUrl, RelayMetadata> {
         // Construct a list of relays
@@ -466,21 +466,19 @@ class Nostr {
     suspend fun getChatRooms(): Set<Room>? {
         try {
             val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
-            val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
+            val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
+            val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
             // Get all events sent by the user
-            val sendFilter = Filter().kind(kind).author(userPubkey)
-            val sendEvents = client?.database()?.query(sendFilter);
+            val filter = Filter().kind(kind).author(userPubkey).customTag(kTag, "dm")
+            val events = client?.database()?.query(filter)
 
-            // Get all events sent to the user
-            val recvFilter = Filter().kind(kind).pubkey(userPubkey)
-            val recvEvents = client?.database()?.query(recvFilter);
-
-            // Collect all events
-            val events = sendEvents?.merge(recvEvents!!)?.toVec();
+            // Collect rooms
             val rooms: MutableSet<Room> = mutableSetOf()
 
             events
+                ?.toVec()
+                ?.map { UnsignedEvent.fromJson(it.content()) }
                 ?.filter { it.tags().publicKeys().isNotEmpty() }
                 ?.sortedByDescending { it.createdAt().asSecs() }
                 ?.forEach { event ->
@@ -516,24 +514,17 @@ class Nostr {
         }
     }
 
-    suspend fun getChatRoomMessages(members: List<PublicKey>): List<Event> {
+    suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
         try {
-            val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
-            val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
-
-            val sendFilter = Filter().kind(kind).author(userPubkey).pubkeys(members)
-            val sendEvents = client?.database()?.query(sendFilter)
-
-            val recvFilter = Filter().kind(kind).authors(members).pubkey(userPubkey)
-            val recvEvents = client?.database()?.query(recvFilter)
+            val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
+            val filter = Filter().kind(kind).reference(roomId.toString())
+            val events = client?.database()?.query(filter)
 
             // Merge the events
-            val events = sendEvents
-                ?.merge(recvEvents!!)
+            return events
                 ?.toVec()
-                ?.sortedByDescending { it.createdAt().asSecs() }
-
-            return events ?: emptyList()
+                ?.map { UnsignedEvent.fromJson(it.content()) }
+                ?.sortedByDescending { it.createdAt().asSecs() } ?: emptyList()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
         }

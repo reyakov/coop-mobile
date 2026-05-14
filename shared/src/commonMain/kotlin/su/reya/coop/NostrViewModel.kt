@@ -17,13 +17,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
-import rust.nostr.sdk.Event
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
@@ -42,7 +42,7 @@ class NostrViewModel(
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
 
-    private val _newEvents = MutableSharedFlow<Event>(extraBufferCapacity = 100)
+    private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
@@ -302,12 +302,9 @@ class NostrViewModel(
         }
     }
 
-    suspend fun getChatRoomMessages(roomId: Long): List<Event> {
+    suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
         try {
-            val room = chatRooms.value.firstOrNull { it.id == roomId } ?: return emptyList()
-            val members = room.members
-
-            return nostr.getChatRoomMessages(members.toList())
+            return nostr.getChatRoomMessages(roomId)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }

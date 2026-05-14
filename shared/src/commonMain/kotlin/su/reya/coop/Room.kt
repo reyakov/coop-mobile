@@ -5,10 +5,10 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
-import rust.nostr.sdk.Event
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
+import rust.nostr.sdk.UnsignedEvent
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -42,7 +42,7 @@ data class Room(
     }
 
     companion object {
-        fun new(rumor: Event, userPubkey: PublicKey): Room {
+        fun new(rumor: UnsignedEvent, userPubkey: PublicKey): Room {
             val id = rumor.roomId()
             val createdAt = rumor.createdAt()
             val subject = rumor.tags().find(TagKind.Subject)?.content()
@@ -86,7 +86,7 @@ data class Room(
     }
 }
 
-fun Event.roomId(): Long {
+fun UnsignedEvent.roomId(): Long {
     // Collect the author's public key and all public keys from tags
     val pubkeys: MutableList<PublicKey> = mutableListOf()
     pubkeys.add(this.author())

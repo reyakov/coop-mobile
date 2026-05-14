@@ -53,7 +53,7 @@ import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_avatar
 import coop.composeapp.generated.resources.ic_send
 import org.jetbrains.compose.resources.painterResource
-import rust.nostr.sdk.Event
+import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.humanReadable
@@ -76,7 +76,7 @@ fun ChatScreen(
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
 
-    val messages = remember { mutableStateListOf<Event>() }
+    val messages = remember { mutableStateListOf<UnsignedEvent>() }
 
     fun setLoading(value: Boolean) {
         loading = value
@@ -177,7 +177,7 @@ fun ChatScreen(
                             contentPadding = PaddingValues(16.dp),
                             reverseLayout = true
                         ) {
-                            items(messages.toList(), key = { it.id().toBech32() }) { event ->
+                            items(messages.toList(), key = { it.id()?.toBech32()!! }) { event ->
                                 ChatMessage(event)
                             }
                         }
@@ -198,11 +198,11 @@ fun ChatScreen(
 
 @Composable
 fun ChatMessage(
-    event: Event
+    rumor: UnsignedEvent
 ) {
     val viewModel = LocalNostrViewModel.current
     val currentUser = viewModel.currentUser()
-    val isMine = event.author() == currentUser
+    val isMine = rumor.author() == currentUser
 
     val bubbleShape = if (isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
@@ -226,7 +226,7 @@ fun ChatMessage(
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         ) {
             Text(
-                text = event.createdAt().humanReadable(),
+                text = rumor.createdAt().humanReadable(),
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = if (isMine) TextAlign.End else TextAlign.Start,
             )
@@ -238,7 +238,7 @@ fun ChatMessage(
                 modifier = Modifier.widthIn(max = 280.dp)
             ) {
                 Text(
-                    text = event.content(),
+                    text = rumor.content(),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.bodyMedium
                 )
