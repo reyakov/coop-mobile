@@ -42,8 +42,8 @@ import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
+import rust.nostr.sdk.giftWrapAsync
 import rust.nostr.sdk.initLogger
-import rust.nostr.sdk.makePrivateMsgAsync
 import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
 
@@ -551,7 +551,8 @@ class Nostr {
         to: List<PublicKey>,
         content: String,
         subject: String? = null,
-        replies: List<EventId> = emptyList()
+        replies: List<EventId> = emptyList(),
+        onNewMessage: ((UnsignedEvent) -> Unit)? = null
     ) {
         try {
             val currentUser =
@@ -578,20 +579,32 @@ class Nostr {
                 }
             }
 
-            for (receiver in to.plus(currentUser)) {
-                // Construct the gift wrap event
-                val event = makePrivateMsgAsync(
-                    signer = signer,
-                    receiver = receiver,
-                    message = content,
-                    rumorExtraTags = tags
-                )
+            for (receiver in listOf(currentUser) + to) {
+                // Construct the rumor event
+                // NEVER SIGN this event with the current user signer
+                val rumor = EventBuilder
+                    .privateMsgRumor(receiver = receiver, message = content)
+                    .tags(tags)
+                    .build(currentUser)
+                    // Ensure the event ID is set
+                    .ensureId()
 
-                println("Sending message to: ${receiver.toBech32()}")
+                // Emit the rumor to the chat screen
+                if (receiver == currentUser) {
+                    onNewMessage?.invoke(rumor)
+                }
+
+                // Construct the gift wrap event
+                val gift = giftWrapAsync(
+                    signer = signer,
+                    receiverPubkey = receiver,
+                    rumor = rumor,
+                    extraTags = tags
+                )
 
                 // Send the event to receiver's NIP-17 relays
                 client?.sendEvent(
-                    event = event,
+                    event = gift,
                     target = SendEventTarget.toNip17(),
                     ackPolicy = AckPolicy.none(),
                     authenticationTimeout = Duration.parse("2s")

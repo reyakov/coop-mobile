@@ -42,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
@@ -51,7 +50,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
-import su.reya.coop.humanReadable
+import su.reya.coop.formatAsGroupHeader
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
@@ -73,7 +72,10 @@ fun ChatScreen(
     var loading by remember { mutableStateOf(true) }
 
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
-
+    val groupedMessages = remember(messages.toList()) {
+        messages.groupBy { it.createdAt().formatAsGroupHeader() }
+    }
+    
     fun setLoading(value: Boolean) {
         loading = value
     }
@@ -96,7 +98,9 @@ fun ChatScreen(
         // Handle new messages
         viewModel.newEvents.collect { event ->
             if (event.roomId() == id) {
-                messages.add(0, event)
+                if (event.id() !in messages.map { it.id() }) {
+                    messages.add(0, event)
+                }
             }
         }
     }
@@ -163,8 +167,13 @@ fun ChatScreen(
                             contentPadding = PaddingValues(16.dp),
                             reverseLayout = true
                         ) {
-                            items(messages.toList(), key = { it.id()?.toBech32()!! }) { event ->
-                                ChatMessage(event)
+                            groupedMessages.forEach { (dateHeader, messagesInGroup) ->
+                                items(messagesInGroup, key = { it.id()?.toBech32()!! }) { event ->
+                                    ChatMessage(event)
+                                }
+                                item {
+                                    DateSeparator(dateHeader)
+                                }
                             }
                         }
                         ChatInput(
@@ -180,6 +189,22 @@ fun ChatScreen(
             }
         }
     )
+}
+
+@Composable
+fun DateSeparator(date: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = date,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
 }
 
 @Composable
@@ -211,12 +236,6 @@ fun ChatMessage(
         Column(
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         ) {
-            Text(
-                text = rumor.createdAt().humanReadable(),
-                style = MaterialTheme.typography.labelSmall,
-                textAlign = if (isMine) TextAlign.End else TextAlign.Start,
-            )
-            Spacer(modifier = Modifier.size(4.dp))
             Surface(
                 color = containerColor,
                 contentColor = contentColor,

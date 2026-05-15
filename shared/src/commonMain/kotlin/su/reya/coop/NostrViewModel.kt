@@ -333,7 +333,12 @@ class NostrViewModel(
                     to = room.members.toList(),
                     content = message,
                     subject = room.subject,
-                    replies = replies
+                    replies = replies,
+                    onNewMessage = { event ->
+                        viewModelScope.launch {
+                            _newEvents.emit(event)
+                        }
+                    }
                 )
             } catch (e: Exception) {
                 showError("Error: ${e.message}")

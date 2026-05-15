@@ -125,6 +125,27 @@ fun Timestamp.ago(): String {
     }
 }
 
+fun Timestamp.formatAsGroupHeader(): String {
+    val timeZone = TimeZone.currentSystemDefault()
+    val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
+    val inputDate = inputInstant.toLocalDateTime(timeZone).date
+
+    val now = Clock.System.now()
+    val today = now.toLocalDateTime(timeZone).date
+    val yesterday = today.minus(1, DateTimeUnit.DAY)
+
+    return when (inputDate) {
+        today -> "Today"
+        yesterday -> "Yesterday"
+        else -> {
+            val day = inputDate.day.toString().padStart(2, '0')
+            val month = inputDate.month.number.toString().padStart(2, '0')
+            val year = inputDate.year.toString().takeLast(2)
+            "$day/$month/$year"
+        }
+    }
+}
+
 fun Timestamp.humanReadable(): String {
     val timeZone = TimeZone.currentSystemDefault()
     val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())

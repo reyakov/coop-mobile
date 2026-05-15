@@ -179,6 +179,7 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                                         picture = userProfile?.asRecord()?.picture,
                                         description = userProfile?.asRecord()?.displayName,
                                         shape = MaterialShapes.Cookie9Sided.toShape(),
+                                        modifier = Modifier.fillMaxSize()
                                     )
                                 }
                                 Spacer(modifier = Modifier.size(8.dp))
