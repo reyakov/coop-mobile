@@ -17,12 +17,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import rust.nostr.sdk.EventBuilder
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
@@ -42,6 +44,9 @@ class NostrViewModel(
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
 
+    private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
+    val contactList = _contactList.asStateFlow()
+
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
@@ -54,6 +59,16 @@ class NostrViewModel(
 
     init {
         startMetadataBatchProcessor()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Ensure all relays are disconnect
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                nostr.disconnect()
+            }
+        }
     }
 
     private fun showError(message: String) {
@@ -132,6 +147,9 @@ class NostrViewModel(
             nostr.handleNotifications(
                 onMetadataUpdate = { pubkey, metadata ->
                     updateMetadata(pubkey, metadata)
+                },
+                onContactListUpdate = { contactList ->
+                    _contactList.value = contactList.toSet()
                 },
                 onEose = {
                     getChatRooms()
@@ -287,6 +305,23 @@ class NostrViewModel(
         }
     }
 
+    fun createChatRoom(to: List<PublicKey>): Long {
+        if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
+        if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
+
+        // Construct the rumor event
+        val rumor = EventBuilder
+            .privateMsgRumor(to.first(), "")
+            .tags(to.map { Tag.publicKey(it) })
+            .build(nostr.signer.currentUser!!)
+
+        // Create a room from the rumor event
+        val room = Room.new(rumor, nostr.signer.currentUser!!)
+        _chatRooms.value += room
+
+        return room.id
+    }
+
     fun getChatRoom(id: Long): Room {
         return chatRooms.value.firstOrNull { it.id == id }
             ?: throw IllegalArgumentException("Room not found")
@@ -342,16 +377,6 @@ class NostrViewModel(
                 )
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
-            }
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        // Ensure all relays are disconnect
-        viewModelScope.launch {
-            withContext(NonCancellable) {
-                nostr.disconnect()
             }
         }
     }

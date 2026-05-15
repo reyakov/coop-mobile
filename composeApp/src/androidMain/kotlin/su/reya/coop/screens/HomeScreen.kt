@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -24,17 +26,23 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +55,8 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_new_chat
+import coop.composeapp.generated.resources.ic_scanner
 import coop.composeapp.generated.resources.ic_search
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -61,7 +71,10 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpenChat: (Long) -> Unit) {
+fun HomeScreen(
+    onOpenChat: (Long) -> Unit,
+    onNewChat: () -> Unit,
+) {
     val clipboard = LocalClipboard.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
@@ -74,6 +87,8 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
     val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
 
     val sheetState = rememberModalBottomSheetState()
+    val listState = rememberLazyListState()
+    val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -98,6 +113,13 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                             contentDescription = "Search"
                         )
                     }
+                    // QR Scanner
+                    IconButton(onClick = { /* TODO: Open search */ }) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_scanner),
+                            contentDescription = "Scanner"
+                        )
+                    }
                     // User
                     IconButton(onClick = { showBottomSheet = true }) {
                         Avatar(
@@ -108,6 +130,32 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                    TooltipAnchorPosition.Above,
+                    spacingBetweenTooltipAndAnchor = 8.dp,
+                ),
+                tooltip = {
+                    if (!expandedFab) {
+                        PlainTooltip { Text("New Chat") }
+                    }
+                },
+                state = rememberTooltipState(),
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = onNewChat,
+                    expanded = expandedFab,
+                    icon = {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_new_chat),
+                            contentDescription = "New Chat"
+                        )
+                    },
+                    text = { Text("New Chat") },
+                )
+            }
         },
         content = { innerPadding ->
             Surface(
@@ -137,6 +185,7 @@ fun HomeScreen(onOpenChat: (Long) -> Unit) {
                     }
                 } else {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(chatRooms.toList(), key = { it.id }) { room ->

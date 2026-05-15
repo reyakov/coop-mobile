@@ -10,6 +10,9 @@ sealed interface Screen {
     data class Chat(val id: Long) : Screen
 
     @Serializable
+    data object NewChat : Screen
+
+    @Serializable
     data object Onboarding : Screen
 
     @Serializable
@@ -17,4 +20,7 @@ sealed interface Screen {
 
     @Serializable
     data object NewIdentity : Screen
+
+    @Serializable
+    data object Scan : Screen
 }

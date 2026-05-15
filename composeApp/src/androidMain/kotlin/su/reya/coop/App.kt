@@ -14,10 +14,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -26,8 +26,10 @@ import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
+import su.reya.coop.screens.NewChatScreen
 import su.reya.coop.screens.NewIdentityScreen
 import su.reya.coop.screens.OnboardingScreen
+import su.reya.coop.screens.ScanScreen
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
@@ -37,18 +39,26 @@ val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
 }
 
+val LocalNavController = staticCompositionLocalOf<NavController> {
+    error("No NavController provided")
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun App(dbPath: String) {
     val context = LocalContext.current
+    val navController = rememberNavController()
+    val darkMode = isSystemInDarkTheme()
+
+    // Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Initialize Nostr and SecretStore
     val nostr = remember { Nostr() }
     val secretStore = remember { SecretStore(context) }
     val viewModel: NostrViewModel = viewModel { NostrViewModel(nostr, secretStore) }
-
-    // Dynamic color scheme
-    val darkMode = isSystemInDarkTheme()
+    
+    // Enabled the dynamic color scheme
     val colorScheme = when {
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
             if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -58,13 +68,12 @@ fun App(dbPath: String) {
         else -> expressiveLightColorScheme()
     }
 
-    // Snackbar
-    val snackbarHostState = remember { SnackbarHostState() }
-
     LaunchedEffect(Unit) {
         viewModel.initAndConnect(dbPath)
         viewModel.startNotificationHandler()
         viewModel.getChatRooms()
+
+        // Collect error events from the ViewModel
         viewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
@@ -76,9 +85,8 @@ fun App(dbPath: String) {
         CompositionLocalProvider(
             LocalNostrViewModel provides viewModel,
             LocalSnackbarHostState provides snackbarHostState,
+            LocalNavController provides navController,
         ) {
-            rememberCoroutineScope()
-            val navController = rememberNavController()
             val emptySecret by viewModel.emptySecret.collectAsState(initial = null)
 
             LaunchedEffect(emptySecret) {
@@ -136,13 +144,24 @@ fun App(dbPath: String) {
                 }
                 composable<Screen.Home> { backStackEntry ->
                     HomeScreen(
-                        onOpenChat = { id -> navController.navigate(Screen.Chat(id)) }
+                        onOpenChat = { id -> navController.navigate(Screen.Chat(id)) },
+                        onNewChat = { navController.navigate(Screen.NewChat) }
                     )
                 }
                 composable<Screen.Chat> { backStackEntry ->
                     val chat: Screen.Chat = backStackEntry.toRoute()
                     ChatScreen(
                         id = chat.id,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.NewChat> { backStackEntry ->
+                    NewChatScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Scan> { backStackEntry ->
+                    ScanScreen(
                         onBack = { navController.popBackStack() },
                     )
                 }

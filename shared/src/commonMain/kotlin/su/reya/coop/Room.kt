@@ -111,7 +111,7 @@ fun Timestamp.ago(): String {
     val duration = now - inputInstant
 
     return when {
-        duration.inWholeSeconds < SECONDS_IN_MINUTE -> "now"
+        duration.inWholeSeconds < SECONDS_IN_MINUTE -> "Now"
         duration.inWholeMinutes < MINUTES_IN_HOUR -> "${duration.inWholeMinutes}m"
         duration.inWholeHours < HOURS_IN_DAY -> "${duration.inWholeHours}h"
         duration.inWholeDays < DAYS_IN_MONTH -> "${duration.inWholeDays}d"

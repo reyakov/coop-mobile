@@ -1,7 +1,10 @@
 package su.reya.coop
 
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.request.get
+import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -24,6 +27,8 @@ import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.LogLevel
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.MetadataRecord
+import rust.nostr.sdk.Nip05Address
+import rust.nostr.sdk.Nip05Profile
 import rust.nostr.sdk.NostrDatabase
 import rust.nostr.sdk.NostrGossip
 import rust.nostr.sdk.PublicKey
@@ -56,8 +61,6 @@ class Nostr {
         private set
     var msgRelayList: Map<PublicKey, List<RelayUrl>> = emptyMap()
         private set
-    var contactList: List<PublicKey> = emptyList()
-        private set
 
     suspend fun init(dbPath: String) {
         try {
@@ -87,6 +90,12 @@ class Nostr {
             client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
             client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
 
+            // Add search relay
+            client?.addRelay(
+                url = RelayUrl.parse("wss://antiprimal.net"),
+                capabilities = RelayCapabilities.read()
+            )
+
             // Indexer relay for NIP-65 discovery
             client?.addRelay(
                 url = RelayUrl.parse("wss://indexer.coracle.social"),
@@ -107,7 +116,6 @@ class Nostr {
     suspend fun exit() {
         signer.switch(Keys.generate())
         deviceSigner = null
-        contactList = emptyList()
     }
 
     suspend fun setSigner(keys: AsyncNostrSigner) {
@@ -184,6 +192,7 @@ class Nostr {
 
     suspend fun handleNotifications(
         onMetadataUpdate: (PublicKey, Metadata) -> Unit,
+        onContactListUpdate: (List<PublicKey>) -> Unit,
         onNewMessage: (UnsignedEvent) -> Unit,
         onEose: () -> Unit,
     ) = coroutineScope {
@@ -214,6 +223,12 @@ class Nostr {
                                     onMetadataUpdate(event.author(), metadata)
                                 } catch (e: Exception) {
                                     println("Failed to parse metadata: $e")
+                                }
+                            }
+
+                            if (event.kind().asStd()?.equals(KindStandard.CONTACT_LIST) == true) {
+                                if (isSignedByUser(event = event)) {
+                                    onContactListUpdate(event.tags().publicKeys())
                                 }
                             }
 
@@ -457,7 +472,7 @@ class Nostr {
                     )
                 )
 
-            client?.subscribe(target = target, id = "metadata-reqs", closeOn = opts)
+            client?.subscribe(target = target, closeOn = opts)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
         }
@@ -494,13 +509,10 @@ class Nostr {
                         Filter().kind(kind).author(userPubkey).pubkeys(room.members.toList());
 
                     // Check if the user is interacting with the room's members
-                    val isInteracting = client?.database()?.query(filter)?.isEmpty() == false;
-
-                    // Check if the room's members are in the contact list
-                    val isContact = contactList.containsAll(room.members)
+                    val isOngoing = client?.database()?.query(filter)?.isEmpty() == false;
 
                     // Set the room kind based on interaction status
-                    if (isInteracting || isContact) {
+                    if (isOngoing) {
                         room.setKind(RoomKind.Ongoing)
                     }
 
@@ -612,6 +624,56 @@ class Nostr {
             }
         } catch (e: Exception) {
             throw IllegalStateException("Failed to send message: ${e.message}", e)
+        }
+    }
+
+    suspend fun profileFromAddress(client: HttpClient, address: Nip05Address): Nip05Profile {
+        try {
+            val response: HttpResponse = client.get(address.url())
+            val bodyString: String = response.body()
+
+            return Nip05Profile.fromJson(address, bodyString)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch profile from address: ${e.message}", e)
+        }
+    }
+
+    suspend fun searchByAddress(query: String): List<PublicKey> {
+        try {
+            val address = Nip05Address.parse(query)
+            val profile = profileFromAddress(HttpClient(), address)
+
+            return listOf(profile.publicKey())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to search address: ${e.message}", e)
+        }
+    }
+
+    suspend fun searchByNostr(query: String) {
+        try {
+            val kinds = listOf(Kind.fromStd(KindStandard.METADATA))
+            val filter = Filter().kinds(kinds).search(query).limit(10u)
+            val target =
+                ReqTarget.manual(mapOf(RelayUrl.parse("wss://antiprimal.net") to listOf(filter)))
+
+            val stream = client?.streamEvents(
+                target = target,
+                id = "search",
+                timeout = Duration.parse("4s"),
+                policy = ReqExitPolicy.ExitOnEose
+            )
+
+            // Collect the results
+            val results = mutableListOf<PublicKey>()
+
+            // Keep searching until the stream is closed or timeout
+            stream?.next()?.let { event ->
+                if (event.event != null) {
+                    results.add(event.event!!.author())
+                }
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to search nostr: ${e.message}", e)
         }
     }
 }
