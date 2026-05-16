@@ -89,6 +89,7 @@ class Nostr {
             // Bootstrap relays
             client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
             client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
+            client?.addRelay(RelayUrl.parse("wss://purplepag.es"))
 
             // Add search relay
             client?.addRelay(
@@ -638,18 +639,18 @@ class Nostr {
         }
     }
 
-    suspend fun searchByAddress(query: String): List<PublicKey> {
+    suspend fun searchByAddress(query: String): PublicKey {
         try {
             val address = Nip05Address.parse(query)
             val profile = profileFromAddress(HttpClient(), address)
 
-            return listOf(profile.publicKey())
+            return profile.publicKey()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search address: ${e.message}", e)
         }
     }
 
-    suspend fun searchByNostr(query: String) {
+    suspend fun searchByNostr(query: String): List<PublicKey> {
         try {
             val kinds = listOf(Kind.fromStd(KindStandard.METADATA))
             val filter = Filter().kinds(kinds).search(query).limit(10u)
@@ -672,6 +673,8 @@ class Nostr {
                     results.add(event.event!!.author())
                 }
             }
+
+            return results
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search nostr: ${e.message}", e)
         }

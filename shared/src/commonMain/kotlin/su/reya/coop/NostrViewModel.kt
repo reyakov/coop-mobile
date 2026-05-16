@@ -380,6 +380,24 @@ class NostrViewModel(
             }
         }
     }
+
+    suspend fun searchByAddress(query: String): PublicKey? {
+        try {
+            return nostr.searchByAddress(query)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+        return null
+    }
+
+    suspend fun searchByNostr(query: String): List<PublicKey> {
+        try {
+            return nostr.searchByNostr(query)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+        return emptyList()
+    }
 }
 
 fun PublicKey.short(): String {
