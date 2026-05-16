@@ -52,7 +52,12 @@ fun ImportScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Import") },
+                title = {
+                    Text(
+                        text = "Import",
+                        style = MaterialTheme.typography.titleMediumEmphasized
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(

@@ -70,7 +70,12 @@ fun NewIdentityScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Create a new identity") },
+                title = {
+                    Text(
+                        text = "Create a new identity",
+                        style = MaterialTheme.typography.titleMediumEmphasized
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
