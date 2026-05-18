@@ -24,6 +24,7 @@ import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
@@ -49,6 +50,9 @@ class NostrViewModel(
 
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
+
+    private val _sentReports = MutableStateFlow<Map<EventId, List<RelayUrl>>>(emptyMap())
+    val sentReport = _sentReports.asSharedFlow()
 
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
     val errorEvents = _errorEvents.receiveAsFlow()
@@ -104,6 +108,7 @@ class NostrViewModel(
                     if (batch.size >= 10 || (now - lastFlushTime) >= timeout || nextKey == null) {
                         val keysToRequest = batch.toList()
                         batch.clear()
+
                         nostr.fetchMetadataBatch(keysToRequest)
                     }
                 }
@@ -366,16 +371,36 @@ class NostrViewModel(
                     content = message,
                     subject = room.subject,
                     replies = replies,
-                    onNewMessage = { event ->
-                        viewModelScope.launch {
-                            _newEvents.emit(event)
-                        }
-                    }
+                    onRumorCreated = { event ->
+                        updateRoomList(roomId, event)
+                        viewModelScope.launch { _newEvents.emit(event) }
+                    },
                 )
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
         }
+    }
+
+    fun isMessageSent(id: EventId): Boolean {
+        val giftWrapId = nostr.rumorMap[id]
+
+        if (giftWrapId != null) {
+            val isSent = nostr.sentEvents[giftWrapId]?.isNotEmpty() ?: false
+            return isSent
+        } else {
+            return false
+        }
+    }
+
+    private fun updateRoomList(roomId: Long, newMessage: UnsignedEvent) {
+        _chatRooms.value = _chatRooms.value.map { room ->
+            if (room.id == roomId) {
+                room.copy(lastMessage = newMessage.content(), createdAt = newMessage.createdAt())
+            } else {
+                room
+            }
+        }.toSet()
     }
 
     suspend fun searchByAddress(query: String): PublicKey? {

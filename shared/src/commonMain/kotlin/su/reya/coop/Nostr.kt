@@ -66,6 +66,10 @@ class Nostr {
         private set
     var msgRelayList: Map<PublicKey, List<RelayUrl>> = emptyMap()
         private set
+    var sentEvents: MutableMap<EventId, List<RelayUrl>> = mutableMapOf()
+        private set
+    var rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
+        private set
 
     suspend fun init(dbPath: String) {
         try {
@@ -94,6 +98,7 @@ class Nostr {
                     .build()
 
             // Bootstrap relays
+            client?.addRelay(RelayUrl.parse("wss://relay.damus.io"))
             client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
             client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
             client?.addRelay(RelayUrl.parse("wss://purplepag.es"))
@@ -334,6 +339,13 @@ class Nostr {
                             }
                         }
 
+                        is RelayMessageEnum.Ok -> {
+                            if (sentEvents.containsKey(message.eventId)) {
+                                val currentRelays = sentEvents[message.eventId] ?: emptyList()
+                                sentEvents[message.eventId] = currentRelays + relayUrl
+                            }
+                        }
+
                         else -> {
                             /* Ignore other message types */
                         }
@@ -495,7 +507,7 @@ class Nostr {
 
         client?.sendEvent(
             event = metadataEvent,
-            target = SendEventTarget.toNip65(),
+            target = SendEventTarget.broadcast(),
             ackPolicy = AckPolicy.none()
         )
 
@@ -515,7 +527,7 @@ class Nostr {
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
         try {
-            val limit = keys.size.toULong();
+            val limit = keys.size.toULong() * 4u;
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             // Construct a filter for metadata events
@@ -528,8 +540,10 @@ class Nostr {
             val target =
                 ReqTarget.manual(
                     mapOf(
+                        RelayUrl.parse("wss://purplepag.es") to listOf(filter),
                         RelayUrl.parse("wss://user.kindpag.es") to listOf(filter),
-                        RelayUrl.parse("wss://relay.primal.net") to listOf(filter)
+                        RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
+                        RelayUrl.parse("wss://relay.damus.io") to listOf(filter),
                     )
                 )
 
@@ -550,37 +564,31 @@ class Nostr {
             val events = client?.database()?.query(filter)
 
             // Collect rooms
-            val rooms: MutableSet<Room> = mutableSetOf()
+            val roomsMap: MutableMap<Long, Room> = mutableMapOf()
 
             events
                 ?.toVec()
                 ?.map { UnsignedEvent.fromJson(it.content()) }
                 ?.filter { it.tags().publicKeys().isNotEmpty() }
-                ?.sortedByDescending { it.createdAt().asSecs() }
                 ?.forEach { event ->
-                    val room = Room.new(rumor = event, userPubkey = userPubkey)
+                    val newRoom = Room.new(rumor = event, userPubkey = userPubkey)
+                    val existingRoom = roomsMap[newRoom.id]
 
                     // Check if the room already exists
-                    if (rooms.contains(room)) {
-                        room.setCreatedAt(room.createdAt)
-                        room.setLastMessage(room.lastMessage)
+                    if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
+                        val filter =
+                            Filter().kind(kind).author(userPubkey).pubkeys(newRoom.members.toList())
+
+                        // Determine if it's an ongoing room
+                        val isOngoing = client?.database()?.query(filter)?.isEmpty() == false
+
+                        // Append room to map
+                        roomsMap[newRoom.id] =
+                            if (isOngoing) newRoom.copy(kind = RoomKind.Ongoing) else newRoom
                     }
-
-                    val filter =
-                        Filter().kind(kind).author(userPubkey).pubkeys(room.members.toList());
-
-                    // Check if the user is interacting with the room's members
-                    val isOngoing = client?.database()?.query(filter)?.isEmpty() == false;
-
-                    // Set the room kind based on interaction status
-                    if (isOngoing) {
-                        room.setKind(RoomKind.Ongoing)
-                    }
-
-                    rooms.add(room)
                 }
 
-            return rooms
+            return roomsMap.values.toSet()
         } catch (e: Exception) {
             println("Failed to get chat rooms: ${e.message}")
             return null
@@ -625,7 +633,7 @@ class Nostr {
         content: String,
         subject: String? = null,
         replies: List<EventId> = emptyList(),
-        onNewMessage: ((UnsignedEvent) -> Unit)? = null
+        onRumorCreated: ((UnsignedEvent) -> Unit)? = null,
     ) {
         try {
             val currentUser =
@@ -664,7 +672,7 @@ class Nostr {
 
                 // Emit the rumor to the chat screen
                 if (receiver == currentUser) {
-                    onNewMessage?.invoke(rumor)
+                    onRumorCreated?.invoke(rumor)
                 }
 
                 // Construct the gift wrap event
@@ -678,12 +686,19 @@ class Nostr {
                 )
 
                 // Send the event to receiver's NIP-17 relays
-                client?.sendEvent(
+                val output = client?.sendEvent(
                     event = gift,
                     target = SendEventTarget.toNip17(),
                     ackPolicy = AckPolicy.none(),
                     authenticationTimeout = Duration.parse("2s")
                 )
+
+                if (output != null) {
+                    sentEvents[output.id] = emptyList()
+                    if (rumor.id() != null) {
+                        rumorMap[rumor.id()!!] = output.id
+                    }
+                }
             }
         } catch (e: Exception) {
             throw IllegalStateException("Failed to send message: ${e.message}", e)

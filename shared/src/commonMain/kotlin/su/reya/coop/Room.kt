@@ -29,14 +29,6 @@ data class Room(
     val kind: RoomKind = RoomKind.default(),
     val lastMessage: String? = null
 ) : Comparable<Room> {
-    override fun hashCode(): Int = id.hashCode()
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Room) return false
-        return id == other.id
-    }
-
     override fun compareTo(other: Room): Int {
         return this.createdAt.asSecs().compareTo(other.createdAt.asSecs())
     }

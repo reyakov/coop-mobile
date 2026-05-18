@@ -1,5 +1,6 @@
 package su.reya.coop.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -75,7 +76,7 @@ fun ChatScreen(
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
-    
+
     fun setLoading(value: Boolean) {
         loading = value
     }
@@ -240,7 +241,17 @@ fun ChatMessage(
                 color = containerColor,
                 contentColor = contentColor,
                 shape = bubbleShape,
-                modifier = Modifier.widthIn(max = 280.dp)
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .clickable(
+                        onClick = {
+                            val id = rumor.id()
+                            if (id != null) {
+                                val sent = viewModel.isMessageSent(id)
+                                println("Sent: $sent")
+                            }
+                        }
+                    )
             ) {
                 Text(
                     text = rumor.content(),
