@@ -1,22 +1,27 @@
 package su.reya.coop
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Get database directory
-        val dbDir = File(filesDir, "nostr")
-        dbDir.mkdirs()
+        val intent = Intent(this, NostrForegroundService::class.java)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
 
         setContent {
-            App(dbDir.absolutePath)
+            App()
         }
     }
 }

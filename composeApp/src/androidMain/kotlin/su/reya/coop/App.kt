@@ -45,7 +45,7 @@ val LocalNavController = staticCompositionLocalOf<NavController> {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun App(dbPath: String) {
+fun App() {
     val context = LocalContext.current
     val navController = rememberNavController()
     val darkMode = isSystemInDarkTheme()
@@ -53,11 +53,10 @@ fun App(dbPath: String) {
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Initialize Nostr and SecretStore
-    val nostr = remember { Nostr() }
+    // Initialize Nostr View Model and Secret Store
     val secretStore = remember { SecretStore(context) }
-    val viewModel: NostrViewModel = viewModel { NostrViewModel(nostr, secretStore) }
-    
+    val viewModel: NostrViewModel = viewModel { NostrViewModel(NostrManager.instance, secretStore) }
+
     // Enabled the dynamic color scheme
     val colorScheme = when {
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
@@ -69,7 +68,7 @@ fun App(dbPath: String) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.initAndConnect(dbPath)
+        viewModel.login()
         viewModel.startNotificationHandler()
         viewModel.getChatRooms()
 

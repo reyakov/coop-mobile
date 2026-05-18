@@ -131,14 +131,11 @@ class NostrViewModel(
         _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
     }
 
-    suspend fun initAndConnect(dbPath: String) {
+    suspend fun login() {
         try {
-            // Initialize nostr client
-            nostr.init(dbPath)
-            // Get user's secret
             getUserSecret()
         } catch (e: Exception) {
-            showError("Failed to initialize Nostr: ${e.message}")
+            showError("Failed to login: ${e.message}")
         }
     }
 
@@ -151,7 +148,7 @@ class NostrViewModel(
                 onContactListUpdate = { contactList ->
                     _contactList.value = contactList.toSet()
                 },
-                onEose = {
+                onSubscriptionClose = {
                     getChatRooms()
                 },
                 onNewMessage = { event ->

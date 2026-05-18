@@ -52,7 +52,12 @@ import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
 
+object NostrManager {
+    val instance = Nostr()
+}
+
 class Nostr {
+    private var isInitialized = false
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
@@ -64,6 +69,8 @@ class Nostr {
 
     suspend fun init(dbPath: String) {
         try {
+            if (isInitialized) return
+
             // Initialize the logger for nostr client
             initLogger(LogLevel.DEBUG)
 
@@ -105,6 +112,8 @@ class Nostr {
 
             // Connect to all bootstrap relays and wait for all connections to be established
             client?.connect(Duration.parse("3s"))
+
+            isInitialized = true
         } catch (e: Exception) {
             throw IllegalStateException("Failed to initialize Nostr client: ${e.message}", e)
         }
@@ -119,9 +128,9 @@ class Nostr {
         deviceSigner = null
     }
 
-    suspend fun setSigner(keys: AsyncNostrSigner) {
+    suspend fun setSigner(new: AsyncNostrSigner) {
         try {
-            signer.switch(keys)
+            signer.switch(new)
             // Fetch metadata for current user
             getUserMetadata()
         } catch (e: Exception) {
@@ -184,10 +193,61 @@ class Nostr {
 
             client?.subscribe(
                 target = ReqTarget.manual(target),
-                id = "messages"
+                id = "all-gift-wraps"
             )
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
+        }
+    }
+
+    suspend fun handleLiteNotifications(
+        onNewMessage: (UnsignedEvent) -> Unit,
+    ) {
+        val now = Timestamp.now()
+        val processedEvent = mutableSetOf<EventId>()
+        val notifications = client?.notifications() ?: return
+
+        while (true) {
+            val notification = notifications.next() ?: continue
+
+            when (notification) {
+                is ClientNotification.Message -> {
+                    val relayUrl = notification.relayUrl
+
+                    when (val message = notification.message.asEnum()) {
+                        is RelayMessageEnum.EventMsg -> {
+                            val event = message.event
+                            val subscriptionId = message.subscriptionId
+
+                            // Ignore events not from the newest gift wraps subscription
+                            if (subscriptionId != "newest-gift-wraps") continue
+
+                            // Prevent processing duplicate events
+                            if (processedEvent.contains(event.id())) continue
+                            processedEvent.add(event.id())
+
+                            if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
+                                try {
+                                    val rumor = extractRumor(event)
+
+                                    // Handle new message
+                                    rumor?.createdAt()?.asSecs()?.let {
+                                        if (it >= now.asSecs()) {
+                                            onNewMessage(rumor)
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    println("Failed to extract rumor: $e")
+                                }
+                            }
+                        }
+
+                        else -> {}
+                    }
+                }
+
+                else -> {}
+            }
         }
     }
 
@@ -195,7 +255,7 @@ class Nostr {
         onMetadataUpdate: (PublicKey, Metadata) -> Unit,
         onContactListUpdate: (List<PublicKey>) -> Unit,
         onNewMessage: (UnsignedEvent) -> Unit,
-        onEose: () -> Unit,
+        onSubscriptionClose: () -> Unit,
     ) = coroutineScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
@@ -251,7 +311,7 @@ class Nostr {
                                     // Start a new tracker
                                     eoseTrackerJob = launch {
                                         delay(10000) // Wait for 10 seconds
-                                        onEose()
+                                        onSubscriptionClose()
                                     }
 
                                     // Handle new message
@@ -270,7 +330,7 @@ class Nostr {
                             val subscriptionId = message.subscriptionId
 
                             if (subscriptionId == "messages") {
-                                onEose()
+                                onSubscriptionClose()
                             }
                         }
 
@@ -612,7 +672,9 @@ class Nostr {
                     signer = signer,
                     receiverPubkey = receiver,
                     rumor = rumor,
-                    extraTags = tags
+                    extraTags = listOf(
+                        Tag.custom(TagKind.Unknown("k"), listOf("14"))
+                    )
                 )
 
                 // Send the event to receiver's NIP-17 relays
