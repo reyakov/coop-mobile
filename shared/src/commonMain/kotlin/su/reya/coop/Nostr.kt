@@ -278,6 +278,7 @@ class Nostr {
                     when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
+                            val id = message.subscriptionId
 
                             // Prevent processing duplicate events
                             if (processedEvent.contains(event.id())) continue
@@ -299,9 +300,18 @@ class Nostr {
                             }
 
                             if (event.kind().asStd()?.equals(KindStandard.INBOX_RELAYS) == true) {
+                                // Get all gift wrap events for current user
                                 if (isSignedByUser(event = event)) {
                                     getUserMessages(msgRelayList = event)
                                 }
+
+                                // Connect to all msg relays for the currently active chat room
+                                if (id.startsWith("room-")) {
+                                    launch {
+                                        chatRoomAuth(event)
+                                    }
+                                }
+
                                 // Cache the relay list for future use
                                 setMsgRelay(pubkey = event.author(), event = event)
                             }
@@ -525,6 +535,23 @@ class Nostr {
         setSigner(keys)
     }
 
+    suspend fun getAllCacheMetadata(): Map<PublicKey, Metadata> {
+        try {
+            val filter = Filter().kind(Kind.fromStd(KindStandard.METADATA)).limit(200u)
+            val events = client?.database()?.query(filter)
+            val results = mutableMapOf<PublicKey, Metadata>()
+
+            events?.toVec()?.forEach { event ->
+                val metadata = Metadata.fromJson(event.content())
+                results[event.author()] = metadata
+            }
+
+            return results
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get cache metadata: ${e.message}", e)
+        }
+    }
+
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
         try {
             val limit = keys.size.toULong() * 4u;
@@ -611,7 +638,7 @@ class Nostr {
         }
     }
 
-    suspend fun chatRoomConnect(members: List<PublicKey>) {
+    suspend fun chatRoomConnect(id: Long, members: List<PublicKey>) {
         try {
             members.forEach { member ->
                 val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
@@ -620,11 +647,24 @@ class Nostr {
 
                 client?.subscribe(
                     target = ReqTarget.auto(listOf(filter)),
-                    closeOn = opts
+                    closeOn = opts,
+                    id = "room-${id}"
                 )
             }
         } catch (e: Exception) {
             throw IllegalStateException("Failed to connect to chat room: ${e.message}", e)
+        }
+    }
+
+    suspend fun chatRoomAuth(event: Event) {
+        try {
+            val urls = nip17ExtractRelayList(event);
+            for (url in urls) {
+                client?.addRelay(url)
+                client?.connectRelay(url)
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to authenticate chat room: ${e.message}", e)
         }
     }
 
@@ -694,9 +734,13 @@ class Nostr {
                 )
 
                 if (output != null) {
+                    // Keep track of sent events
                     sentEvents[output.id] = emptyList()
-                    if (rumor.id() != null) {
-                        rumorMap[rumor.id()!!] = output.id
+                    if (rumor.id() != null) rumorMap[rumor.id()!!] = output.id
+
+                    // Collect failed outputs
+                    output.failed.forEach { (relayUrl, reason) ->
+                        println("Failed to send event to relay $relayUrl: $reason")
                     }
                 }
             }

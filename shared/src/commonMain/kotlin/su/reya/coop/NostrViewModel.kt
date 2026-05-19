@@ -63,6 +63,7 @@ class NostrViewModel(
 
     init {
         startMetadataBatchProcessor()
+        getCacheMetadata()
     }
 
     override fun onCleared() {
@@ -78,10 +79,7 @@ class NostrViewModel(
     private fun showError(message: String) {
         viewModelScope.launch {
             _errorEvents.send(message)
-
-            if (isCreating.value) {
-                _isCreating.value = false
-            }
+            if (isCreating.value) _isCreating.value = false
         }
     }
 
@@ -116,6 +114,17 @@ class NostrViewModel(
         }
     }
 
+    private fun getCacheMetadata() {
+        viewModelScope.launch {
+            val results = nostr.getAllCacheMetadata()
+            results.forEach { (pubkey, metadata) ->
+                println("Cache metadata for pubkey $pubkey: $metadata")
+                updateMetadata(pubkey, metadata)
+                seenPublicKeys.add(pubkey)
+            }
+        }
+    }
+
     private fun requestMetadata(pubkey: PublicKey) {
         if (seenPublicKeys.add(pubkey)) {
             viewModelScope.launch {
@@ -124,16 +133,16 @@ class NostrViewModel(
         }
     }
 
+    private fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
+        _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
+    }
+
     fun getMetadata(pubkey: PublicKey): StateFlow<Metadata?> {
         val flow = _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }
         if (flow.value == null) {
             requestMetadata(pubkey)
         }
         return flow.asStateFlow()
-    }
-
-    private fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
-        _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
     }
 
     suspend fun login() {
@@ -355,7 +364,7 @@ class NostrViewModel(
                 val room = getChatRoom(roomId)
                 val members = room.members
 
-                nostr.chatRoomConnect(members.toList())
+                nostr.chatRoomConnect(roomId, members.toList())
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
