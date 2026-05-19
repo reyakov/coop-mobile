@@ -68,11 +68,6 @@ fun App() {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.login()
-        viewModel.startNotificationHandler()
-        viewModel.getChatRooms()
-
-        // Collect error events from the ViewModel
         viewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
@@ -91,9 +86,6 @@ fun App() {
             LaunchedEffect(emptySecret) {
                 // Navigate to the home screen if the secret is already set
                 if (emptySecret == false) {
-                    // Get chat rooms
-                    viewModel.getChatRooms()
-                    // Navigate to the home screen
                     navController.navigate(Screen.Home) {
                         popUpTo(Screen.Onboarding) { inclusive = true }
                     }

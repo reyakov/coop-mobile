@@ -62,8 +62,10 @@ class NostrViewModel(
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
-        startMetadataBatchProcessor()
+        startNotificationHandler()
+        startMetadataBatchHandler()
         getCacheMetadata()
+        login()
     }
 
     override fun onCleared() {
@@ -83,8 +85,35 @@ class NostrViewModel(
         }
     }
 
-    private fun startMetadataBatchProcessor() {
+    private fun startNotificationHandler() {
         viewModelScope.launch {
+            // Wait until the client is ready
+            nostr.waitUntilInitialized()
+
+            nostr.handleNotifications(
+                onMetadataUpdate = { pubkey, metadata ->
+                    updateMetadata(pubkey, metadata)
+                },
+                onContactListUpdate = { contactList ->
+                    _contactList.value = contactList.toSet()
+                },
+                onSubscriptionClose = {
+                    getChatRooms()
+                },
+                onNewMessage = { event ->
+                    viewModelScope.launch {
+                        _newEvents.emit(event)
+                    }
+                },
+            )
+        }
+    }
+
+    private fun startMetadataBatchHandler() {
+        viewModelScope.launch {
+            // Wait until the client is ready
+            nostr.waitUntilInitialized()
+
             val batch = mutableSetOf<PublicKey>()
             val timeout = 500L // 500ms timeout for batching
 
@@ -116,11 +145,52 @@ class NostrViewModel(
 
     private fun getCacheMetadata() {
         viewModelScope.launch {
+            // Wait until the client is ready
+            nostr.waitUntilInitialized()
+
             val results = nostr.getAllCacheMetadata()
             results.forEach { (pubkey, metadata) ->
-                println("Cache metadata for pubkey $pubkey: $metadata")
                 updateMetadata(pubkey, metadata)
                 seenPublicKeys.add(pubkey)
+            }
+        }
+    }
+
+    private fun login() {
+        viewModelScope.launch {
+            // Wait until the client is ready
+            nostr.waitUntilInitialized()
+
+            // Get user's signer secret
+            val secret = secretStore.get("user_signer")
+
+            // If no secret is found, show onboarding screen
+            when (secret) {
+                null -> {
+                    _emptySecret.value = true
+                    return@launch
+                }
+
+                else -> _emptySecret.value = false
+            }
+
+            // Handle different signer types
+            if (secret.startsWith("nsec1")) {
+                val keys = Keys.parse(secret)
+                nostr.setSigner(keys)
+            } else if (secret.startsWith("bunker://")) {
+                try {
+                    val appKeys = getOrInitAppKeys()
+                    val bunker = NostrConnectUri.parse(secret)
+                    val timeout = Duration.parse("50s") // 50 seconds timeout
+                    val remote =
+                        NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
+                    nostr.setSigner(remote)
+                } catch (e: Exception) {
+                    showError("Error: ${e.message}")
+                }
+            } else {
+                throw IllegalArgumentException("Invalid secret format: $secret")
             }
         }
     }
@@ -145,82 +215,11 @@ class NostrViewModel(
         return flow.asStateFlow()
     }
 
-    suspend fun login() {
-        try {
-            getUserSecret()
-        } catch (e: Exception) {
-            showError("Failed to login: ${e.message}")
-        }
-    }
-
-    fun startNotificationHandler() {
-        viewModelScope.launch {
-            nostr.handleNotifications(
-                onMetadataUpdate = { pubkey, metadata ->
-                    updateMetadata(pubkey, metadata)
-                },
-                onContactListUpdate = { contactList ->
-                    _contactList.value = contactList.toSet()
-                },
-                onSubscriptionClose = {
-                    getChatRooms()
-                },
-                onNewMessage = { event ->
-                    viewModelScope.launch {
-                        _newEvents.emit(event)
-                    }
-                },
-            )
-        }
-    }
-
     fun currentUser(): PublicKey? {
         return nostr.signer.currentUser
     }
 
-    fun logout() {
-        viewModelScope.launch {
-            _emptySecret.value = true
-            _chatRooms.value = emptySet()
-            secretStore.clear("user_signer")
-            nostr.exit()
-        }
-    }
-
-    suspend fun getUserSecret() {
-        // Get user's signer secret
-        val secret = secretStore.get("user_signer")
-
-        // If no secret is found, show onboarding screen
-        when (secret) {
-            null -> {
-                _emptySecret.value = true
-                return
-            }
-
-            else -> _emptySecret.value = false
-        }
-
-        // Handle different signer types
-        if (secret.startsWith("nsec1")) {
-            val keys = Keys.parse(secret)
-            nostr.setSigner(keys)
-        } else if (secret.startsWith("bunker://")) {
-            try {
-                val appKeys = getOrInitAppKeys()
-                val bunker = NostrConnectUri.parse(secret)
-                val timeout = Duration.parse("50s") // 50 seconds timeout
-                val remote = NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
-                nostr.setSigner(remote)
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
-            }
-        } else {
-            throw IllegalArgumentException("Invalid secret format: $secret")
-        }
-    }
-
-    suspend fun getOrInitAppKeys(): Keys {
+    private suspend fun getOrInitAppKeys(): Keys {
         val secret = secretStore.get("app_keys")
 
         // If app keys are already stored, use them
@@ -345,6 +344,14 @@ class NostrViewModel(
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
+        }
+    }
+
+    suspend fun refreshChatRooms() {
+        try {
+            _chatRooms.value = nostr.getChatRooms() ?: emptySet()
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 

@@ -38,10 +38,10 @@ class NostrForegroundService : Service() {
             try {
                 val dbDir = File(filesDir, "nostr")
                 dbDir.mkdirs()
-
                 // Initialize Nostr client
                 nostr.init(dbDir.absolutePath)
-
+                // Connect to bootstrap relays
+                nostr.connectBootstrapRelays()
                 // Handle notifications
                 nostr.handleLiteNotifications { event ->
                     if (!isUserInApp()) {

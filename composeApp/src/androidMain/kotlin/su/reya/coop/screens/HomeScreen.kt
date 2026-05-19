@@ -37,10 +37,14 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -78,7 +82,6 @@ fun HomeScreen(
     val clipboard = LocalClipboard.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
-    val scope = rememberCoroutineScope()
 
     val currentUser = viewModel.currentUser() ?: return
     val currentUserProfile = viewModel.getMetadata(currentUser) ?: return
@@ -86,10 +89,17 @@ fun HomeScreen(
     val userProfile by currentUserProfile.collectAsState(initial = null)
     val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
 
+    val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
     val listState = rememberLazyListState()
+    val pullToRefreshState = rememberPullToRefreshState()
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.getChatRooms()
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -165,34 +175,54 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             ) {
-                if (chatRooms.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "No chats yet",
-                                style = MaterialTheme.typography.titleLargeEmphasized,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Your conversations will appear here.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline
-                            )
+                PullToRefreshBox(
+                    modifier = Modifier.fillMaxSize(),
+                    isRefreshing = isRefreshing,
+                    state = pullToRefreshState,
+                    onRefresh = {
+                        scope.launch {
+                            isRefreshing = true
+                            viewModel.refreshChatRooms()
+                            isRefreshing = false
                         }
+                    },
+                    indicator = {
+                        PullToRefreshDefaults.LoadingIndicator(
+                            state = pullToRefreshState,
+                            isRefreshing = isRefreshing,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
                     }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(chatRooms.toList(), key = { it.id }) { room ->
-                            ChatRoom(
-                                room = room,
-                                onClick = { onOpenChat(room.id) }
-                            )
+                ) {
+                    if (chatRooms.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "No chats yet",
+                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Your conversations will appear here.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(chatRooms.toList(), key = { it.id }) { room ->
+                                ChatRoom(
+                                    room = room,
+                                    onClick = { onOpenChat(room.id) }
+                                )
+                            }
                         }
                     }
                 }

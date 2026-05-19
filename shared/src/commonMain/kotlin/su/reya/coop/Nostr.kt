@@ -8,6 +8,10 @@ import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import rust.nostr.sdk.AckPolicy
 import rust.nostr.sdk.Alphabet
@@ -57,7 +61,9 @@ object NostrManager {
 }
 
 class Nostr {
-    private var isInitialized = false
+    private val _isInitialized = MutableStateFlow(false)
+    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
+
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
@@ -73,7 +79,7 @@ class Nostr {
 
     suspend fun init(dbPath: String) {
         try {
-            if (isInitialized) return
+            if (_isInitialized.value) return
 
             // Initialize the logger for nostr client
             initLogger(LogLevel.DEBUG)
@@ -97,31 +103,31 @@ class Nostr {
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                     .build()
 
-            // Bootstrap relays
-            client?.addRelay(RelayUrl.parse("wss://relay.damus.io"))
-            client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
-            client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
-            client?.addRelay(RelayUrl.parse("wss://purplepag.es"))
-
-            // Add search relay
-            client?.addRelay(
-                url = RelayUrl.parse("wss://antiprimal.net"),
-                capabilities = RelayCapabilities.read()
-            )
-
-            // Indexer relay for NIP-65 discovery
-            client?.addRelay(
-                url = RelayUrl.parse("wss://indexer.coracle.social"),
-                capabilities = RelayCapabilities.gossip()
-            )
-
-            // Connect to all bootstrap relays and wait for all connections to be established
-            client?.connect(Duration.parse("3s"))
-
-            isInitialized = true
+            _isInitialized.value = true
         } catch (e: Exception) {
             throw IllegalStateException("Failed to initialize Nostr client: ${e.message}", e)
         }
+    }
+
+    suspend fun waitUntilInitialized() {
+        _isInitialized.first { it }
+    }
+
+    suspend fun connectBootstrapRelays() {
+        // Bootstrap relays
+        client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
+        client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
+        client?.addRelay(RelayUrl.parse("wss://purplepag.es"))
+
+
+        // Indexer relay for NIP-65 discovery
+        client?.addRelay(
+            url = RelayUrl.parse("wss://indexer.coracle.social"),
+            capabilities = RelayCapabilities.gossip()
+        )
+
+        // Connect to all bootstrap relays and wait for all connections to be established
+        client?.connect(Duration.parse("2s"))
     }
 
     suspend fun disconnect() {
@@ -773,6 +779,13 @@ class Nostr {
 
     suspend fun searchByNostr(query: String): List<PublicKey> {
         try {
+            // Add search relay
+            val searchRelay = RelayUrl.parse("wss://antiprimal.net")
+            if (client?.relay(searchRelay) == null) {
+                client?.addRelay(url = searchRelay, capabilities = RelayCapabilities.read())
+                client?.connectRelay(searchRelay)
+            }
+
             val kinds = listOf(Kind.fromStd(KindStandard.METADATA))
             val filter = Filter().kinds(kinds).search(query).limit(10u)
             val target =
