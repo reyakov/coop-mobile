@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_send
+import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNostrViewModel
@@ -56,6 +57,7 @@ import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
+import su.reya.coop.short
 
 @Composable
 fun ChatScreen(
@@ -91,7 +93,16 @@ fun ChatScreen(
         messages.addAll(initialMessages)
 
         // Get msg relays for each member
-        viewModel.chatRoomConnect(id)
+        val results = viewModel.chatRoomConnect(id)
+        results.forEach { (member, relays) ->
+            if (relays.isNotEmpty()) {
+                val metadata = viewModel.getMetadata(member).first { it != null }
+                val profile = metadata?.asRecord()
+                val name = profile?.displayName ?: profile?.name ?: member.short()
+
+                snackbarHostState.showSnackbar("Connected to messaging relays for $name")
+            }
+        }
 
         // Stop loading spinner
         setLoading(false)
@@ -113,7 +124,11 @@ fun ChatScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box {
+                        if (loading) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(32.dp),
+                            )
+                        } else {
                             Avatar(
                                 picture = picture,
                                 description = displayName,
@@ -148,19 +163,12 @@ fun ChatScreen(
                 color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             ) {
-                if (loading) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingIndicator()
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(bottom = innerPadding.calculateBottomPadding())
-                    ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding())
+                ) {
+                    if (groupedMessages.isNotEmpty()) {
                         LazyColumn(
                             modifier = Modifier
                                 .weight(1f)
@@ -169,7 +177,9 @@ fun ChatScreen(
                             reverseLayout = true
                         ) {
                             groupedMessages.forEach { (dateHeader, messagesInGroup) ->
-                                items(messagesInGroup, key = { it.id()?.toBech32()!! }) { event ->
+                                items(
+                                    messagesInGroup,
+                                    key = { it.id()?.toBech32()!! }) { event ->
                                     ChatMessage(event)
                                 }
                                 item {
@@ -177,15 +187,33 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        ChatInput(
-                            value = text,
-                            onValueChange = { text = it },
-                            onSend = {
-                                viewModel.sendMessage(id, text)
-                                text = ""
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "No messages yet",
+                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Your conversations will appear here.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
                             }
-                        )
+                        }
                     }
+                    ChatInput(
+                        value = text,
+                        onValueChange = { text = it },
+                        onSend = {
+                            viewModel.sendMessage(id, text)
+                            text = ""
+                        }
+                    )
                 }
             }
         }
@@ -223,10 +251,10 @@ fun ChatMessage(
     }
 
     val containerColor =
-        if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+        if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
 
     val contentColor =
-        if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+        if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
 
     Box(
         modifier = Modifier

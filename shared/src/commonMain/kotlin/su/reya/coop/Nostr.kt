@@ -70,8 +70,6 @@ class Nostr {
         private set
     var deviceSigner: AsyncNostrSigner? = null
         private set
-    var msgRelayList: Map<PublicKey, List<RelayUrl>> = emptyMap()
-        private set
     var sentEvents: MutableMap<EventId, List<RelayUrl>> = mutableMapOf()
         private set
     var rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
@@ -253,11 +251,15 @@ class Nostr {
                             }
                         }
 
-                        else -> {}
+                        else -> {
+                            /* Ignore other event kinds */
+                        }
                     }
                 }
 
-                else -> {}
+                else -> {
+                    /* Ignore other message types */
+                }
             }
         }
     }
@@ -306,20 +308,10 @@ class Nostr {
                             }
 
                             if (event.kind().asStd()?.equals(KindStandard.INBOX_RELAYS) == true) {
-                                // Get all gift wrap events for current user
+                                // Get all gift wrap events for the current user
                                 if (isSignedByUser(event = event)) {
                                     getUserMessages(msgRelayList = event)
                                 }
-
-                                // Connect to all msg relays for the currently active chat room
-                                if (id.startsWith("room-")) {
-                                    launch {
-                                        chatRoomAuth(event)
-                                    }
-                                }
-
-                                // Cache the relay list for future use
-                                setMsgRelay(pubkey = event.author(), event = event)
                             }
 
                             if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
@@ -368,20 +360,15 @@ class Nostr {
                     }
                 }
 
-                is ClientNotification.NewEvent -> {
-                    // TODO: Handle new event
-                }
-
                 is ClientNotification.Shutdown -> {
                     break
                 }
+
+                else -> {
+                    /* Ignore other message types */
+                }
             }
         }
-    }
-
-    private fun setMsgRelay(pubkey: PublicKey, event: Event) {
-        val relays = nip17ExtractRelayList(event)
-        msgRelayList = msgRelayList + (pubkey to relays)
     }
 
     private suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
@@ -644,33 +631,49 @@ class Nostr {
         }
     }
 
-    suspend fun chatRoomConnect(id: Long, members: List<PublicKey>) {
+    suspend fun chatRoomConnect(members: List<PublicKey>): Map<PublicKey, List<RelayUrl>> {
         try {
+            val results = mutableMapOf<PublicKey, MutableList<RelayUrl>>()
+
             members.forEach { member ->
+                results[member] = mutableListOf<RelayUrl>()
                 val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
                 val filter = Filter().kind(kind).author(member).limit(1u)
-                val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
-                client?.subscribe(
+                val stream = client?.streamEvents(
                     target = ReqTarget.auto(listOf(filter)),
-                    closeOn = opts,
-                    id = "room-${id}"
+                    id = "room-${member.toBech32().substring(0, 10)}",
+                    timeout = Duration.parse("3s"),
+                    policy = ReqExitPolicy.ExitOnEose
                 )
+
+                stream?.next()?.let { res ->
+                    if (res.event != null) {
+                        // Connect to the msg relays
+                        connectMsgRelays(res.event!!)
+                        // Mark the member as connected
+                        results[member]?.add(res.relayUrl)
+                    }
+                }
             }
+
+            return results
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to connect to chat room: ${e.message}", e)
+            throw IllegalStateException("Failed to fetch relays: ${e.message}", e)
         }
     }
 
-    suspend fun chatRoomAuth(event: Event) {
+    suspend fun connectMsgRelays(event: Event) {
         try {
             val urls = nip17ExtractRelayList(event);
             for (url in urls) {
-                client?.addRelay(url)
-                client?.connectRelay(url)
+                if (client?.relay(url) == null) {
+                    client?.addRelay(url)
+                    client?.connectRelay(url)
+                }
             }
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to authenticate chat room: ${e.message}", e)
+            throw IllegalStateException("Failed to connect to relays: ${e.message}", e)
         }
     }
 

@@ -360,18 +360,18 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
     )
 }
 
-val defaultMenuList = listOf(
-    "Messaging Relays",
-    "Spam Filter",
-    "Contacts",
-    "Settings",
-    "About"
-)
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomMenuList() {
     val viewModel = LocalNostrViewModel.current
+
+    val defaultMenuList = listOf(
+        "Messaging Relays" to { },
+        "Spam Filter" to { },
+        "Contacts" to { },
+        "Settings" to { },
+        "About" to { }
+    )
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -381,15 +381,14 @@ fun BottomMenuList() {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
-            defaultMenuList.forEachIndexed { index, item ->
+            defaultMenuList.forEachIndexed { index, (title, action) ->
                 SegmentedListItem(
-                    checked = false,
-                    onCheckedChange = { },
+                    onClick = { action() },
                     shapes = ListItemDefaults.segmentedShapes(
                         index = index,
                         count = defaultMenuList.size
                     ),
-                    content = { Text(text = item) },
+                    content = { Text(text = title) },
                 )
             }
         }

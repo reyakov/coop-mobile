@@ -373,16 +373,15 @@ class NostrViewModel(
         return emptyList()
     }
 
-    fun chatRoomConnect(roomId: Long) {
-        viewModelScope.launch {
-            try {
-                val room = getChatRoom(roomId)
-                val members = room.members
+    suspend fun chatRoomConnect(roomId: Long): Map<PublicKey, List<RelayUrl>> {
+        val room = getChatRoom(roomId)
+        val members = room.members
 
-                nostr.chatRoomConnect(roomId, members.toList())
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
-            }
+        return runCatching {
+            nostr.chatRoomConnect(members.toList())
+        }.getOrElse { e ->
+            showError("Error: ${e.message}")
+            members.associateWith { emptyList<RelayUrl>() }
         }
     }
 
