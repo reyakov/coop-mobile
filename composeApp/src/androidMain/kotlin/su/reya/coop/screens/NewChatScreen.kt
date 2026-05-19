@@ -77,7 +77,9 @@ fun NewChatScreen(
     var query by remember { mutableStateOf("") }
 
     val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle?.getStateFlow<String?>("qr_result", null)?.collectAsState()
+    val qrResult by savedStateHandle
+        ?.getStateFlow<String?>("qr_result", null)
+        ?.collectAsState()
         ?: remember { mutableStateOf(null) }
 
     LaunchedEffect(query) {
@@ -88,6 +90,7 @@ fun NewChatScreen(
                 val pubkey = try {
                     PublicKey.parse(query)
                 } catch (e: Exception) {
+                    println("Failed to parse npub: ${e.message}")
                     null
                 }
                 if (pubkey != null) {
@@ -109,8 +112,11 @@ fun NewChatScreen(
     }
 
     LaunchedEffect(qrResult) {
-        qrResult?.let {
-            println("QR result: $it")
+        qrResult?.let { result ->
+            runCatching { PublicKey.parse(result) }
+                .onSuccess { pubkey -> selectedReceivers.add(pubkey) }
+                .onFailure { e -> println("Failed to parse QR: ${e.message}") }
+            // Clear the nav state
             navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
         }
     }

@@ -15,9 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -61,12 +63,14 @@ import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_scanner
-import coop.composeapp.generated.resources.ic_search
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalNavController
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.Screen
 import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
@@ -80,6 +84,7 @@ fun HomeScreen(
     onNewChat: () -> Unit,
 ) {
     val clipboard = LocalClipboard.current
+    val navController = LocalNavController.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
 
@@ -97,8 +102,28 @@ fun HomeScreen(
     var showBottomSheet by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
 
+    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+    val qrResult by savedStateHandle
+        ?.getStateFlow<String?>("qr_result", null)
+        ?.collectAsState()
+        ?: remember { mutableStateOf(null) }
+
     LaunchedEffect(Unit) {
         viewModel.getChatRooms()
+    }
+
+    LaunchedEffect(qrResult) {
+        qrResult?.let { result ->
+            runCatching { PublicKey.parse(result) }
+                .onSuccess { pubkey ->
+                    val roomId = viewModel.createChatRoom(listOf(pubkey))
+                    navController.navigate(Screen.Chat(roomId))
+                }
+                .onFailure { e -> println("Failed to parse QR: ${e.message}") }
+
+            // Clear the nav state
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+        }
     }
 
     Scaffold(
@@ -116,15 +141,8 @@ fun HomeScreen(
                     )
                 },
                 actions = {
-                    // Search
-                    IconButton(onClick = { /* TODO: Open search */ }) {
-                        Icon(
-                            painter = painterResource(Res.drawable.ic_search),
-                            contentDescription = "Search"
-                        )
-                    }
                     // QR Scanner
-                    IconButton(onClick = { /* TODO: Open search */ }) {
+                    IconButton(onClick = { navController.navigate(Screen.Scan) }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_scanner),
                             contentDescription = "Scanner"
@@ -353,20 +371,37 @@ val defaultMenuList = listOf(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomMenuList() {
+    val viewModel = LocalNostrViewModel.current
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        defaultMenuList.forEachIndexed { index, item ->
-            SegmentedListItem(
-                checked = false,
-                onCheckedChange = { },
-                shapes = ListItemDefaults.segmentedShapes(
-                    index = index,
-                    count = defaultMenuList.size
-                ),
-                content = { Text(text = item) },
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+        ) {
+            defaultMenuList.forEachIndexed { index, item ->
+                SegmentedListItem(
+                    checked = false,
+                    onCheckedChange = { },
+                    shapes = ListItemDefaults.segmentedShapes(
+                        index = index,
+                        count = defaultMenuList.size
+                    ),
+                    content = { Text(text = item) },
+                )
+            }
+        }
+        Spacer(modifier = Modifier.size(16.dp))
+        FilledTonalButton(
+            onClick = { viewModel.logout() },
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
             )
+        ) {
+            Text(text = "Logout")
         }
     }
 }

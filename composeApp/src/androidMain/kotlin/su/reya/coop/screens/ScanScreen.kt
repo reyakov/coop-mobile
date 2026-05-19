@@ -42,9 +42,7 @@ fun ScanScreen(
     val snackbarHostState = LocalSnackbarHostState.current
 
     val onResult: (String) -> Unit = { result ->
-        navController.previousBackStackEntry
-            ?.savedStateHandle
-            ?.set("qr_result", result)
+        navController.previousBackStackEntry?.savedStateHandle?.set("qr_result", result)
         navController.popBackStack()
     }
 

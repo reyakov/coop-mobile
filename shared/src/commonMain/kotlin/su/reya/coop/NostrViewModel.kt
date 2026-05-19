@@ -219,6 +219,14 @@ class NostrViewModel(
         return nostr.signer.currentUser
     }
 
+    fun logout() {
+        viewModelScope.launch {
+            secretStore.clear("user_signer")
+            nostr.signer.switch(Keys.generate())
+            _emptySecret.value = true
+        }
+    }
+
     private suspend fun getOrInitAppKeys(): Keys {
         val secret = secretStore.get("app_keys")
 
