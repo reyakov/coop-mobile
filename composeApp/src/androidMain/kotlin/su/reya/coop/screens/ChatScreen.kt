@@ -168,7 +168,7 @@ fun ChatScreen(
                         .fillMaxSize()
                         .padding(bottom = innerPadding.calculateBottomPadding())
                 ) {
-                    if (groupedMessages.isNotEmpty()) {
+                    if (messages.isNotEmpty()) {
                         LazyColumn(
                             modifier = Modifier
                                 .weight(1f)
@@ -189,7 +189,9 @@ fun ChatScreen(
                         }
                     } else {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
