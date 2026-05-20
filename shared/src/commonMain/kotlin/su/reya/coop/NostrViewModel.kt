@@ -244,9 +244,9 @@ class NostrViewModel(
 
     fun createIdentity(
         name: String,
-        bio: String,
+        bio: String?,
         picture: ByteArray?,
-        contentType: String?
+        contentType: String? = null
     ) {
         viewModelScope.launch {
             try {
@@ -282,7 +282,7 @@ class NostrViewModel(
                 }
 
                 // Create identity
-                nostr.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
+                nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
 
                 // Save secret to the secret storage
                 secretStore.set("user_signer", secret)

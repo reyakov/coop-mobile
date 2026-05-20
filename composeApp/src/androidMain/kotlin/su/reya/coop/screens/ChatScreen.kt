@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -68,6 +69,8 @@ fun ChatScreen(
     val viewModel = LocalNostrViewModel.current
 
     val room = viewModel.getChatRoom(id)
+    val listState = rememberLazyListState()
+
     val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
     val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)
 
@@ -114,6 +117,12 @@ fun ChatScreen(
                     messages.add(0, event)
                 }
             }
+        }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -174,7 +183,8 @@ fun ChatScreen(
                                 .weight(1f)
                                 .fillMaxWidth(),
                             contentPadding = PaddingValues(16.dp),
-                            reverseLayout = true
+                            reverseLayout = true,
+                            state = listState,
                         ) {
                             groupedMessages.forEach { (dateHeader, messagesInGroup) ->
                                 items(

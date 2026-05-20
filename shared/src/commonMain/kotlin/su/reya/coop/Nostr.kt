@@ -95,7 +95,13 @@ class Nostr {
                     .websocketTransport(CoopWebSocketClient(httpClient))
                     .database(lmdb)
                     .gossip(gossip)
-                    .gossipConfig(GossipConfig().noBackgroundRefresh())
+                    .gossipConfig(
+                        GossipConfig()
+                            .noBackgroundRefresh()
+                            .fetchTimeout(Duration.parse("2s"))
+                            .syncIdleTimeout(Duration.parse("100ms"))
+                            .syncInitialTimeout(Duration.parse("100ms"))
+                    )
                     .verifySubscriptions(false)
                     .automaticAuthentication(true)
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
@@ -481,7 +487,7 @@ class Nostr {
         return msgRelayList
     }
 
-    suspend fun createIdentity(keys: Keys, name: String, bio: String, picture: String?) {
+    suspend fun createIdentity(keys: Keys, name: String, bio: String?, picture: String?) {
         // Send relay list event
         val relayList = getDefaultRelayList()
         val relayListEvent = EventBuilder.relayList(relayList).signWithKeys(keys);
@@ -505,7 +511,7 @@ class Nostr {
 
         // Send metadata event
         val metadata =
-            Metadata.fromRecord(MetadataRecord(name = name, about = bio, picture = picture))
+            Metadata.fromRecord(MetadataRecord(displayName = name, about = bio, picture = picture))
         val metadataEvent = EventBuilder.metadata(metadata).signWithKeys(keys)
 
         client?.sendEvent(
@@ -608,7 +614,7 @@ class Nostr {
                     }
                 }
 
-            return roomsMap.values.toSet()
+            return roomsMap.values.sortedByDescending { it.createdAt.asSecs() }.toSet()
         } catch (e: Exception) {
             println("Failed to get chat rooms: ${e.message}")
             return null

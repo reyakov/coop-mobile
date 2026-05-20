@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,14 +23,15 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,12 +40,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
-import coop.composeapp.generated.resources.ic_avatar
+import coop.composeapp.generated.resources.ic_plus
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalSnackbarHostState
 
@@ -53,7 +56,7 @@ import su.reya.coop.LocalSnackbarHostState
 fun NewIdentityScreen(
     isLoading: Boolean,
     onBack: () -> Unit,
-    onSave: (name: String, bio: String, picture: Uri?) -> Unit
+    onSave: (name: String, bio: String?, picture: Uri?) -> Unit
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
     var name by remember { mutableStateOf("") }
@@ -90,25 +93,21 @@ fun NewIdentityScreen(
             )
         },
         content = { innerPadding ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding()),
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            Column(
+                modifier = Modifier.fillMaxSize(),
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(top = innerPadding.calculateTopPadding()),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
                             .size(120.dp)
-                            .clip(CircleShape)
+                            .clip(MaterialShapes.Pentagon.toShape())
                             .clickable { launcher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
@@ -127,7 +126,7 @@ fun NewIdentityScreen(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        painter = painterResource(Res.drawable.ic_avatar),
+                                        painter = painterResource(Res.drawable.ic_plus),
                                         contentDescription = "Pick avatar",
                                         modifier = Modifier.size(48.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -136,39 +135,106 @@ fun NewIdentityScreen(
                             }
                         }
                     }
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    OutlinedTextField(
-                        value = bio,
-                        onValueChange = { bio = it },
-                        label = { Text("Bio:") },
+                }
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                ) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp),
-                        minLines = 3,
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Button(
-                        onClick = {
-                            onSave(name, bio, picture)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(ButtonDefaults.LargeContainerHeight),
-                        enabled = name.isNotBlank() && !isLoading,
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        if (isLoading) {
-                            LoadingIndicator()
-                        } else {
-                            Text(
-                                text = "Save & Continue",
-                                style = MaterialTheme.typography.titleLargeEmphasized,
-                            )
+                        Text(
+                            text = "What others should call you?",
+                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                        BasicTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 1,
+                            textStyle = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                color = MaterialTheme.colorScheme.primaryFixed,
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (name.isEmpty()) {
+                                        Text(
+                                            "Alice",
+                                            style = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                alpha = 0.5f
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = "Your bio (optional)",
+                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                        BasicTextField(
+                            value = bio,
+                            onValueChange = { bio = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 3,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.primaryFixed,
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (bio.isEmpty()) {
+                                        Text(
+                                            "I love cat",
+                                            style = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                alpha = 0.5f
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Button(
+                            onClick = {
+                                onSave(name, bio, picture)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(ButtonDefaults.LargeContainerHeight),
+                            enabled = name.isNotBlank() && !isLoading,
+                        ) {
+                            if (isLoading) {
+                                LoadingIndicator()
+                            } else {
+                                Text(
+                                    text = "Continue",
+                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                )
+                            }
                         }
                     }
                 }
