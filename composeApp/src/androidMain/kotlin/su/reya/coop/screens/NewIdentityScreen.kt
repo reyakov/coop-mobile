@@ -63,10 +63,11 @@ fun NewIdentityScreen(
     var bio by remember { mutableStateOf("") }
     var picture by remember { mutableStateOf<Uri?>(null) }
 
-    val launcher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-            picture = uri
-        }
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        picture = uri
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -224,7 +225,7 @@ fun NewIdentityScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(ButtonDefaults.LargeContainerHeight),
+                                .height(ButtonDefaults.MediumContainerHeight),
                             enabled = name.isNotBlank() && !isLoading,
                         ) {
                             if (isLoading) {
@@ -232,7 +233,7 @@ fun NewIdentityScreen(
                             } else {
                                 Text(
                                     text = "Continue",
-                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }
                         }

@@ -69,8 +69,8 @@ fun NewChatScreen(
     val snackbarHostState = LocalSnackbarHostState.current
     val navController = LocalNavController.current
     val viewModel = LocalNostrViewModel.current
-    val contactList by viewModel.contactList.collectAsState(initial = emptySet())
 
+    val contactList by viewModel.contactList.collectAsState(initial = emptySet())
     val createGroup = remember { mutableStateOf(false) }
     val searchResults = remember { mutableStateListOf<PublicKey>() }
     val selectedReceivers = remember { mutableStateListOf<PublicKey>() }

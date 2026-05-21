@@ -295,6 +295,25 @@ class NostrViewModel(
         }
     }
 
+    suspend fun verifyIdentity(secret: String): PublicKey? {
+        if (secret.startsWith("nsec1")) {
+            val keys = Keys.parse(secret)
+            return keys.publicKey()
+        } else if (secret.startsWith("bunker://")) {
+            val appKeys = getOrInitAppKeys()
+            val bunker = NostrConnectUri.parse(secret)
+            val timeout = Duration.parse("50s") // 50 seconds timeout
+            val remote = NostrConnect(uri = bunker, appKeys, timeout, null)
+
+            // Show toast to ask user to approve the connection
+            showError("Please approve the connection.")
+
+            return remote.getPublicKeyAsync()
+        } else {
+            throw IllegalArgumentException("Invalid secret: $secret")
+        }
+    }
+
     fun importIdentity(secret: String) {
         viewModelScope.launch {
             if (secret.startsWith("nsec1")) {

@@ -569,7 +569,6 @@ class Nostr {
                         RelayUrl.parse("wss://purplepag.es") to listOf(filter),
                         RelayUrl.parse("wss://user.kindpag.es") to listOf(filter),
                         RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
-                        RelayUrl.parse("wss://relay.damus.io") to listOf(filter),
                     )
                 )
 
