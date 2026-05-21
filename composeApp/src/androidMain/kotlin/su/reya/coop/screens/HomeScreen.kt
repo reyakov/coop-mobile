@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -93,6 +94,7 @@ fun HomeScreen(
 
     val userProfile by currentUserProfile.collectAsState(initial = null)
     val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
+    val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -212,7 +214,14 @@ fun HomeScreen(
                         )
                     }
                 ) {
-                    if (chatRooms.isEmpty()) {
+                    if (!isPartialProcessedGiftWrap && chatRooms.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingIndicator()
+                        }
+                    } else if (chatRooms.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center

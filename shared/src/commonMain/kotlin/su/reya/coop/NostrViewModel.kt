@@ -48,6 +48,9 @@ class NostrViewModel(
     private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
     val contactList = _contactList.asStateFlow()
 
+    private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
+    val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
+
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
@@ -99,6 +102,10 @@ class NostrViewModel(
                 },
                 onSubscriptionClose = {
                     getChatRooms()
+
+                    if (!_isPartialProcessedGiftWrap.value) {
+                        _isPartialProcessedGiftWrap.value = true
+                    }
                 },
                 onNewMessage = { event ->
                     viewModelScope.launch {
