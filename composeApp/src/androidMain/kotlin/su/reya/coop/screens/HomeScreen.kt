@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_new_chat
@@ -214,7 +215,7 @@ fun HomeScreen(
                         )
                     }
                 ) {
-                    if (!isPartialProcessedGiftWrap && chatRooms.isEmpty()) {
+                    if (!isPartialProcessedGiftWrap) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -226,10 +227,15 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                 Text(
                                     text = "No chats yet",
-                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(

@@ -1,27 +1,49 @@
 package su.reya.coop
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.expressiveLightColorScheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import kotlinx.coroutines.launch
 import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
@@ -43,11 +65,12 @@ val LocalNavController = staticCompositionLocalOf<NavController> {
     error("No NavController provided")
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     val context = LocalContext.current
     val navController = rememberNavController()
+    val scope = rememberCoroutineScope()
     val darkMode = isSystemInDarkTheme()
 
     // Snackbar
@@ -82,6 +105,8 @@ fun App() {
             LocalNavController provides navController,
         ) {
             val emptySecret by viewModel.emptySecret.collectAsState(initial = null)
+            val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsState()
+            val sheetState = rememberModalBottomSheetState()
 
             LaunchedEffect(emptySecret) {
                 // Navigate to the home screen if the secret is already set
@@ -94,6 +119,61 @@ fun App() {
 
             // Show loading screen while initializing
             if (emptySecret == null) return@CompositionLocalProvider
+
+            // Show the relay setup dialog if the msg relay list is empty
+            if (isRelayListEmpty) {
+                ModalBottomSheet(
+                    onDismissRequest = { },
+                    sheetState = sheetState,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f)
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = "Messaging Relays are required",
+                            style = MaterialTheme.typography.headlineSmallEmphasized.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = "Coop cannot found your messaging relays. To send and receive messages on Coop, you need to set up at least one messaging relay.",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text(
+                            text = "Please click the button below to continue with the default set of relays. You can always change them later in the settings.",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontStyle = FontStyle.Italic,
+                            ),
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    viewModel.useDefaultMsgRelayList()
+                                    sheetState.hide()
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(ButtonDefaults.MediumContainerHeight),
+                        ) {
+                            Text(
+                                text = "Continue",
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
+                    }
+                }
+            }
 
             NavHost(
                 navController = navController,

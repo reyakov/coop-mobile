@@ -7,6 +7,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,9 @@ class NostrViewModel(
     private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
     val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
 
+    private val _isRelayListEmpty = MutableStateFlow(false)
+    val isRelayListEmpty = _isRelayListEmpty.asStateFlow()
+
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
@@ -69,6 +73,7 @@ class NostrViewModel(
         startMetadataBatchHandler()
         getCacheMetadata()
         login()
+        observeSignerAndCheckRelays()
     }
 
     override fun onCleared() {
@@ -202,6 +207,25 @@ class NostrViewModel(
         }
     }
 
+    private fun observeSignerAndCheckRelays() {
+        viewModelScope.launch {
+            while (true) {
+                val pubkey = nostr.signer.currentUser
+
+                if (pubkey != null) {
+                    delay(3000)
+                    val relays = nostr.getMsgRelays(pubkey)
+                    if (relays.isEmpty()) {
+                        _isRelayListEmpty.value = true
+                    }
+                    break
+                }
+
+                delay(1000)
+            }
+        }
+    }
+
     private fun requestMetadata(pubkey: PublicKey) {
         if (seenPublicKeys.add(pubkey)) {
             viewModelScope.launch {
@@ -232,6 +256,10 @@ class NostrViewModel(
             nostr.signer.switch(Keys.generate())
             _emptySecret.value = true
         }
+    }
+
+    fun dismissRelayWarning() {
+        _isRelayListEmpty.value = false
     }
 
     private suspend fun getOrInitAppKeys(): Keys {
@@ -346,6 +374,15 @@ class NostrViewModel(
             } else {
                 showError("Please enter a valid Secret or Bunker URI.")
             }
+        }
+    }
+
+    suspend fun useDefaultMsgRelayList() {
+        try {
+            val defaultRelays = nostr.getDefaultMsgRelayList()
+            nostr.setMsgRelays(defaultRelays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 

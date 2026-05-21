@@ -348,7 +348,7 @@ class Nostr {
                         is RelayMessageEnum.EndOfStoredEvents -> {
                             val subscriptionId = message.subscriptionId
 
-                            if (subscriptionId == "messages") {
+                            if (subscriptionId == "all-gift-wraps" || subscriptionId == "newest-gift-wraps") {
                                 onSubscriptionClose()
                             }
                         }
@@ -471,7 +471,7 @@ class Nostr {
         return relayList
     }
 
-    private suspend fun getMsgRelayList(): List<RelayUrl> {
+    suspend fun getDefaultMsgRelayList(): List<RelayUrl> {
         // Construct a list of messaging relays
         val msgRelayList = listOf(
             RelayUrl.parse("wss://relay.0xchat.com"),
@@ -500,7 +500,7 @@ class Nostr {
         )
 
         // Send messaging relay list event
-        val msgRelayList = getMsgRelayList()
+        val msgRelayList = getDefaultMsgRelayList()
         val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).signWithKeys(keys)
 
         client?.sendEvent(
@@ -575,6 +575,39 @@ class Nostr {
             client?.subscribe(target = target, closeOn = opts)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
+        }
+    }
+
+    suspend fun setMsgRelays(urls: List<RelayUrl>) {
+        try {
+            val event = EventBuilder.nip17RelayList(urls).signAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.toNip65(),
+                ackPolicy = AckPolicy.none(),
+            )
+
+            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS);
+            val filter = Filter().kind(kind).author(signer.currentUser!!).limit(1u)
+            val target = ReqTarget.auto(listOf(filter))
+            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+
+            client?.subscribe(target = target, closeOn = opts)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
+        }
+    }
+
+    suspend fun getMsgRelays(publicKey: PublicKey): List<RelayUrl> {
+        try {
+            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
+            val filter = Filter().kind(kind).author(publicKey).limit(1u)
+            val events = client?.database()?.query(filter)
+
+            return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get msg relays: ${e.message}", e)
         }
     }
 
