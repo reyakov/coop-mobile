@@ -51,6 +51,7 @@ import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
+import rust.nostr.sdk.extractRelayList
 import rust.nostr.sdk.giftWrapAsync
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
@@ -608,6 +609,18 @@ class Nostr {
             return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get msg relays: ${e.message}", e)
+        }
+    }
+
+    suspend fun getRelayList(publicKey: PublicKey): Map<RelayUrl, RelayMetadata?> {
+        try {
+            val kind = Kind.fromStd(KindStandard.RELAY_LIST)
+            val filter = Filter().kind(kind).author(publicKey).limit(1u)
+            val events = client?.database()?.query(filter)
+
+            return extractRelayList(events?.toVec()?.firstOrNull() ?: return emptyMap())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get relay list: ${e.message}", e)
         }
     }
 

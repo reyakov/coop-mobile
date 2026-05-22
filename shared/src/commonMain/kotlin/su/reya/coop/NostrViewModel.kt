@@ -25,6 +25,7 @@ import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
@@ -383,6 +384,24 @@ class NostrViewModel(
             nostr.setMsgRelays(defaultRelays)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun currentUserRelayList(): Map<RelayUrl, RelayMetadata?> {
+        try {
+            return nostr.getRelayList(nostr.signer.currentUser!!)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            return emptyMap()
+        }
+    }
+
+    suspend fun currentUserMsgRelayList(): List<RelayUrl> {
+        try {
+            return nostr.getMsgRelays(nostr.signer.currentUser!!)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            return emptyList()
         }
     }
 

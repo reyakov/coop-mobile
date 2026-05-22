@@ -52,6 +52,7 @@ import su.reya.coop.screens.MyQrScreen
 import su.reya.coop.screens.NewChatScreen
 import su.reya.coop.screens.NewIdentityScreen
 import su.reya.coop.screens.OnboardingScreen
+import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.ScanScreen
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
@@ -124,7 +125,7 @@ fun App() {
             // Show the relay setup dialog if the msg relay list is empty
             if (isRelayListEmpty) {
                 ModalBottomSheet(
-                    onDismissRequest = { },
+                    onDismissRequest = { viewModel.dismissRelayWarning() },
                     sheetState = sheetState,
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
@@ -239,6 +240,11 @@ fun App() {
                 }
                 composable<Screen.MyQr> { backStackEntry ->
                     MyQrScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Relay> { backStackEntry ->
+                    RelayScreen(
                         onBack = { navController.popBackStack() },
                     )
                 }

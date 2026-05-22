@@ -1,6 +1,5 @@
 package su.reya.coop.screens
 
-import android.content.ClipData
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,7 +59,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
@@ -269,10 +267,19 @@ fun HomeScreen(
                     ) {
                         val pubkey = viewModel.currentUser()
                         val shortPubkey = pubkey?.short() ?: "Not available"
+
                         val userName =
                             userProfile?.asRecord()?.displayName
                                 ?: userProfile?.asRecord()?.name
                                 ?: "No name"
+
+                        val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
+                            scope.launch {
+                                sheetState.hide()
+                                showBottomSheet = false
+                                action()
+                            }
+                        }
 
                         Column(
                             modifier = Modifier
@@ -311,13 +318,7 @@ fun HomeScreen(
                                 ) {
                                     OutlinedButton(
                                         onClick = {
-                                            scope.launch {
-                                                if (pubkey != null) {
-                                                    val text = pubkey.toBech32();
-                                                    val entry = ClipData.newPlainText("text", text)
-                                                    clipboard.setClipEntry(entry.toClipEntry())
-                                                }
-                                            }
+                                            dismissAndRun { navController.navigate(Screen.MyQr) }
                                         },
                                     ) {
                                         Text(text = shortPubkey)
@@ -340,7 +341,7 @@ fun HomeScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.size(16.dp))
-                            BottomMenuList()
+                            BottomMenuList(onDismiss = dismissAndRun)
                         }
                     }
                 }
@@ -394,15 +395,17 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun BottomMenuList() {
+fun BottomMenuList(
+    onDismiss: (suspend () -> Unit) -> Unit
+) {
+    val navController = LocalNavController.current
     val viewModel = LocalNostrViewModel.current
 
     val defaultMenuList = listOf(
-        "Messaging Relays" to { },
-        "Spam Filter" to { },
+        "Relay Management" to { navController.navigate(Screen.Relay) },
+        "Spams & Blocks" to { },
         "Contacts" to { },
-        "Settings" to { },
-        "About" to { }
+        "Settings" to { }
     )
 
     Column(
@@ -415,7 +418,7 @@ fun BottomMenuList() {
         ) {
             defaultMenuList.forEachIndexed { index, (title, action) ->
                 SegmentedListItem(
-                    onClick = { action() },
+                    onClick = { onDismiss { action() } },
                     shapes = ListItemDefaults.segmentedShapes(
                         index = index,
                         count = defaultMenuList.size
