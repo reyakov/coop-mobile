@@ -28,6 +28,7 @@ kotlin {
             implementation("su.reya:nostr-sdk-kmp:0.2.3")
             implementation("io.github.kalinjul.easyqrscan:scanner:0.7.0")
             implementation("androidx.lifecycle:lifecycle-process:2.8.0")
+            implementation("io.github.alexzhirkevich:qrose:1.1.2")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

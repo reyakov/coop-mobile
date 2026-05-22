@@ -48,6 +48,7 @@ import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
+import su.reya.coop.screens.MyQrScreen
 import su.reya.coop.screens.NewChatScreen
 import su.reya.coop.screens.NewIdentityScreen
 import su.reya.coop.screens.OnboardingScreen
@@ -233,6 +234,11 @@ fun App() {
                 }
                 composable<Screen.Scan> { backStackEntry ->
                     ScanScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.MyQr> { backStackEntry ->
+                    MyQrScreen(
                         onBack = { navController.popBackStack() },
                     )
                 }

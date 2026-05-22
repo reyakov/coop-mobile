@@ -52,7 +52,8 @@ fun ScanScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Scan QR", style = MaterialTheme.typography.titleMediumEmphasized
+                        text = "Scan QR",
+                        style = MaterialTheme.typography.titleMediumEmphasized
                     )
                 },
                 navigationIcon = {

@@ -19,6 +19,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_new_chat
+import coop.composeapp.generated.resources.ic_qr
 import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -304,8 +306,8 @@ fun HomeScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.size(8.dp))
-                                Box(
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     OutlinedButton(
                                         onClick = {
@@ -319,6 +321,21 @@ fun HomeScreen(
                                         },
                                     ) {
                                         Text(text = shortPubkey)
+                                    }
+                                    FilledIconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                sheetState.hide()
+                                                showBottomSheet = false
+                                                navController.navigate(Screen.MyQr)
+                                            }
+                                        },
+                                        shape = MaterialShapes.Square.toShape()
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(Res.drawable.ic_qr),
+                                            contentDescription = "My QR"
+                                        )
                                     }
                                 }
                             }

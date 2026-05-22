@@ -23,4 +23,7 @@ sealed interface Screen {
 
     @Serializable
     data object Scan : Screen
+
+    @Serializable
+    data object MyQr : Screen
 }
