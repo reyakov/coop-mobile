@@ -1,0 +1,46 @@
+name: Build and Release
+
+on:
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Select build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - alpha
+          - beta
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build APK
+        run: ./gradlew :composeApp:assemble${{ env.BUILD_TYPE }}
+
+      - name: Gitea Release
+        uses: akkuman/gitea-release-action@v1
+        with:
+          files: "composeApp/build/outputs/apk/${{ env.BUILD_TYPE }}/*.apk"
+          server_url: "https://git.reya.su/"
+          repository: "reya/coop-mobile"
+          token: ${{ secrets.GITEA_TOKEN }}
