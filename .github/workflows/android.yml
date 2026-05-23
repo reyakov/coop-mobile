@@ -1,19 +1,15 @@
 name: Build and Release
 
 on:
-  pull_request:
-    branches: [ "master" ]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       build_type:
-        description: 'Select build type'
+        description: 'Build type (release, beta, alpha)'
         required: true
-        default: 'release'
-        type: choice
-        options:
-          - release
-          - alpha
-          - beta
+        type: string
+  push:
+    tags:
+      - "v*"
 
 jobs:
   build:
@@ -35,7 +31,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew :composeApp:assemble${{ env.BUILD_TYPE }}
+        run: ./gradlew :composeApp:assemble${{ inputs.build_type }}
 
       - name: Gitea Release
         uses: akkuman/gitea-release-action@v1
