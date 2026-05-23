@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -48,25 +47,19 @@ kotlin {
     }
 }
 
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        load(file.inputStream())
-    }
-}
-
 android {
     namespace = "su.reya.coop"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     base.archivesName.set("coop")
-    
+
     signingConfigs {
         create("release") {
-            storeFile = localProperties.getProperty("keystore.path")?.let { file(it) }
-            storePassword = localProperties.getProperty("keystore.password")
-            keyAlias = localProperties.getProperty("key.alias")
-            keyPassword = localProperties.getProperty("key.password")
+            val path = System.getenv("KEYSTORE_PATH")
+            storeFile = path?.let { file(it) }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
     defaultConfig {

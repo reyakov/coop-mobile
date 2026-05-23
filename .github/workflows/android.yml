@@ -23,8 +23,18 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Decode Keystore
+        run: |
+          # Decodes the Base64 string from secrets to a physical file
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > composeApp/release.jks
+
       - name: Build APK
         run: ./gradlew :composeApp:assembleRelease
+        env:
+          KEYSTORE_PATH: release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Gitea Release
         uses: akkuman/gitea-release-action@v1
