@@ -2,15 +2,6 @@ name: Build and Release
 
 on:
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: Build type
-        default: 'release'
-        type: choice
-        options:
-          - release
-          - beta
-          - alpha
   push:
     tags:
       - "v*"
@@ -18,8 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      BUILD_TYPE: ${{ inputs.build_type }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,12 +24,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew :composeApp:assemble${{ env.BUILD_TYPE }}
+        run: ./gradlew :composeApp:assembleRelease
 
       - name: Gitea Release
         uses: akkuman/gitea-release-action@v1
         with:
-          files: "composeApp/build/outputs/apk/${{ env.BUILD_TYPE }}/*.apk"
+          files: "composeApp/build/outputs/apk/release/*.apk"
           server_url: "https://git.reya.su/"
           repository: "reya/coop-mobile"
           token: ${{ secrets.GITEA_TOKEN }}

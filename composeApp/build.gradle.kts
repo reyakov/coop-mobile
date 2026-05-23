@@ -59,6 +59,8 @@ android {
     namespace = "su.reya.coop"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
+    base.archivesName.set("coop")
+    
     signingConfigs {
         create("release") {
             storeFile = localProperties.getProperty("keystore.path")?.let { file(it) }
@@ -86,20 +88,6 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt")
             )
-            signingConfig = signingConfigs.getByName("release")
-        }
-        create("beta") {
-            initWith(getByName("release"))
-            applicationIdSuffix = ".beta"
-            versionNameSuffix = "-beta"
-            manifestPlaceholders["appName"] = "Coop Beta"
-            signingConfig = signingConfigs.getByName("release")
-        }
-        create("alpha") {
-            initWith(getByName("release"))
-            applicationIdSuffix = ".alpha"
-            versionNameSuffix = "-alpha"
-            manifestPlaceholders["appName"] = "Coop Alpha"
             signingConfig = signingConfigs.getByName("release")
         }
     }
