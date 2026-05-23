@@ -1,4 +1,3 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,6 +5,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    kotlin("plugin.serialization") version libs.versions.kotlin.get()
 }
 
 kotlin {
@@ -14,11 +14,21 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
+            implementation("androidx.navigation:navigation-compose:2.8.8")
+            implementation("androidx.datastore:datastore-preferences:1.2.1")
+            implementation("androidx.datastore:datastore-preferences-core:1.2.1")
+            implementation("org.jetbrains.compose.material3:material3:1.11.0-alpha07")
+            implementation("io.coil-kt.coil3:coil-compose:3.4.0")
+            implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
+            implementation("su.reya:nostr-sdk-kmp:0.2.3")
+            implementation("io.github.kalinjul.easyqrscan:scanner:0.7.0")
+            implementation("androidx.lifecycle:lifecycle-process:2.8.0")
+            implementation("io.github.alexzhirkevich:qrose:1.1.2")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
