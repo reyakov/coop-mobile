@@ -15,8 +15,10 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -100,6 +102,8 @@ fun App() {
 
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
+        typography = Typography(),
+        motionScheme = MotionScheme.expressive(),
     ) {
         CompositionLocalProvider(
             LocalNostrViewModel provides viewModel,
