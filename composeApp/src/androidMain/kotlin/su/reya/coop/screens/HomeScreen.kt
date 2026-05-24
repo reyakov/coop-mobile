@@ -58,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
@@ -85,7 +84,6 @@ fun HomeScreen(
     onOpenChat: (Long) -> Unit,
     onNewChat: () -> Unit,
 ) {
-    val clipboard = LocalClipboard.current
     val navController = LocalNavController.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
@@ -112,15 +110,21 @@ fun HomeScreen(
         ?: remember { mutableStateOf(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.getChatRooms()
+        if (qrResult == null) {
+            viewModel.getChatRooms()
+        }
     }
 
     LaunchedEffect(qrResult) {
         qrResult?.let { result ->
             runCatching { PublicKey.parse(result) }
                 .onSuccess { pubkey ->
-                    val roomId = viewModel.createChatRoom(listOf(pubkey))
-                    navController.navigate(Screen.Chat(roomId))
+                    try {
+                        val roomId = viewModel.createChatRoom(listOf(pubkey))
+                        navController.navigate(Screen.Chat(roomId))
+                    } catch (e: Exception) {
+                        e.message?.let { snackbarHostState.showSnackbar(it) }
+                    }
                 }
                 .onFailure { e -> println("Failed to parse QR: ${e.message}") }
 

@@ -68,8 +68,19 @@ fun ChatScreen(
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
 
-    val room = viewModel.getChatRoom(id)
     val listState = rememberLazyListState()
+    val chatRooms by viewModel.chatRooms.collectAsState()
+    val room = remember(chatRooms, id) { chatRooms.firstOrNull { it.id == id } }
+
+    if (room == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            LoadingIndicator()
+        }
+        return
+    }
 
     val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
     val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)

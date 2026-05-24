@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -406,20 +407,26 @@ class NostrViewModel(
     }
 
     fun createChatRoom(to: List<PublicKey>): Long {
-        if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
-        if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
+        try {
+            if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
+            if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
 
-        // Construct the rumor event
-        val rumor = EventBuilder
-            .privateMsgRumor(to.first(), "")
-            .tags(to.map { Tag.publicKey(it) })
-            .build(nostr.signer.currentUser!!)
+            // Construct the rumor event
+            val rumor = EventBuilder
+                .privateMsgRumor(to.first(), "")
+                .tags(to.map { Tag.publicKey(it) })
+                .build(nostr.signer.currentUser!!)
 
-        // Create a room from the rumor event
-        val room = Room.new(rumor, nostr.signer.currentUser!!)
-        _chatRooms.value += room
+            // Create a room from the rumor event
+            val room = Room.new(rumor, nostr.signer.currentUser!!)
+            _chatRooms.update { currentRooms ->
+                currentRooms + room
+            }
 
-        return room.id
+            return room.id
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Failed to create room: ${e.message}")
+        }
     }
 
     fun getChatRoom(id: Long): Room {
@@ -429,10 +436,12 @@ class NostrViewModel(
 
     fun getChatRooms() {
         viewModelScope.launch {
-            try {
-                _chatRooms.value = nostr.getChatRooms() ?: emptySet()
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
+            val rooms = nostr.getChatRooms() ?: emptySet()
+            _chatRooms.update { currentRooms ->
+                val virtualRooms = currentRooms.filter { local ->
+                    rooms.none { db -> db.id == local.id }
+                }
+                rooms + virtualRooms
             }
         }
     }

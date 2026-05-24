@@ -76,7 +76,6 @@ fun ScanScreen(
             ScannerWithPermissions(
                 modifier = Modifier.fillMaxSize(),
                 onScanned = {
-                    println("Scanned: $it");
                     onResult(it)
                     true
                 },
