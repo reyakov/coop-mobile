@@ -110,7 +110,9 @@ fun HomeScreen(
         ?: remember { mutableStateOf(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.getChatRooms()
+        if (qrResult == null) {
+            viewModel.getChatRooms()
+        }
     }
 
     LaunchedEffect(qrResult) {

@@ -436,7 +436,13 @@ class NostrViewModel(
 
     fun getChatRooms() {
         viewModelScope.launch {
-            _chatRooms.value = nostr.getChatRooms() ?: emptySet()
+            val rooms = nostr.getChatRooms() ?: emptySet()
+            _chatRooms.update { currentRooms ->
+                val virtualRooms = currentRooms.filter { local ->
+                    rooms.none { db -> db.id == local.id }
+                }
+                rooms + virtualRooms
+            }
         }
     }
 
