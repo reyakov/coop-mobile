@@ -21,6 +21,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.navigation.compose)
             implementation(libs.androidx.lifecycle.process)
+            implementation(libs.androidx.core.splashscreen)
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
             implementation("su.reya:nostr-sdk-kmp:0.2.3")
