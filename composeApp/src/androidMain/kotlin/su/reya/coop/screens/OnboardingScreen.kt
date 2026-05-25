@@ -9,16 +9,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -26,27 +27,65 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.shared.getExpressiveFontFamily
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
     val logoPainter = painterResource(Res.drawable.coop)
+    val expressiveFont = getExpressiveFontFamily()
+    val annotatedText = buildAnnotatedString {
+        append("By using Coop, you agree to accept\nour ")
+        // Push "Terms of Use" link
+        pushLink(
+            LinkAnnotation.Url(
+                url = "https://coop.free/terms",
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                )
+            )
+        )
+        append("Terms of Use")
+        pop()
+        append(" and ")
+        // Push "Privacy Policy" link
+        pushLink(
+            LinkAnnotation.Url(
+                url = "https://coop.free/privacy",
+                styles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                )
+            )
+        )
+        append("Privacy Policy")
+        pop()
+        append(".")
+    }
+
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         content = { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = innerPadding.calculateBottomPadding())
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 LogoRepeatingBackground(
                     painter = logoPainter,
                     logosPerRow = 6,
@@ -54,55 +93,71 @@ fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
                     horizontalOffset = 0.5f
                 )
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding() + 16.dp),
                 ) {
-                    Box(
+                    Spacer(modifier = Modifier.weight(2f))
+                    Surface(
                         modifier = Modifier
-                            .weight(2f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // TODO: Add headline
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
                             .fillMaxWidth()
-                            .padding(bottom = innerPadding.calculateBottomPadding()),
-                        contentAlignment = Alignment.BottomEnd,
+                            .padding(24.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 4.dp,
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = innerPadding.calculateBottomPadding()),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
                         ) {
+                            Text(
+                                text = "Get Started",
+                                style = MaterialTheme.typography.headlineSmallEmphasized.copy(
+                                    fontFamily = expressiveFont,
+                                ),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text(
+                                text = "Coop is a secure and easy to use messaging app. All your communications are encrypted and private by default.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.size(24.dp))
                             Button(
                                 onClick = onOpenNew,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .size(ButtonDefaults.LargeContainerHeight),
+                                    .size(ButtonDefaults.MediumContainerHeight),
                             ) {
                                 Text(
-                                    text = "Start messaging",
-                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    text = "Start Messaging",
+                                    style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }
-                            Spacer(modifier = Modifier.size(16.dp))
-                            FilledTonalButton(
+                            Spacer(modifier = Modifier.size(8.dp))
+                            OutlinedButton(
                                 onClick = onOpenImport,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(ButtonDefaults.LargeContainerHeight),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                                ),
+                                    .height(ButtonDefaults.MediumContainerHeight),
                             ) {
                                 Text(
-                                    text = "Import identity",
-                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    text = "Add an Existing Identity",
+                                    style = MaterialTheme.typography.titleMedium,
                                 )
                             }
                         }
                     }
+                    Text(
+                        text = annotatedText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -116,7 +171,7 @@ fun LogoRepeatingBackground(
     rotationDegrees: Float = 0f,
     horizontalOffset: Float = 0.5f
 ) {
-    val tintColor = MaterialTheme.colorScheme.primary
+    val tintColor = MaterialTheme.colorScheme.onSecondaryContainer
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val canvasWidth = size.width
