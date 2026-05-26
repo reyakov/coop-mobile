@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,7 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,6 +63,7 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
+import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -69,6 +75,7 @@ fun ImportScreen(
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
     val navController = LocalNavController.current
+    val focusManager = LocalFocusManager.current
     val viewModel = LocalNostrViewModel.current
     val scope = rememberCoroutineScope()
 
@@ -145,40 +152,44 @@ fun ImportScreen(
         },
         content = { innerPadding ->
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .imePadding(),
             ) {
                 Column(
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
-                        .padding(top = innerPadding.calculateTopPadding()),
+                        .weight(1f),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
                             .size(120.dp)
-                            .clip(MaterialShapes.Pentagon.toShape()),
+                            .clip(MaterialShapes.Cookie9Sided.toShape()),
                         contentAlignment = Alignment.Center
                     ) {
                         Avatar(
                             picture = picture,
                             description = "Profile picture",
                             modifier = Modifier.fillMaxSize(),
-                            shape = MaterialShapes.Pentagon.toShape(),
+                            shape = MaterialShapes.Cookie9Sided.toShape(),
                         )
                     }
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(
                         text = displayName,
                         textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleLargeEmphasized,
+                        style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                            fontFamily = getExpressiveFontFamily()
+                        ),
                     )
                 }
                 Surface(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 ) {
@@ -186,44 +197,57 @@ fun ImportScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(24.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text(
-                            text = "Enter your Secret Key or Bunker URI:",
-                            style = MaterialTheme.typography.titleMediumEmphasized.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        )
-                        BasicTextField(
-                            value = secret,
-                            onValueChange = { secret = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 4,
-                            visualTransformation = PasswordVisualTransformation('*'),
-                            textStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
-                                color = MaterialTheme.colorScheme.primaryFixed,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (secret.isEmpty()) {
-                                        Text(
-                                            "bunker://",
-                                            style = MaterialTheme.typography.bodyMediumEmphasized.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.5f
-                                            )
-                                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "Enter your Secret Key or Bunker URI:",
+                                style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            BasicTextField(
+                                value = secret,
+                                onValueChange = { secret = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 4,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        focusManager.clearFocus()
                                     }
-                                    innerTextField()
+                                ),
+                                visualTransformation = PasswordVisualTransformation('*'),
+                                textStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
+                                    color = MaterialTheme.colorScheme.primaryFixed,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (secret.isEmpty()) {
+                                            Text(
+                                                "bunker://",
+                                                style = MaterialTheme.typography.bodyMediumEmphasized.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                    alpha = 0.5f
+                                                )
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
                                 }
-                            }
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
+                            )
+                        }
+                        Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
                                 if (pubkey == null) {

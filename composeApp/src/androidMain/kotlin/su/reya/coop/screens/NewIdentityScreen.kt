@@ -148,7 +148,7 @@ fun NewIdentityScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false),
+                        .weight(1f, fill = true),
                     color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 ) {
@@ -156,94 +156,98 @@ fun NewIdentityScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(24.dp)
-                            .imePadding()
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text(
-                            text = "What others should call you?",
-                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        )
-                        BasicTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                }
-                            ),
-                            textStyle = MaterialTheme.typography.headlineLargeEmphasized.copy(
-                                color = MaterialTheme.colorScheme.primaryFixed,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (name.isEmpty()) {
-                                        Text(
-                                            "Alice",
-                                            style = MaterialTheme.typography.headlineLargeEmphasized.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.5f
-                                            )
-                                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "What others should call you?",
+                                style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            BasicTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        focusManager.clearFocus()
                                     }
-                                    innerTextField()
-                                }
-                            }
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text(
-                            text = "Your bio (optional)",
-                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        )
-                        BasicTextField(
-                            value = bio,
-                            onValueChange = { bio = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3,
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                }
-                            ),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                color = MaterialTheme.colorScheme.primaryFixed,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (bio.isEmpty()) {
-                                        Text(
-                                            "I love cat",
-                                            style = MaterialTheme.typography.headlineLargeEmphasized.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.5f
+                                ),
+                                textStyle = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                    color = MaterialTheme.colorScheme.primaryFixed,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (name.isEmpty()) {
+                                            Text(
+                                                "Alice",
+                                                style = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                    alpha = 0.5f
+                                                )
                                             )
-                                        )
+                                        }
+                                        innerTextField()
                                     }
-                                    innerTextField()
                                 }
-                            }
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text(
+                                text = "Your bio (optional)",
+                                style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            )
+                            BasicTextField(
+                                value = bio,
+                                onValueChange = { bio = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                maxLines = 3,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        focusManager.clearFocus()
+                                    }
+                                ),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.primaryFixed,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                                decorationBox = { innerTextField ->
+                                    Box(contentAlignment = Alignment.CenterStart) {
+                                        if (bio.isEmpty()) {
+                                            Text(
+                                                "I love cat",
+                                                style = MaterialTheme.typography.headlineLargeEmphasized.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                    alpha = 0.5f
+                                                )
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
                                 onSave(name, bio, picture)
