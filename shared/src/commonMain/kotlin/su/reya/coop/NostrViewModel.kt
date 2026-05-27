@@ -477,6 +477,9 @@ class NostrViewModel(
     }
 
     fun sendMessage(roomId: Long, message: String, replies: List<EventId> = emptyList()) {
+        if (message.isEmpty()) {
+            showError("Message cannot be empty")
+        }
         viewModelScope.launch {
             try {
                 val room = getChatRoom(roomId)

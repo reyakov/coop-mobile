@@ -54,6 +54,7 @@ import su.reya.coop.screens.MyQrScreen
 import su.reya.coop.screens.NewChatScreen
 import su.reya.coop.screens.NewIdentityScreen
 import su.reya.coop.screens.OnboardingScreen
+import su.reya.coop.screens.ProfileScreen
 import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.ScanScreen
 
@@ -229,6 +230,13 @@ fun App() {
                     val chat: Screen.Chat = backStackEntry.toRoute()
                     ChatScreen(
                         id = chat.id,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Profile> { backStackEntry ->
+                    val profile: Screen.Profile = backStackEntry.toRoute()
+                    ProfileScreen(
+                        pubkey = profile.pubkey,
                         onBack = { navController.popBackStack() },
                     )
                 }

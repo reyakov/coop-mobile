@@ -51,8 +51,10 @@ import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.LocalNavController
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
@@ -66,6 +68,7 @@ fun ChatScreen(
     onBack: () -> Unit,
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
+    val navController = LocalNavController.current
     val viewModel = LocalNostrViewModel.current
 
     val listState = rememberLazyListState()
@@ -143,7 +146,14 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            room.members.firstOrNull()?.let { pubkey ->
+                                navController.navigate(Screen.Profile(pubkey.toBech32()))
+                            }
+                        }
+                    ) {
                         if (loading) {
                             LoadingIndicator(
                                 modifier = Modifier.size(32.dp),
