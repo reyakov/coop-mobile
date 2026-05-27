@@ -417,8 +417,19 @@ class NostrViewModel(
                 .tags(to.map { Tag.publicKey(it) })
                 .build(nostr.signer.currentUser!!)
 
+            // Check if the room already exists
+            val id = rumor.roomId()
+            val existingRoom = _chatRooms.value.firstOrNull { it.id == id }
+
+            // If the room already exists, return its ID
+            if (existingRoom != null) {
+                return existingRoom.id
+            }
+
             // Create a room from the rumor event
             val room = Room.new(rumor, nostr.signer.currentUser!!)
+
+            // Update the chat rooms state
             _chatRooms.update { currentRooms ->
                 currentRooms + room
             }
