@@ -10,6 +10,9 @@ sealed interface Screen {
     data class Chat(val id: Long) : Screen
 
     @Serializable
+    data class Profile(val pubkey: String) : Screen
+
+    @Serializable
     data object NewChat : Screen
 
     @Serializable

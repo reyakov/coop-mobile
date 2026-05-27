@@ -1,5 +1,6 @@
 package su.reya.coop.screens
 
+import android.content.ClipData
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
@@ -86,6 +89,7 @@ fun HomeScreen(
 ) {
     val navController = LocalNavController.current
     val snackbarHostState = LocalSnackbarHostState.current
+    val clipboardManager = LocalClipboard.current
     val viewModel = LocalNostrViewModel.current
 
     val currentUser = viewModel.currentUser() ?: return
@@ -322,18 +326,20 @@ fun HomeScreen(
                                 ) {
                                     OutlinedButton(
                                         onClick = {
-                                            dismissAndRun { navController.navigate(Screen.MyQr) }
+                                            scope.launch {
+                                                pubkey?.let {
+                                                    val bech32 = it.toBech32()
+                                                    val data = ClipData.newPlainText(bech32, bech32)
+                                                    clipboardManager.setClipEntry(ClipEntry(data))
+                                                }
+                                            }
                                         },
                                     ) {
                                         Text(text = shortPubkey)
                                     }
                                     FilledIconButton(
                                         onClick = {
-                                            scope.launch {
-                                                sheetState.hide()
-                                                showBottomSheet = false
-                                                navController.navigate(Screen.MyQr)
-                                            }
+                                            dismissAndRun { navController.navigate(Screen.MyQr) }
                                         },
                                         shape = MaterialShapes.Square.toShape()
                                     ) {
