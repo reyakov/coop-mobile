@@ -23,8 +23,10 @@ class MainActivity : ComponentActivity() {
             startService(intent)
         }
 
+        val roomId = intent.getLongExtra("room_id", -1L)
+
         setContent {
-            App()
+            App(openRoomId = if (roomId != -1L) roomId else null)
         }
     }
 }

@@ -109,13 +109,27 @@ class NostrViewModel(
                 },
                 onSubscriptionClose = {
                     getChatRooms()
-
                     if (!_isPartialProcessedGiftWrap.value) {
                         _isPartialProcessedGiftWrap.value = true
                     }
                 },
                 onNewMessage = { event ->
                     viewModelScope.launch {
+                        val roomId = event.roomId()
+                        val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
+
+                        if (existingRoom == null) {
+                            val currentUser = nostr.signer.currentUser
+                            if (currentUser != null) {
+                                val newRoom = Room.new(event, currentUser)
+                                _chatRooms.update { currentRooms ->
+                                    currentRooms + newRoom
+                                }
+                            }
+                        } else {
+                            updateRoomList(roomId, event)
+                        }
+
                         _newEvents.emit(event)
                     }
                 },

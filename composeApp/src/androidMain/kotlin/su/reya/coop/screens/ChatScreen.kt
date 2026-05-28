@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,19 +93,16 @@ fun ChatScreen(
 
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var newOtherMessages by remember { mutableIntStateOf(0) }
 
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
 
-    fun setLoading(value: Boolean) {
-        loading = value
-    }
-
     LaunchedEffect(id) {
         // Start loading spinner
-        setLoading(true)
+        loading = true
 
         // Get messages
         val initialMessages = viewModel.getChatRoomMessages(id)
@@ -122,7 +122,7 @@ fun ChatScreen(
         }
 
         // Stop loading spinner
-        setLoading(false)
+        loading = false
 
         // Handle new messages
         viewModel.newEvents.collect { event ->
@@ -130,6 +130,9 @@ fun ChatScreen(
                 if (event.id() !in messages.map { it.id() }) {
                     messages.add(0, event)
                 }
+            } else {
+                // If the event is not in the current room, it's a new message from another user
+                newOtherMessages++
             }
         }
     }
@@ -173,11 +176,21 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(Res.drawable.ic_arrow_back),
-                            contentDescription = "Back"
-                        )
+                    BadgedBox(
+                        badge = {
+                            if (newOtherMessages > 0) {
+                                Badge {
+                                    Text(newOtherMessages.toString())
+                                }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_arrow_back),
+                                contentDescription = "Back"
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

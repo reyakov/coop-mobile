@@ -72,7 +72,7 @@ val LocalNavController = staticCompositionLocalOf<NavController> {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun App() {
+fun App(openRoomId: Long? = null) {
     val context = LocalContext.current
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -98,6 +98,12 @@ fun App() {
     LaunchedEffect(Unit) {
         viewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    LaunchedEffect(openRoomId) {
+        if (openRoomId != null) {
+            navController.navigate(Screen.Chat(openRoomId))
         }
     }
 

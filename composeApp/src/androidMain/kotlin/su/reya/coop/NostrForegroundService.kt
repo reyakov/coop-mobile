@@ -3,6 +3,7 @@ package su.reya.coop
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.Build
@@ -45,7 +46,7 @@ class NostrForegroundService : Service() {
                 // Handle notifications
                 nostr.handleLiteNotifications { event ->
                     if (!isUserInApp()) {
-                        showNewMessageNotification(event.content())
+                        showNewMessageNotification(event.roomId(), event.content())
                     }
                 }
             } catch (e: Exception) {
@@ -76,12 +77,26 @@ class NostrForegroundService : Service() {
             .build()
     }
 
-    private fun showNewMessageNotification(message: String) {
+    private fun showNewMessageNotification(roomId: Long, message: String) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("room_id", roomId)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            roomId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, "nostr_service")
-            .setContentTitle("New Message")
+            .setContentTitle("You received a new message")
             .setContentText(message)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
             .build()
+
         val manager = getSystemService(NotificationManager::class.java)
         manager?.notify(System.currentTimeMillis().toInt(), notification)
     }
