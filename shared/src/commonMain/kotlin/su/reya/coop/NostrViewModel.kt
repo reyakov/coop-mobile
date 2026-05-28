@@ -109,9 +109,7 @@ class NostrViewModel(
                 },
                 onSubscriptionClose = {
                     getChatRooms()
-                    if (!_isPartialProcessedGiftWrap.value) {
-                        _isPartialProcessedGiftWrap.value = true
-                    }
+                    _isPartialProcessedGiftWrap.value = true
                 },
                 onNewMessage = { event ->
                     viewModelScope.launch {
@@ -178,7 +176,9 @@ class NostrViewModel(
 
             val results = nostr.getAllCacheMetadata()
             results.forEach { (pubkey, metadata) ->
+                // Update the metadata state
                 updateMetadata(pubkey, metadata)
+                // Update seenPublicKeys to avoid duplicate requests
                 seenPublicKeys.add(pubkey)
             }
         }
@@ -193,14 +193,13 @@ class NostrViewModel(
             val secret = secretStore.get("user_signer")
 
             // If no secret is found, show onboarding screen
-            when (secret) {
-                null -> {
-                    _emptySecret.value = true
-                    return@launch
-                }
-
-                else -> _emptySecret.value = false
+            if (secret == null) {
+                _emptySecret.value = true
+                return@launch
             }
+
+            // Update the empty secret state
+            _emptySecret.value = false
 
             // Handle different signer types
             if (secret.startsWith("nsec1")) {
@@ -229,11 +228,22 @@ class NostrViewModel(
                 val pubkey = nostr.signer.currentUser
 
                 if (pubkey != null) {
+                    // Get chat rooms
+                    val rooms = nostr.getChatRooms() ?: emptySet()
+                    if (rooms.isNotEmpty()) {
+                        _chatRooms.value = rooms
+                        _isPartialProcessedGiftWrap.value = true
+                    }
+
+                    // Small delay to ensure all relays are connected
                     delay(3000)
+
+                    // Check if the relay list is empty
                     val relays = nostr.getMsgRelays(pubkey)
                     if (relays.isEmpty()) {
                         _isRelayListEmpty.value = true
                     }
+
                     break
                 }
 
