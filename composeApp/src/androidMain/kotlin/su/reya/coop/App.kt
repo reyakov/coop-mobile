@@ -39,14 +39,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlinx.coroutines.launch
-import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
@@ -72,7 +70,10 @@ val LocalNavController = staticCompositionLocalOf<NavController> {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun App(openRoomId: Long? = null) {
+fun App(
+    viewModel: NostrViewModel,
+    openRoomId: Long? = null
+) {
     val context = LocalContext.current
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -80,10 +81,6 @@ fun App(openRoomId: Long? = null) {
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
-
-    // Initialize Nostr View Model and Secret Store
-    val secretStore = remember { SecretStore(context) }
-    val viewModel: NostrViewModel = viewModel { NostrViewModel(NostrManager.instance, secretStore) }
 
     // Enabled the dynamic color scheme
     val colorScheme = when {
@@ -98,12 +95,6 @@ fun App(openRoomId: Long? = null) {
     LaunchedEffect(Unit) {
         viewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
-        }
-    }
-
-    LaunchedEffect(openRoomId) {
-        if (openRoomId != null) {
-            navController.navigate(Screen.Chat(openRoomId))
         }
     }
 
@@ -123,15 +114,20 @@ fun App(openRoomId: Long? = null) {
 
             LaunchedEffect(emptySecret) {
                 // Navigate to the home screen if the secret is already set
-                if (emptySecret == false) {
+                if (emptySecret == false && openRoomId == null) {
                     navController.navigate(Screen.Home) {
                         popUpTo(Screen.Onboarding) { inclusive = true }
                     }
                 }
             }
 
-            // Show loading screen while initializing
-            if (emptySecret == null) return@CompositionLocalProvider
+            LaunchedEffect(openRoomId) {
+                if (openRoomId != null) {
+                    navController.navigate(Screen.Chat(openRoomId)) {
+                        popUpTo(Screen.Home) { saveState = true }
+                    }
+                }
+            }
 
             // Show the relay setup dialog if the msg relay list is empty
             if (isRelayListEmpty) {

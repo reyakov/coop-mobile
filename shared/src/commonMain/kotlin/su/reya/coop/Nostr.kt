@@ -6,13 +6,13 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import rust.nostr.sdk.AckPolicy
 import rust.nostr.sdk.Alphabet
 import rust.nostr.sdk.AsyncNostrSigner
@@ -170,8 +170,6 @@ class Nostr {
     suspend fun setSigner(new: AsyncNostrSigner) {
         try {
             signer.switch(new)
-            // Fetch metadata for current user
-            getUserMetadata()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to set signer: ${e.message}", e)
         }
@@ -244,10 +242,10 @@ class Nostr {
         onContactListUpdate: (List<PublicKey>) -> Unit,
         onNewMessage: (UnsignedEvent) -> Unit,
         onSubscriptionClose: () -> Unit,
-    ) = coroutineScope {
+    ) = supervisorScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
-        val notifications = client?.notifications() ?: return@coroutineScope
+        val notifications = client?.notifications() ?: return@supervisorScope
 
         var eoseTrackerJob: Job? = null
 

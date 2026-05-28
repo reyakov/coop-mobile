@@ -82,7 +82,7 @@ class NostrViewModel(
 
         // Observe new events from the Nostr client
         runObserver()
-        
+
         // Wait and merge metadata requests into a single batch
         runMetadataBatching()
     }
@@ -201,9 +201,6 @@ class NostrViewModel(
 
     private fun login() {
         viewModelScope.launch {
-            // Wait until the client is ready
-            nostr.waitUntilInitialized()
-
             // Get user's signer secret
             val secret = secretStore.get("user_signer")
 
@@ -249,6 +246,9 @@ class NostrViewModel(
                         _isPartialProcessedGiftWrap.value = true
                     }
 
+                    // Get all metadata for the current user
+                    nostr.getUserMetadata()
+
                     // Small delay to ensure all relays are connected
                     delay(3000)
 
@@ -261,7 +261,7 @@ class NostrViewModel(
                     break
                 }
 
-                delay(1000)
+                delay(500)
             }
         }
     }
