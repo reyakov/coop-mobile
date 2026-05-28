@@ -32,7 +32,8 @@ class NostrForegroundService : Service() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
-        val notification = createNotification("Connecting to Nostr...")
+
+        val notification = createNotification()
         startForeground(1, notification)
 
         serviceScope.launch {
@@ -44,11 +45,25 @@ class NostrForegroundService : Service() {
                 // Connect to bootstrap relays
                 nostr.connectBootstrapRelays()
                 // Handle notifications
-                nostr.handleLiteNotifications { event ->
-                    if (!isUserInApp()) {
-                        showNewMessageNotification(event.roomId(), event.content())
+                nostr.handleNotifications(
+                    onMetadataUpdate = { pubkey, metadata ->
+                        serviceScope.launch { nostr.emitMetadataUpdate(pubkey, metadata) }
+                    },
+                    onContactListUpdate = { contacts ->
+                        serviceScope.launch { nostr.emitContactListUpdate(contacts) }
+                    },
+                    onSubscriptionClose = {
+                        serviceScope.launch { nostr.emitSubscriptionClosed() }
+                    },
+                    onNewMessage = { event ->
+                        serviceScope.launch {
+                            if (!isUserInApp()) {
+                                showNewMessageNotification(event.roomId(), event.content())
+                            }
+                            nostr.emitNewEvent(event)
+                        }
                     }
-                }
+                )
             } catch (e: Exception) {
                 println("Failed to start Nostr in background: ${e.message}")
             }
@@ -59,22 +74,40 @@ class NostrForegroundService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            "nostr_service",
-            "Nostr Background Service",
+        val manager = getSystemService(NotificationManager::class.java)
+
+        val serviceChannel = NotificationChannel(
+            "nostr_service_silent",
+            "Nostr Background Status",
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            setShowBadge(false)
+        }
+        manager?.createNotificationChannel(serviceChannel)
+
+        val messageChannel = NotificationChannel(
+            "nostr_messages",
+            "New Messages",
             NotificationManager.IMPORTANCE_HIGH
         )
-        val manager = getSystemService(NotificationManager::class.java)
-        manager?.createNotificationChannel(channel)
+        manager?.createNotificationChannel(messageChannel)
     }
 
-    private fun createNotification(content: String): Notification {
-        return NotificationCompat.Builder(this, "nostr_service")
-            .setContentTitle("Coop")
-            .setContentText(content)
-            .setSmallIcon(android.R.drawable.ic_menu_send)
+    private fun createNotification(content: String? = null): Notification {
+        val builder = NotificationCompat.Builder(this, "nostr_service")
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
-            .build()
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(Notification.CATEGORY_SERVICE)
+
+        if (content != null) {
+            builder.setContentTitle("Coop")
+            builder.setContentText(content)
+        } else {
+            builder.setContentTitle("Coop is active")
+        }
+
+        return builder.build()
     }
 
     private fun showNewMessageNotification(roomId: Long, message: String) {
@@ -90,11 +123,13 @@ class NostrForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, "nostr_service")
+        val notification = NotificationCompat.Builder(this, "nostr_messages")
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("You received a new message")
             .setContentText(message)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setCategory(Notification.CATEGORY_MESSAGE)
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)

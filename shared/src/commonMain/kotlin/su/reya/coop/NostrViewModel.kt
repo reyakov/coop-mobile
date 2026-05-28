@@ -71,11 +71,20 @@ class NostrViewModel(
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
-        startNotificationHandler()
-        startMetadataBatchHandler()
-        getCacheMetadata()
+        // Check local stored secret (secret key or bunker)
         login()
+
+        // Observe the signer state and verify the relay list
         observeSignerAndCheckRelays()
+
+        // Get all local stored metadata
+        getCacheMetadata()
+
+        // Observe new events from the Nostr client
+        runObserver()
+        
+        // Wait and merge metadata requests into a single batch
+        runMetadataBatching()
     }
 
     override fun onCleared() {
@@ -95,47 +104,53 @@ class NostrViewModel(
         }
     }
 
-    private fun startNotificationHandler() {
+    private fun runObserver() {
         viewModelScope.launch {
-            // Wait until the client is ready
-            nostr.waitUntilInitialized()
+            // Observe new messages
+            launch {
+                nostr.newEvents.collect { event ->
+                    val roomId = event.roomId()
+                    val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
 
-            nostr.handleNotifications(
-                onMetadataUpdate = { pubkey, metadata ->
+                    if (existingRoom == null) {
+                        val currentUser = nostr.signer.currentUser
+                        if (currentUser != null) {
+                            val newRoom = Room.new(event, currentUser)
+                            _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
+                        }
+                    } else {
+                        updateRoomList(roomId, event)
+                    }
+
+                    _newEvents.emit(event)
+                }
+            }
+
+            // Observe metadata updates
+            launch {
+                nostr.metadataUpdates.collect { (pubkey, metadata) ->
                     updateMetadata(pubkey, metadata)
-                },
-                onContactListUpdate = { contactList ->
-                    _contactList.value = contactList.toSet()
-                },
-                onSubscriptionClose = {
+                }
+            }
+
+            // Observe contact list updates
+            launch {
+                nostr.contactListUpdates.collect { contacts ->
+                    _contactList.value = contacts.toSet()
+                }
+            }
+
+            // Observes subscription close
+            launch {
+                nostr.subscriptionClosed.collect {
                     getChatRooms()
                     _isPartialProcessedGiftWrap.value = true
-                },
-                onNewMessage = { event ->
-                    viewModelScope.launch {
-                        val roomId = event.roomId()
-                        val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
-
-                        if (existingRoom == null) {
-                            val currentUser = nostr.signer.currentUser
-                            if (currentUser != null) {
-                                val newRoom = Room.new(event, currentUser)
-                                _chatRooms.update { currentRooms ->
-                                    currentRooms + newRoom
-                                }
-                            }
-                        } else {
-                            updateRoomList(roomId, event)
-                        }
-
-                        _newEvents.emit(event)
-                    }
-                },
-            )
+                }
+            }
         }
     }
 
-    private fun startMetadataBatchHandler() {
+    private fun runMetadataBatching() {
         viewModelScope.launch {
             // Wait until the client is ready
             nostr.waitUntilInitialized()
@@ -210,8 +225,7 @@ class NostrViewModel(
                     val appKeys = getOrInitAppKeys()
                     val bunker = NostrConnectUri.parse(secret)
                     val timeout = Duration.parse("50s") // 50 seconds timeout
-                    val remote =
-                        NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
+                    val remote = NostrConnect(uri = bunker, appKeys, timeout, opts = null)
                     nostr.setSigner(remote)
                 } catch (e: Exception) {
                     showError("Error: ${e.message}")
@@ -435,11 +449,13 @@ class NostrViewModel(
             if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
             if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
 
+            val currentUser = nostr.signer.currentUser!!
+
             // Construct the rumor event
             val rumor = EventBuilder
                 .privateMsgRumor(to.first(), "")
                 .tags(to.map { Tag.publicKey(it) })
-                .build(nostr.signer.currentUser!!)
+                .build(currentUser)
 
             // Check if the room already exists
             val id = rumor.roomId()
@@ -451,7 +467,7 @@ class NostrViewModel(
             }
 
             // Create a room from the rumor event
-            val room = Room.new(rumor, nostr.signer.currentUser!!)
+            val room = Room.new(rumor, currentUser)
 
             // Update the chat rooms state
             _chatRooms.update { currentRooms ->
@@ -546,13 +562,18 @@ class NostrViewModel(
     }
 
     private fun updateRoomList(roomId: Long, newMessage: UnsignedEvent) {
-        _chatRooms.value = _chatRooms.value.map { room ->
-            if (room.id == roomId) {
-                room.copy(lastMessage = newMessage.content(), createdAt = newMessage.createdAt())
-            } else {
-                room
-            }
-        }.toSet()
+        _chatRooms.update { currentRooms ->
+            currentRooms.map { room ->
+                if (room.id == roomId) {
+                    room.copy(
+                        lastMessage = newMessage.content(),
+                        createdAt = newMessage.createdAt()
+                    )
+                } else {
+                    room
+                }
+            }.sortedDescending().toSet()
+        }
     }
 
     suspend fun searchByAddress(query: String): PublicKey? {
