@@ -6,25 +6,48 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import su.reya.coop.coop.storage.SecretStore
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: NostrViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val secretStore = SecretStore(this@MainActivity)
+                return NostrViewModel(NostrManager.instance, secretStore) as T
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
         enableEdgeToEdge()
 
         super.onCreate(savedInstanceState)
 
-        val intent = Intent(this, NostrForegroundService::class.java)
+        val serviceIntent = Intent(this, NostrForegroundService::class.java)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
+            startForegroundService(serviceIntent)
         } else {
-            startService(intent)
+            startService(serviceIntent)
+        }
+
+        // Keep the splash screen visible until the signer check is complete
+        splashScreen.setKeepOnScreenCondition {
+            viewModel.signerRequired.value == null
         }
 
         setContent {
-            App()
+            App(viewModel = viewModel)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 }

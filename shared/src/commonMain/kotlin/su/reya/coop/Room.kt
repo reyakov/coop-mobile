@@ -40,10 +40,10 @@ data class Room(
             val subject = rumor.tags().find(TagKind.Subject)?.content()
 
             // Collect the author's public key and all public keys from tags
-            // Also remove the user's public key from the list, current user is always a member
             val pubkeys: MutableSet<PublicKey> = mutableSetOf()
             pubkeys.add(rumor.author())
             pubkeys.addAll(rumor.tags().publicKeys())
+            // Also remove the user's public key from the list, current user is always a member
             pubkeys.remove(userPubkey)
 
             // Create a new Room instance

@@ -6,13 +6,13 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import rust.nostr.sdk.AckPolicy
 import rust.nostr.sdk.Alphabet
 import rust.nostr.sdk.AsyncNostrSigner
@@ -62,9 +62,6 @@ object NostrManager {
 }
 
 class Nostr {
-    private val _isInitialized = MutableStateFlow(false)
-    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
-
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
@@ -76,9 +73,35 @@ class Nostr {
     var rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
         private set
 
+    private val isInitialized = MutableStateFlow(false)
+
+    // Add these to the Nostr class
+    private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
+    val newEvents = _newEvents.asSharedFlow()
+
+    private val _metadataUpdates =
+        MutableSharedFlow<Pair<PublicKey, Metadata>>(extraBufferCapacity = 100)
+    val metadataUpdates = _metadataUpdates.asSharedFlow()
+
+    private val _contactListUpdates = MutableSharedFlow<List<PublicKey>>(extraBufferCapacity = 100)
+    val contactListUpdates = _contactListUpdates.asSharedFlow()
+
+    private val _subscriptionClosed = MutableSharedFlow<Unit>(extraBufferCapacity = 10)
+    val subscriptionClosed = _subscriptionClosed.asSharedFlow()
+
+    suspend fun emitNewEvent(event: UnsignedEvent) = _newEvents.emit(event)
+
+    suspend fun emitSubscriptionClosed() = _subscriptionClosed.emit(Unit)
+
+    suspend fun emitMetadataUpdate(pubkey: PublicKey, metadata: Metadata) =
+        _metadataUpdates.emit(pubkey to metadata)
+
+    suspend fun emitContactListUpdate(contacts: List<PublicKey>) =
+        _contactListUpdates.emit(contacts)
+
     suspend fun init(dbPath: String) {
         try {
-            if (_isInitialized.value) return
+            if (isInitialized.value) return
 
             // Initialize the logger for nostr client
             initLogger(LogLevel.DEBUG)
@@ -108,14 +131,14 @@ class Nostr {
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                     .build()
 
-            _isInitialized.value = true
+            isInitialized.value = true
         } catch (e: Exception) {
             throw IllegalStateException("Failed to initialize Nostr client: ${e.message}", e)
         }
     }
 
     suspend fun waitUntilInitialized() {
-        _isInitialized.first { it }
+        isInitialized.first { it }
     }
 
     suspend fun connectBootstrapRelays() {
@@ -147,8 +170,6 @@ class Nostr {
     suspend fun setSigner(new: AsyncNostrSigner) {
         try {
             signer.switch(new)
-            // Fetch metadata for current user
-            getUserMetadata()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to set signer: ${e.message}", e)
         }
@@ -216,70 +237,15 @@ class Nostr {
         }
     }
 
-    suspend fun handleLiteNotifications(
-        onNewMessage: (UnsignedEvent) -> Unit,
-    ) {
-        val now = Timestamp.now()
-        val processedEvent = mutableSetOf<EventId>()
-        val notifications = client?.notifications() ?: return
-
-        while (true) {
-            val notification = notifications.next() ?: continue
-
-            when (notification) {
-                is ClientNotification.Message -> {
-                    val relayUrl = notification.relayUrl
-
-                    when (val message = notification.message.asEnum()) {
-                        is RelayMessageEnum.EventMsg -> {
-                            val event = message.event
-                            val subscriptionId = message.subscriptionId
-
-                            // Ignore events not from the newest gift wraps subscription
-                            if (subscriptionId != "newest-gift-wraps") continue
-
-                            // Prevent processing duplicate events
-                            if (processedEvent.contains(event.id())) continue
-                            processedEvent.add(event.id())
-
-                            if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
-                                try {
-                                    val rumor = extractRumor(event)
-
-                                    // Handle new message
-                                    rumor?.createdAt()?.asSecs()?.let {
-                                        if (it >= now.asSecs()) {
-                                            onNewMessage(rumor)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    println("Failed to extract rumor: $e")
-                                }
-                            }
-                        }
-
-                        else -> {
-                            /* Ignore other event kinds */
-                        }
-                    }
-                }
-
-                else -> {
-                    /* Ignore other message types */
-                }
-            }
-        }
-    }
-
     suspend fun handleNotifications(
         onMetadataUpdate: (PublicKey, Metadata) -> Unit,
         onContactListUpdate: (List<PublicKey>) -> Unit,
         onNewMessage: (UnsignedEvent) -> Unit,
         onSubscriptionClose: () -> Unit,
-    ) = coroutineScope {
+    ) = supervisorScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
-        val notifications = client?.notifications() ?: return@coroutineScope
+        val notifications = client?.notifications() ?: return@supervisorScope
 
         var eoseTrackerJob: Job? = null
 
@@ -293,7 +259,6 @@ class Nostr {
                     when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
-                            val id = message.subscriptionId
 
                             // Prevent processing duplicate events
                             if (processedEvent.contains(event.id())) continue
