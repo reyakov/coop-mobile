@@ -43,6 +43,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
 import kotlinx.coroutines.launch
 import su.reya.coop.screens.ChatScreen
@@ -70,10 +71,7 @@ val LocalNavController = staticCompositionLocalOf<NavController> {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun App(
-    viewModel: NostrViewModel,
-    openRoomId: Long? = null
-) {
+fun App(viewModel: NostrViewModel) {
     val context = LocalContext.current
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
@@ -114,18 +112,94 @@ fun App(
 
             LaunchedEffect(emptySecret) {
                 // Navigate to the home screen if the secret is already set
-                if (emptySecret == false && openRoomId == null) {
+                if (emptySecret == false) {
                     navController.navigate(Screen.Home) {
                         popUpTo(Screen.Onboarding) { inclusive = true }
                     }
                 }
             }
 
-            LaunchedEffect(openRoomId) {
-                if (openRoomId != null) {
-                    navController.navigate(Screen.Chat(openRoomId)) {
-                        popUpTo(Screen.Home) { saveState = true }
-                    }
+            NavHost(
+                navController = navController,
+                startDestination = if (emptySecret == false) Screen.Home else Screen.Onboarding
+            ) {
+                composable<Screen.Onboarding> { backStackEntry ->
+                    OnboardingScreen(
+                        onOpenImport = { navController.navigate(Screen.Import) },
+                        onOpenNew = { navController.navigate(Screen.NewIdentity) }
+                    )
+                }
+                composable<Screen.Import> { backStackEntry ->
+                    val isCreating by viewModel.isCreating.collectAsState()
+
+                    ImportScreen(
+                        isLoading = isCreating,
+                        onBack = { navController.popBackStack() },
+                        onSave = { secret ->
+                            viewModel.importIdentity(secret)
+                        }
+                    )
+                }
+                composable<Screen.NewIdentity> { backStackEntry ->
+                    val isCreating by viewModel.isCreating.collectAsState()
+
+                    NewIdentityScreen(
+                        isLoading = isCreating,
+                        onBack = { navController.popBackStack() },
+                        onSave = { name, bio, uri ->
+                            val contentType = uri?.let { context.contentResolver.getType(it) }
+                            val picture = uri?.let {
+                                context.contentResolver.openInputStream(it)?.use { input ->
+                                    input.readBytes()
+                                }
+                            }
+                            viewModel.createIdentity(name, bio, picture, contentType)
+                        }
+                    )
+                }
+                composable<Screen.Home> { backStackEntry ->
+                    HomeScreen(
+                        onOpenChat = { id -> navController.navigate(Screen.Chat(id)) },
+                        onNewChat = { navController.navigate(Screen.NewChat) }
+                    )
+                }
+                composable<Screen.Chat>(
+                    deepLinks = listOf(
+                        navDeepLink<Screen.Chat>(basePath = "coop://chat")
+                    )
+                ) { backStackEntry ->
+                    val chat: Screen.Chat = backStackEntry.toRoute()
+                    ChatScreen(
+                        id = chat.id,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Profile> { backStackEntry ->
+                    val profile: Screen.Profile = backStackEntry.toRoute()
+                    ProfileScreen(
+                        pubkey = profile.pubkey,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.NewChat> { backStackEntry ->
+                    NewChatScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Scan> { backStackEntry ->
+                    ScanScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.MyQr> { backStackEntry ->
+                    MyQrScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<Screen.Relay> { backStackEntry ->
+                    RelayScreen(
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
 
@@ -181,86 +255,6 @@ fun App(
                             )
                         }
                     }
-                }
-            }
-
-            NavHost(
-                navController = navController,
-                startDestination = if (emptySecret == false) Screen.Home else Screen.Onboarding
-            ) {
-                composable<Screen.Onboarding> { backStackEntry ->
-                    OnboardingScreen(
-                        onOpenImport = { navController.navigate(Screen.Import) },
-                        onOpenNew = { navController.navigate(Screen.NewIdentity) }
-                    )
-                }
-                composable<Screen.Import> { backStackEntry ->
-                    val isCreating by viewModel.isCreating.collectAsState()
-
-                    ImportScreen(
-                        isLoading = isCreating,
-                        onBack = { navController.popBackStack() },
-                        onSave = { secret ->
-                            viewModel.importIdentity(secret)
-                        }
-                    )
-                }
-                composable<Screen.NewIdentity> { backStackEntry ->
-                    val isCreating by viewModel.isCreating.collectAsState()
-
-                    NewIdentityScreen(
-                        isLoading = isCreating,
-                        onBack = { navController.popBackStack() },
-                        onSave = { name, bio, uri ->
-                            val contentType = uri?.let { context.contentResolver.getType(it) }
-                            val picture = uri?.let {
-                                context.contentResolver.openInputStream(it)?.use { input ->
-                                    input.readBytes()
-                                }
-                            }
-                            viewModel.createIdentity(name, bio, picture, contentType)
-                        }
-                    )
-                }
-                composable<Screen.Home> { backStackEntry ->
-                    HomeScreen(
-                        onOpenChat = { id -> navController.navigate(Screen.Chat(id)) },
-                        onNewChat = { navController.navigate(Screen.NewChat) }
-                    )
-                }
-                composable<Screen.Chat> { backStackEntry ->
-                    val chat: Screen.Chat = backStackEntry.toRoute()
-                    ChatScreen(
-                        id = chat.id,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Profile> { backStackEntry ->
-                    val profile: Screen.Profile = backStackEntry.toRoute()
-                    ProfileScreen(
-                        pubkey = profile.pubkey,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.NewChat> { backStackEntry ->
-                    NewChatScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Scan> { backStackEntry ->
-                    ScanScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.MyQr> { backStackEntry ->
-                    MyQrScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Relay> { backStackEntry ->
-                    RelayScreen(
-                        onBack = { navController.popBackStack() },
-                    )
                 }
             }
         }

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
@@ -111,10 +112,14 @@ class NostrForegroundService : Service() {
     }
 
     private fun showNewMessageNotification(roomId: Long, message: String) {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("room_id", roomId)
-        }
+        val deepLinkUri = "coop://chat/$roomId".toUri()
+
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            deepLinkUri,
+            this,
+            MainActivity::class.java
+        )
 
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -122,7 +127,7 @@ class NostrForegroundService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
+        
         val notification = NotificationCompat.Builder(this, "nostr_messages")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("You received a new message")
