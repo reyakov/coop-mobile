@@ -82,11 +82,13 @@ fun App(viewModel: NostrViewModel) {
 
     // Enabled the dynamic color scheme
     val colorScheme = when {
+        // Enable the dynamic color scheme for Android 12+
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
             if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
+        // When dark mode is enabled, use the dark color scheme
         darkMode -> darkColorScheme()
+        // Fallback to the light color scheme
         else -> expressiveLightColorScheme()
     }
 
@@ -106,22 +108,27 @@ fun App(viewModel: NostrViewModel) {
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavController provides navController,
         ) {
-            val emptySecret by viewModel.emptySecret.collectAsState(initial = null)
+            val signerRequired by viewModel.signerRequired.collectAsState(initial = null)
             val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsState()
             val sheetState = rememberModalBottomSheetState()
 
-            LaunchedEffect(emptySecret) {
+            LaunchedEffect(signerRequired) {
                 // Navigate to the home screen if the secret is already set
-                if (emptySecret == false) {
+                if (signerRequired == false) {
                     navController.navigate(Screen.Home) {
                         popUpTo(Screen.Onboarding) { inclusive = true }
                     }
                 }
             }
 
+            // Keep the splash screen visible until the secret check is complete
+            if (signerRequired == null) {
+                return@CompositionLocalProvider
+            }
+
             NavHost(
                 navController = navController,
-                startDestination = if (emptySecret == false) Screen.Home else Screen.Onboarding
+                startDestination = if (signerRequired!!) Screen.Onboarding else Screen.Home
             ) {
                 composable<Screen.Onboarding> { backStackEntry ->
                     OnboardingScreen(

@@ -39,8 +39,8 @@ class NostrViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage
 ) : ViewModel() {
-    private val _emptySecret = MutableStateFlow<Boolean?>(null)
-    val emptySecret = _emptySecret.asStateFlow()
+    private val _signerRequired = MutableStateFlow<Boolean?>(null)
+    val signerRequired = _signerRequired.asStateFlow()
 
     private val _isCreating = MutableStateFlow(false)
     val isCreating = _isCreating.asStateFlow()
@@ -206,12 +206,12 @@ class NostrViewModel(
 
             // If no secret is found, show onboarding screen
             if (secret == null) {
-                _emptySecret.value = true
+                _signerRequired.value = true
                 return@launch
             }
 
             // Update the empty secret state
-            _emptySecret.value = false
+            _signerRequired.value = false
 
             // Handle different signer types
             if (secret.startsWith("nsec1")) {
@@ -294,7 +294,7 @@ class NostrViewModel(
         viewModelScope.launch {
             secretStore.clear("user_signer")
             nostr.signer.switch(Keys.generate())
-            _emptySecret.value = true
+            _signerRequired.value = true
         }
     }
 
@@ -363,7 +363,7 @@ class NostrViewModel(
                 secretStore.set("user_signer", secret)
 
                 // Set an empty secret state
-                _emptySecret.value = false
+                _signerRequired.value = false
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -396,18 +396,16 @@ class NostrViewModel(
                 nostr.setSigner(keys)
                 secretStore.set("user_signer", secret)
                 // Set an empty secret state
-                _emptySecret.value = false
+                _signerRequired.value = false
             } else if (secret.startsWith("bunker://")) {
                 try {
                     val appKeys = getOrInitAppKeys()
                     val bunker = NostrConnectUri.parse(secret)
                     val timeout = Duration.parse("50s") // 50 seconds timeout
-                    val remote =
-                        NostrConnect(uri = bunker, appKeys = appKeys, timeout = timeout, null)
+                    val remote = NostrConnect(uri = bunker, appKeys, timeout, null)
                     nostr.setSigner(remote)
                     secretStore.set("user_signer", secret)
-                    // Set an empty secret state
-                    _emptySecret.value = false
+                    _signerRequired.value = false
                 } catch (e: Exception) {
                     showError("Error: ${e.message}")
                 }

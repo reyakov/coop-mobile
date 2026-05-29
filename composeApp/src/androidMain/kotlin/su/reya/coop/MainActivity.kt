@@ -36,8 +36,9 @@ class MainActivity : ComponentActivity() {
             startService(serviceIntent)
         }
 
+        // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
-            viewModel.emptySecret.value == null
+            viewModel.signerRequired.value == null
         }
 
         setContent {
