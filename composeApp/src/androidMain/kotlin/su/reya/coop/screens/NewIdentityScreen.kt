@@ -36,6 +36,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,21 +55,26 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_plus
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalNavigator
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NewIdentityScreen(
-    isLoading: Boolean,
-    onBack: () -> Unit,
     onSave: (name: String, bio: String?, picture: Uri?) -> Unit
 ) {
+
     val snackbarHostState = LocalSnackbarHostState.current
     val focusManager = LocalFocusManager.current
+    val navigator = LocalNavigator.current
+    val viewModel = LocalNostrViewModel.current
 
     var name by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var picture by remember { mutableStateOf<Uri?>(null) }
+
+    val isLoading by viewModel.isCreating.collectAsState()
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -88,7 +94,7 @@ fun NewIdentityScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"

@@ -70,8 +70,9 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.Screen
@@ -83,11 +84,9 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    onOpenChat: (Long) -> Unit,
-    onNewChat: () -> Unit,
-) {
-    val navController = LocalNavController.current
+fun HomeScreen() {
+    val navigator = LocalNavigator.current
+    val qrScanResult = LocalScanResult.current
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
     val viewModel = LocalNostrViewModel.current
@@ -107,33 +106,24 @@ fun HomeScreen(
     var showBottomSheet by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
 
-    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle
-        ?.getStateFlow<String?>("qr_result", null)
-        ?.collectAsState()
-        ?: remember { mutableStateOf(null) }
-
     LaunchedEffect(Unit) {
-        if (qrResult == null) {
-            viewModel.getChatRooms()
-        }
+        viewModel.getChatRooms()
     }
 
-    LaunchedEffect(qrResult) {
-        qrResult?.let { result ->
+    LaunchedEffect(qrScanResult.content) {
+        qrScanResult.content?.let { result ->
             runCatching { PublicKey.parse(result) }
                 .onSuccess { pubkey ->
                     try {
                         val roomId = viewModel.createChatRoom(listOf(pubkey))
-                        navController.navigate(Screen.Chat(roomId))
+                        navigator.navigate(Screen.Chat(roomId))
                     } catch (e: Exception) {
                         e.message?.let { snackbarHostState.showSnackbar(it) }
                     }
                 }
                 .onFailure { e -> println("Failed to parse QR: ${e.message}") }
-
             // Clear the nav state
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+            qrScanResult.clear()
         }
     }
 
@@ -153,7 +143,7 @@ fun HomeScreen(
                 },
                 actions = {
                     // QR Scanner
-                    IconButton(onClick = { navController.navigate(Screen.Scan) }) {
+                    IconButton(onClick = { navigator.navigate(Screen.Scan) }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_scanner),
                             contentDescription = "Scanner"
@@ -184,7 +174,7 @@ fun HomeScreen(
                 state = rememberTooltipState(),
             ) {
                 ExtendedFloatingActionButton(
-                    onClick = onNewChat,
+                    onClick = { navigator.navigate(Screen.NewChat) },
                     expanded = expandedFab,
                     icon = {
                         Icon(
@@ -261,7 +251,7 @@ fun HomeScreen(
                             items(chatRooms.toList(), key = { it.id }) { room ->
                                 ChatRoom(
                                     room = room,
-                                    onClick = { onOpenChat(room.id) }
+                                    onClick = { navigator.navigate(Screen.Chat(room.id)) }
                                 )
                             }
                         }
@@ -339,7 +329,7 @@ fun HomeScreen(
                                     }
                                     FilledIconButton(
                                         onClick = {
-                                            dismissAndRun { navController.navigate(Screen.MyQr) }
+                                            dismissAndRun { navigator.navigate(Screen.MyQr) }
                                         },
                                         shape = MaterialShapes.Square.toShape()
                                     ) {
@@ -408,11 +398,11 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
 fun BottomMenuList(
     onDismiss: (suspend () -> Unit) -> Unit
 ) {
-    val navController = LocalNavController.current
+    val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
     val defaultMenuList = listOf(
-        "Relay Management" to { navController.navigate(Screen.Relay) },
+        "Relay Management" to { navigator.navigate(Screen.Relay) },
         "Spams & Blocks" to { },
         "Contacts" to { },
         "Settings" to { }

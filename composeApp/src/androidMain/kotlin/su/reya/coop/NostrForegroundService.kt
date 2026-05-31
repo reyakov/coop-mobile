@@ -30,9 +30,10 @@ class NostrForegroundService : Service() {
         return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        createNotificationChannel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createNotificationChannel()
+        }
 
         val notification = createNotification()
         startForeground(1, notification)
@@ -78,7 +79,7 @@ class NostrForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
 
         val serviceChannel = NotificationChannel(
-            "nostr_service_silent",
+            "nostr_service",
             "Nostr Background Status",
             NotificationManager.IMPORTANCE_MIN
         ).apply {
@@ -127,7 +128,7 @@ class NostrForegroundService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         val notification = NotificationCompat.Builder(this, "nostr_messages")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("You received a new message")

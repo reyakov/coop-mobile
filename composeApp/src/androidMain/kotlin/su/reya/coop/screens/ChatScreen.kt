@@ -54,7 +54,7 @@ import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -66,12 +66,9 @@ import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
 @Composable
-fun ChatScreen(
-    id: Long,
-    onBack: () -> Unit,
-) {
+fun ChatScreen(id: Long) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val navController = LocalNavController.current
+    val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
     val listState = rememberLazyListState()
@@ -153,7 +150,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable {
                             room.members.firstOrNull()?.let { pubkey ->
-                                navController.navigate(Screen.Profile(pubkey.toBech32()))
+                                navigator.navigate(Screen.Profile(pubkey.toBech32()))
                             }
                         }
                     ) {
@@ -185,7 +182,7 @@ fun ChatScreen(
                             }
                         }
                     ) {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = { navigator.goBack() }) {
                             Icon(
                                 painter = painterResource(Res.drawable.ic_arrow_back),
                                 contentDescription = "Back"

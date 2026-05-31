@@ -1,8 +1,25 @@
 package su.reya.coop
 
+import android.content.Intent
+import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-sealed interface Screen {
+sealed interface Screen : NavKey {
+    companion object {
+        fun fromIntent(intent: Intent): Screen? {
+            val data = intent.data ?: return null
+            if (data.scheme != "coop") return null
+
+            return when (data.host) {
+                // Matches coop://chat/{id}
+                "chat" -> data.pathSegments.firstOrNull()?.toLongOrNull()?.let { Chat(it) }
+                // Matches coop://profile/{pubkey}
+                "profile" -> data.pathSegments.firstOrNull()?.let { Profile(it) }
+                else -> null
+            }
+        }
+    }
+
     @Serializable
     data object Home : Screen
 

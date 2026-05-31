@@ -19,12 +19,14 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
-            implementation(libs.androidx.navigation.compose)
             implementation(libs.androidx.lifecycle.process)
+            implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.jetbrains.navigation3.ui)
+            implementation(libs.jetbrains.lifecycle.viewmodelNavigation3)
             implementation(libs.androidx.core.splashscreen)
+            implementation("su.reya:nostr-sdk-kmp:0.2.3")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
-            implementation("su.reya:nostr-sdk-kmp:0.2.3")
             implementation("io.github.kalinjul.easyqrscan:scanner:0.7.0")
             implementation("io.github.alexzhirkevich:qrose:1.1.2")
         }

@@ -19,13 +19,13 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @Composable
-fun MyQrScreen(
-    onBack: () -> Unit
-) {
+fun MyQrScreen() {
+    val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
     val currentUser = viewModel.currentUser() ?: return
@@ -41,7 +41,7 @@ fun MyQrScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"

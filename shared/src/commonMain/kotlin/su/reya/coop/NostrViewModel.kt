@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.EventBuilder
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
@@ -33,7 +34,7 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
-import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class NostrViewModel(
     private val nostr: Nostr,
@@ -201,34 +202,26 @@ class NostrViewModel(
 
     private fun login() {
         viewModelScope.launch {
-            // Get user's signer secret
-            val secret = secretStore.get("user_signer")
+            try {
+                val secret = secretStore.get("user_signer")
 
-            // If no secret is found, show onboarding screen
-            if (secret == null) {
-                _signerRequired.value = true
-                return@launch
-            }
-
-            // Update the empty secret state
-            _signerRequired.value = false
-
-            // Handle different signer types
-            if (secret.startsWith("nsec1")) {
-                val keys = Keys.parse(secret)
-                nostr.setSigner(keys)
-            } else if (secret.startsWith("bunker://")) {
-                try {
-                    val appKeys = getOrInitAppKeys()
-                    val bunker = NostrConnectUri.parse(secret)
-                    val timeout = Duration.parse("50s") // 50 seconds timeout
-                    val remote = NostrConnect(uri = bunker, appKeys, timeout, opts = null)
-                    nostr.setSigner(remote)
-                } catch (e: Exception) {
-                    showError("Error: ${e.message}")
+                if (secret == null) {
+                    _signerRequired.value = true
+                    return@launch
                 }
-            } else {
-                throw IllegalArgumentException("Invalid secret format: $secret")
+
+                runCatching {
+                    val signer = createSigner(secret)
+                    nostr.setSigner(signer)
+                }.onSuccess {
+                    _signerRequired.value = false
+                }.onFailure { e ->
+                    showError("Login failed: ${e.message}")
+                    _signerRequired.value = true
+                }
+            } catch (e: Exception) {
+                showError("Login failed: ${e.message}")
+                _signerRequired.value = true
             }
         }
     }
@@ -317,6 +310,20 @@ class NostrViewModel(
         return keys
     }
 
+    private suspend fun createSigner(secret: String): AsyncNostrSigner {
+        return when {
+            secret.startsWith("nsec1") -> Keys.parse(secret)
+            secret.startsWith("bunker://") -> {
+                val appKeys = getOrInitAppKeys()
+                val bunker = NostrConnectUri.parse(secret)
+                val timeout = 50.seconds // or Duration.parse("50s")
+                NostrConnect(uri = bunker, appKeys, timeout, null)
+            }
+
+            else -> throw IllegalArgumentException("Invalid secret format")
+        }
+    }
+
     fun createIdentity(
         name: String,
         bio: String?,
@@ -371,46 +378,25 @@ class NostrViewModel(
     }
 
     suspend fun verifyIdentity(secret: String): PublicKey? {
-        if (secret.startsWith("nsec1")) {
-            val keys = Keys.parse(secret)
-            return keys.publicKey()
-        } else if (secret.startsWith("bunker://")) {
-            val appKeys = getOrInitAppKeys()
-            val bunker = NostrConnectUri.parse(secret)
-            val timeout = Duration.parse("50s") // 50 seconds timeout
-            val remote = NostrConnect(uri = bunker, appKeys, timeout, null)
-
-            // Show toast to ask user to approve the connection
-            showError("Please approve the connection.")
-
-            return remote.getPublicKeyAsync()
-        } else {
-            throw IllegalArgumentException("Invalid secret: $secret")
-        }
+        return runCatching {
+            val signer = createSigner(secret)
+            if (secret.startsWith("bunker://")) {
+                showError("Please approve the connection.")
+            }
+            signer.getPublicKeyAsync()
+        }.getOrNull()
     }
 
     fun importIdentity(secret: String) {
         viewModelScope.launch {
-            if (secret.startsWith("nsec1")) {
-                val keys = Keys.parse(secret)
-                nostr.setSigner(keys)
+            runCatching {
+                val signer = createSigner(secret)
+                nostr.setSigner(signer)
                 secretStore.set("user_signer", secret)
-                // Set an empty secret state
+            }.onSuccess {
                 _signerRequired.value = false
-            } else if (secret.startsWith("bunker://")) {
-                try {
-                    val appKeys = getOrInitAppKeys()
-                    val bunker = NostrConnectUri.parse(secret)
-                    val timeout = Duration.parse("50s") // 50 seconds timeout
-                    val remote = NostrConnect(uri = bunker, appKeys, timeout, null)
-                    nostr.setSigner(remote)
-                    secretStore.set("user_signer", secret)
-                    _signerRequired.value = false
-                } catch (e: Exception) {
-                    showError("Error: ${e.message}")
-                }
-            } else {
-                showError("Please enter a valid Secret or Bunker URI.")
+            }.onFailure { e ->
+                showError(e.message ?: "Invalid Secret or Bunker URI")
             }
         }
     }
