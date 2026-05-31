@@ -43,8 +43,11 @@ data class Room(
             val pubkeys: MutableSet<PublicKey> = mutableSetOf()
             pubkeys.add(rumor.author())
             pubkeys.addAll(rumor.tags().publicKeys())
+
             // Also remove the user's public key from the list, current user is always a member
-            pubkeys.remove(userPubkey)
+            if (pubkeys.size > 1 && pubkeys.contains(userPubkey)) {
+                pubkeys.remove(userPubkey)
+            }
 
             // Create a new Room instance
             return Room(
