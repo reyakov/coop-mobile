@@ -202,19 +202,24 @@ class NostrViewModel(
 
     private fun login() {
         viewModelScope.launch {
-            val secret = secretStore.get("user_signer")
+            try {
+                val secret = secretStore.get("user_signer")
 
-            if (secret == null) {
-                _signerRequired.value = true
-                return@launch
-            }
+                if (secret == null) {
+                    _signerRequired.value = true
+                    return@launch
+                }
 
-            runCatching {
-                val signer = createSigner(secret)
-                nostr.setSigner(signer)
-            }.onSuccess {
-                _signerRequired.value = false
-            }.onFailure { e ->
+                runCatching {
+                    val signer = createSigner(secret)
+                    nostr.setSigner(signer)
+                }.onSuccess {
+                    _signerRequired.value = false
+                }.onFailure { e ->
+                    showError("Login failed: ${e.message}")
+                    _signerRequired.value = true
+                }
+            } catch (e: Exception) {
                 showError("Login failed: ${e.message}")
                 _signerRequired.value = true
             }
