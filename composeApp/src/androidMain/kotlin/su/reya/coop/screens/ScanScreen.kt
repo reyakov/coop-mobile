@@ -30,21 +30,16 @@ import org.jetbrains.compose.resources.painterResource
 import org.publicvalue.multiplatform.qrcode.CameraPosition
 import org.publicvalue.multiplatform.qrcode.CodeType
 import org.publicvalue.multiplatform.qrcode.ScannerWithPermissions
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
+import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun ScanScreen(
-    onBack: () -> Unit
-) {
-    val navController = LocalNavController.current
+fun ScanScreen() {
+    val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-
-    val onResult: (String) -> Unit = { result ->
-        navController.previousBackStackEntry?.savedStateHandle?.set("qr_result", result)
-        navController.popBackStack()
-    }
+    val qrScanResult = LocalScanResult.current
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -57,7 +52,7 @@ fun ScanScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"
@@ -76,7 +71,8 @@ fun ScanScreen(
             ScannerWithPermissions(
                 modifier = Modifier.fillMaxSize(),
                 onScanned = {
-                    onResult(it)
+                    qrScanResult.content = it
+                    navigator.goBack()
                     true
                 },
                 types = listOf(CodeType.QR),

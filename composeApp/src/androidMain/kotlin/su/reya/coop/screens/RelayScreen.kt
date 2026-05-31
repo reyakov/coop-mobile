@@ -34,14 +34,14 @@ import coop.composeapp.generated.resources.ic_arrow_back
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun RelayScreen(
-    onBack: () -> Unit
-) {
+fun RelayScreen() {
+    val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
 
@@ -80,7 +80,7 @@ fun RelayScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"

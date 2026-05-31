@@ -37,13 +37,17 @@ import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Screen
 import su.reya.coop.shared.getExpressiveFontFamily
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
+fun OnboardingScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
+    val navigator = LocalNavigator.current
+
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
     val annotatedText = buildAnnotatedString {
@@ -127,7 +131,7 @@ fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.size(24.dp))
                             Button(
-                                onClick = onOpenNew,
+                                onClick = { navigator.navigate(Screen.NewIdentity) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .size(ButtonDefaults.MediumContainerHeight),
@@ -139,7 +143,7 @@ fun OnboardingScreen(onOpenImport: () -> Unit, onOpenNew: () -> Unit) {
                             }
                             Spacer(modifier = Modifier.size(8.dp))
                             OutlinedButton(
-                                onClick = onOpenImport,
+                                onClick = { navigator.navigate(Screen.Import) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(ButtonDefaults.MediumContainerHeight),

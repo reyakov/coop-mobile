@@ -54,8 +54,9 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -63,11 +64,10 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NewChatScreen(
-    onBack: () -> Unit,
-) {
+fun NewChatScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
-    val navController = LocalNavController.current
+    val navigator = LocalNavigator.current
+    val qrScanResult = LocalScanResult.current
     val viewModel = LocalNostrViewModel.current
 
     val contactList by viewModel.contactList.collectAsState(initial = emptySet())
@@ -75,12 +75,6 @@ fun NewChatScreen(
     val searchResults = remember { mutableStateListOf<PublicKey>() }
     val selectedReceivers = remember { mutableStateListOf<PublicKey>() }
     var query by remember { mutableStateOf("") }
-
-    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle
-        ?.getStateFlow<String?>("qr_result", null)
-        ?.collectAsState()
-        ?: remember { mutableStateOf(null) }
 
     LaunchedEffect(query) {
         if (query.length >= 3) {
@@ -111,13 +105,19 @@ fun NewChatScreen(
         }
     }
 
-    LaunchedEffect(qrResult) {
-        qrResult?.let { result ->
+    LaunchedEffect(qrScanResult.content) {
+        qrScanResult.content?.let { result ->
+            // Verify the content
             runCatching { PublicKey.parse(result) }
-                .onSuccess { pubkey -> selectedReceivers.add(pubkey) }
-                .onFailure { e -> println("Failed to parse QR: ${e.message}") }
+                .onSuccess { pubkey ->
+                    selectedReceivers.add(pubkey)
+                }
+                .onFailure { e ->
+                    println("Failed to parse QR: ${e.message}")
+                }
+
             // Clear the nav state
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+            qrScanResult.clear()
         }
     }
 
@@ -136,7 +136,7 @@ fun NewChatScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"
@@ -144,7 +144,7 @@ fun NewChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Scan) }) {
+                    IconButton(onClick = { navigator.navigate(Screen.Scan) }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_scanner),
                             contentDescription = "Scanner"
@@ -168,7 +168,7 @@ fun NewChatScreen(
                     ExtendedFloatingActionButton(
                         onClick = {
                             val roomId = viewModel.createChatRoom(selectedReceivers.toList())
-                            navController.navigate(Screen.Chat(roomId))
+                            navigator.navigate(Screen.Chat(roomId))
                         },
                         expanded = false,
                         icon = {
@@ -259,7 +259,7 @@ fun NewChatScreen(
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
                                 val roomId = viewModel.createChatRoom(listOf(pubkey))
-                                navController.navigate(Screen.Chat(roomId))
+                                navigator.navigate(Screen.Chat(roomId))
                             },
                         )
                         Spacer(modifier = Modifier.size(16.dp))
@@ -270,7 +270,7 @@ fun NewChatScreen(
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
                                 val roomId = viewModel.createChatRoom(listOf(pubkey))
-                                navController.navigate(Screen.Chat(roomId))
+                                navigator.navigate(Screen.Chat(roomId))
                             }
                         )
                         Spacer(modifier = Modifier.size(16.dp))

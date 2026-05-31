@@ -44,7 +44,7 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -54,15 +54,12 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ProfileScreen(
-    onBack: () -> Unit,
-    pubkey: String
-) {
+fun ProfileScreen(pubkey: String) {
     val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
 
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val navController = LocalNavController.current
+    val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
     val scope = rememberCoroutineScope()
@@ -88,7 +85,7 @@ fun ProfileScreen(
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"
@@ -162,7 +159,7 @@ fun ProfileScreen(
                                     scope.launch {
                                         try {
                                             val roomId = viewModel.createChatRoom(listOf(pubkey))
-                                            navController.navigate(Screen.Chat(roomId))
+                                            navigator.navigate(Screen.Chat(roomId))
                                         } catch (e: Exception) {
                                             e.message?.let { snackbarHostState.showSnackbar(it) }
                                         }

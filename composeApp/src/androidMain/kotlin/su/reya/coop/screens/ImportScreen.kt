@@ -58,8 +58,9 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalNavController
+import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -69,12 +70,11 @@ import su.reya.coop.short
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ImportScreen(
-    isLoading: Boolean,
-    onBack: () -> Unit,
     onSave: (secret: String) -> Unit
 ) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val navController = LocalNavController.current
+    val navigator = LocalNavigator.current
+    val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
     val viewModel = LocalNostrViewModel.current
     val scope = rememberCoroutineScope()
@@ -89,19 +89,14 @@ fun ImportScreen(
         }
     }.collectAsState(null)
 
-
     val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
     val picture = profile?.picture
 
-    val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-    val qrResult by savedStateHandle
-        ?.getStateFlow<String?>("qr_result", null)
-        ?.collectAsState()
-        ?: remember { mutableStateOf(null) }
+    val isLoading by viewModel.isCreating.collectAsState()
 
-    LaunchedEffect(qrResult) {
-        qrResult?.let { result ->
+    LaunchedEffect(qrScanResult.content) {
+        qrScanResult.content?.let { result ->
             runCatching {
                 if (result.startsWith("nsec")) {
                     Keys.parse(result)
@@ -113,8 +108,9 @@ fun ImportScreen(
             }
                 .onSuccess { it -> secret = result }
                 .onFailure { e -> println("Failed to parse QR: ${e.message}") }
+
             // Clear the nav state
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("qr_result")
+            qrScanResult.clear()
         }
     }
 
@@ -133,7 +129,7 @@ fun ImportScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { navigator.goBack() }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_arrow_back),
                             contentDescription = "Back"
@@ -141,7 +137,7 @@ fun ImportScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Scan) }) {
+                    IconButton(onClick = { navigator.navigate(Screen.Scan) }) {
                         Icon(
                             painter = painterResource(Res.drawable.ic_scanner),
                             contentDescription = "Scanner"

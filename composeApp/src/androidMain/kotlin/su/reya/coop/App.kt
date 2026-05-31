@@ -1,5 +1,9 @@
 package su.reya.coop
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,8 +33,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,12 +45,14 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navDeepLink
-import androidx.navigation.toRoute
+import androidx.core.util.Consumer
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.launch
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
@@ -65,26 +73,41 @@ val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
 }
 
-val LocalNavController = staticCompositionLocalOf<NavController> {
-    error("No NavController provided")
+val LocalNavigator = staticCompositionLocalOf<Navigator> {
+    error("No Navigator provided")
+}
+
+val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
+    error("No QrScanResult provided")
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun App(viewModel: NostrViewModel) {
     val context = LocalContext.current
-    val navController = rememberNavController()
+    val activity = context as? ComponentActivity
     val scope = rememberCoroutineScope()
-    val darkMode = isSystemInDarkTheme()
+    val sheetState = rememberModalBottomSheetState()
+    val backStack = rememberNavBackStack(Screen.Home)
+    val navigator = remember(backStack) { Navigator(backStack) }
+    val qrScanResult = remember { QrScanResult() }
+
+    val signerRequired by viewModel.signerRequired.collectAsState(initial = null)
+    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsState()
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Check if dark theme enabled
+    val darkMode = isSystemInDarkTheme()
 
     // Enabled the dynamic color scheme
     val colorScheme = when {
         // Enable the dynamic color scheme for Android 12+
         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
-            if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(
+                context
+            )
         }
         // When dark mode is enabled, use the dark color scheme
         darkMode -> darkColorScheme()
@@ -92,9 +115,45 @@ fun App(viewModel: NostrViewModel) {
         else -> expressiveLightColorScheme()
     }
 
+    BackHandler(enabled = backStack.size > 1) {
+        navigator.goBack()
+    }
+
     LaunchedEffect(Unit) {
         viewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    LaunchedEffect(activity) {
+        activity?.let {
+            fun handleIntent(intent: Intent) {
+                val screen = Screen.fromIntent(intent)
+                // Prevent pushing the same screen
+                if (screen != null && backStack.lastOrNull() != screen) {
+                    navigator.navigate(screen)
+                }
+            }
+
+            // Handle the intent that started the Activity
+            handleIntent(it.intent)
+
+            // Handle new intents while the Activity is running
+            val listener = Consumer<Intent> { intent -> handleIntent(intent) }
+            it.addOnNewIntentListener(listener)
+        }
+    }
+
+    LaunchedEffect(backStack.size) {
+        if (backStack.isEmpty()) {
+            (context as? Activity)?.finish()
+        }
+    }
+
+    LaunchedEffect(signerRequired) {
+        if (signerRequired == true && backStack.last() != Screen.Onboarding) {
+            backStack.clear()
+            backStack.add(Screen.Onboarding)
         }
     }
 
@@ -106,109 +165,70 @@ fun App(viewModel: NostrViewModel) {
         CompositionLocalProvider(
             LocalNostrViewModel provides viewModel,
             LocalSnackbarHostState provides snackbarHostState,
-            LocalNavController provides navController,
+            LocalNavigator provides navigator,
+            LocalScanResult provides qrScanResult,
         ) {
-            val signerRequired by viewModel.signerRequired.collectAsState(initial = null)
-            val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsState()
-            val sheetState = rememberModalBottomSheetState()
-
-            LaunchedEffect(signerRequired) {
-                // Navigate to the home screen if the secret is already set
-                if (signerRequired == false) {
-                    navController.navigate(Screen.Home) {
-                        popUpTo(Screen.Onboarding) { inclusive = true }
+            NavDisplay(
+                backStack = backStack,
+                onBack = {
+                    if (backStack.size > 1) {
+                        backStack.removeLastOrNull()
+                    } else {
+                        (context as? Activity)?.finish()
+                    }
+                },
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator(),
+                    rememberViewModelStoreNavEntryDecorator()
+                ),
+                entryProvider = entryProvider {
+                    entry<Screen.Home> {
+                        HomeScreen()
+                    }
+                    entry<Screen.Onboarding> {
+                        OnboardingScreen()
+                    }
+                    entry<Screen.Import> {
+                        ImportScreen(
+                            onSave = { secret ->
+                                viewModel.importIdentity(secret)
+                            }
+                        )
+                    }
+                    entry<Screen.NewIdentity> {
+                        NewIdentityScreen(
+                            onSave = { name, bio, uri ->
+                                val contentType =
+                                    uri?.let { context.contentResolver.getType(it) }
+                                val picture = uri?.let {
+                                    context.contentResolver.openInputStream(it)?.use { input ->
+                                        input.readBytes()
+                                    }
+                                }
+                                viewModel.createIdentity(name, bio, picture, contentType)
+                            }
+                        )
+                    }
+                    entry<Screen.Chat> { key ->
+                        ChatScreen(id = key.id)
+                    }
+                    entry<Screen.NewChat> {
+                        NewChatScreen()
+                    }
+                    entry<Screen.Profile> { key ->
+                        ProfileScreen(pubkey = key.pubkey)
+                    }
+                    entry<Screen.Scan> {
+                        ScanScreen()
+                    }
+                    entry<Screen.MyQr> {
+                        MyQrScreen()
+                    }
+                    entry<Screen.Relay> {
+                        RelayScreen()
                     }
                 }
-            }
-
-            // Keep the splash screen visible until the secret check is complete
-            if (signerRequired == null) {
-                return@CompositionLocalProvider
-            }
-
-            NavHost(
-                navController = navController,
-                startDestination = if (signerRequired!!) Screen.Onboarding else Screen.Home
-            ) {
-                composable<Screen.Onboarding> { backStackEntry ->
-                    OnboardingScreen(
-                        onOpenImport = { navController.navigate(Screen.Import) },
-                        onOpenNew = { navController.navigate(Screen.NewIdentity) }
-                    )
-                }
-                composable<Screen.Import> { backStackEntry ->
-                    val isCreating by viewModel.isCreating.collectAsState()
-
-                    ImportScreen(
-                        isLoading = isCreating,
-                        onBack = { navController.popBackStack() },
-                        onSave = { secret ->
-                            viewModel.importIdentity(secret)
-                        }
-                    )
-                }
-                composable<Screen.NewIdentity> { backStackEntry ->
-                    val isCreating by viewModel.isCreating.collectAsState()
-
-                    NewIdentityScreen(
-                        isLoading = isCreating,
-                        onBack = { navController.popBackStack() },
-                        onSave = { name, bio, uri ->
-                            val contentType = uri?.let { context.contentResolver.getType(it) }
-                            val picture = uri?.let {
-                                context.contentResolver.openInputStream(it)?.use { input ->
-                                    input.readBytes()
-                                }
-                            }
-                            viewModel.createIdentity(name, bio, picture, contentType)
-                        }
-                    )
-                }
-                composable<Screen.Home> { backStackEntry ->
-                    HomeScreen(
-                        onOpenChat = { id -> navController.navigate(Screen.Chat(id)) },
-                        onNewChat = { navController.navigate(Screen.NewChat) }
-                    )
-                }
-                composable<Screen.Chat>(
-                    deepLinks = listOf(
-                        navDeepLink<Screen.Chat>(basePath = "coop://chat")
-                    )
-                ) { backStackEntry ->
-                    val chat: Screen.Chat = backStackEntry.toRoute()
-                    ChatScreen(
-                        id = chat.id,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Profile> { backStackEntry ->
-                    val profile: Screen.Profile = backStackEntry.toRoute()
-                    ProfileScreen(
-                        pubkey = profile.pubkey,
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.NewChat> { backStackEntry ->
-                    NewChatScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Scan> { backStackEntry ->
-                    ScanScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.MyQr> { backStackEntry ->
-                    MyQrScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                composable<Screen.Relay> { backStackEntry ->
-                    RelayScreen(
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-            }
+            )
 
             // Show the relay setup dialog if the msg relay list is empty
             if (isRelayListEmpty) {
@@ -265,5 +285,25 @@ fun App(viewModel: NostrViewModel) {
                 }
             }
         }
+    }
+}
+
+class Navigator(private val backStack: NavBackStack<NavKey>) {
+    fun navigate(route: NavKey) {
+        backStack.add(route)
+    }
+
+    fun goBack() {
+        if (backStack.size > 1) {
+            backStack.removeAt(backStack.lastIndex)
+        }
+    }
+}
+
+class QrScanResult {
+    var content by mutableStateOf<String?>(null)
+
+    fun clear() {
+        content = null
     }
 }
