@@ -43,8 +43,8 @@ class NostrViewModel(
     private val _signerRequired = MutableStateFlow<Boolean?>(null)
     val signerRequired = _signerRequired.asStateFlow()
 
-    private val _isCreating = MutableStateFlow(false)
-    val isCreating = _isCreating.asStateFlow()
+    private val _isLoggedIn = MutableStateFlow(false)
+    val isLoggedIn = _isLoggedIn.asStateFlow()
 
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
@@ -61,7 +61,7 @@ class NostrViewModel(
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
-    private val _sentReports = MutableStateFlow<Map<EventId, List<RelayUrl>>>(emptyMap())
+    private val _sentReports = MutableSharedFlow<Map<EventId, List<RelayUrl>>>()
     val sentReport = _sentReports.asSharedFlow()
 
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
@@ -101,7 +101,6 @@ class NostrViewModel(
     private fun showError(message: String) {
         viewModelScope.launch {
             _errorEvents.send(message)
-            if (isCreating.value) _isCreating.value = false
         }
     }
 
@@ -324,56 +323,54 @@ class NostrViewModel(
         }
     }
 
-    fun createIdentity(
+    suspend fun createIdentity(
         name: String,
         bio: String?,
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        viewModelScope.launch {
-            try {
-                val keys = Keys.generate()
-                val secret = keys.secretKey().toBech32()
-                var avatarUrl = ""
+        _isLoggedIn.value = true
+        try {
+            val keys = Keys.generate()
+            val secret = keys.secretKey().toBech32()
+            var avatarUrl = ""
 
-                // Set loading state
-                _isCreating.value = true
-
-                // Upload picture to Blossom
-                if (picture != null) {
-                    val blossom = BlossomClient(
-                        url = "https://blossom.band",
-                        client = HttpClient {
-                            install(ContentNegotiation) {
-                                json(Json {
-                                    ignoreUnknownKeys = true
-                                    prettyPrint = true
-                                    isLenient = true
-                                })
-                            }
+            // Upload picture to Blossom
+            if (picture != null) {
+                val blossom = BlossomClient(
+                    url = "https://blossom.band",
+                    client = HttpClient {
+                        install(ContentNegotiation) {
+                            json(Json {
+                                ignoreUnknownKeys = true
+                                prettyPrint = true
+                                isLenient = true
+                            })
                         }
-                    )
+                    }
+                )
 
-                    val descriptor = blossom.upload(
-                        file = picture,
-                        contentType = contentType,
-                        signer = keys
-                    )
+                val descriptor = blossom.upload(
+                    file = picture,
+                    contentType = contentType,
+                    signer = keys
+                )
 
-                    avatarUrl = descriptor?.url ?: ""
-                }
-
-                // Create identity
-                nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
-
-                // Save secret to the secret storage
-                secretStore.set("user_signer", secret)
-
-                // Set an empty secret state
-                _signerRequired.value = false
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
+                avatarUrl = descriptor?.url ?: ""
             }
+
+            // Create identity
+            nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
+
+            // Save secret to the secret storage
+            secretStore.set("user_signer", secret)
+
+            // Set an empty secret state
+            _signerRequired.value = false
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        } finally {
+            _isLoggedIn.value = true
         }
     }
 
@@ -387,17 +384,17 @@ class NostrViewModel(
         }.getOrNull()
     }
 
-    fun importIdentity(secret: String) {
-        viewModelScope.launch {
-            runCatching {
-                val signer = createSigner(secret)
-                nostr.setSigner(signer)
-                secretStore.set("user_signer", secret)
-            }.onSuccess {
-                _signerRequired.value = false
-            }.onFailure { e ->
-                showError(e.message ?: "Invalid Secret or Bunker URI")
-            }
+    suspend fun importIdentity(secret: String) {
+        _isLoggedIn.value = true
+        try {
+            val signer = createSigner(secret)
+            nostr.setSigner(signer)
+            secretStore.set("user_signer", secret)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        } finally {
+            _signerRequired.value = false
+            _isLoggedIn.value = true
         }
     }
 

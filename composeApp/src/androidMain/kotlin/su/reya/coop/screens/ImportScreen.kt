@@ -33,7 +33,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,10 +48,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
@@ -69,31 +69,27 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ImportScreen(
-    onSave: (secret: String) -> Unit
-) {
+fun ImportScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
     val viewModel = LocalNostrViewModel.current
+
     val scope = rememberCoroutineScope()
 
+    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
+
+    // Get metadata when pubkey changes
     val metadata by remember(pubkey) {
-        if (pubkey != null) {
-            viewModel.getMetadata(pubkey!!)
-        } else {
-            MutableStateFlow(null)
-        }
-    }.collectAsState(null)
+        pubkey?.let(viewModel::getMetadata) ?: flowOf(null)
+    }.collectAsStateWithLifecycle(null)
 
     val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
     val picture = profile?.picture
-
-    val isLoading by viewModel.isCreating.collectAsState()
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
@@ -246,20 +242,24 @@ fun ImportScreen(
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
-                                if (pubkey == null) {
-                                    scope.launch {
+                                scope.launch {
+                                    if (pubkey == null) {
                                         viewModel.verifyIdentity(secret).let { pubkey = it }
+                                    } else {
+                                        // Import the identity
+                                        viewModel.importIdentity(secret)
+                                        // Navigate to the home screen
+                                        navigator.navigate(Screen.Home)
                                     }
-                                } else {
-                                    onSave(secret)
                                 }
+
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !isLoading,
+                            enabled = secret.isNotBlank() && !isLoggedIn,
                         ) {
-                            if (isLoading) {
+                            if (isLoggedIn) {
                                 LoadingIndicator()
                             } else {
                                 Text(

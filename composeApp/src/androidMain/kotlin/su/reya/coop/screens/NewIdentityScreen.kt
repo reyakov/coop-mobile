@@ -36,45 +36,50 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_plus
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Screen
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NewIdentityScreen(
-    onSave: (name: String, bio: String?, picture: Uri?) -> Unit
-) {
-
+fun NewIdentityScreen() {
+    val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val focusManager = LocalFocusManager.current
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
+    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
     var name by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var picture by remember { mutableStateOf<Uri?>(null) }
 
-    val isLoading by viewModel.isCreating.collectAsState()
+    val scope = rememberCoroutineScope()
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -256,14 +261,35 @@ fun NewIdentityScreen(
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
-                                onSave(name, bio, picture)
+                                scope.launch {
+                                    try {
+                                        val imageBytes = withContext(Dispatchers.IO) {
+                                            picture?.let { uri ->
+                                                context.contentResolver.openInputStream(
+                                                    uri
+                                                )?.use { input -> input.readBytes() }
+                                            }
+                                        }
+
+                                        val contentType =
+                                            picture?.let { context.contentResolver.getType(it) }
+
+                                        // Create the identity
+                                        viewModel.createIdentity(name, bio, imageBytes, contentType)
+
+                                        // Navigate to the home screen if successful
+                                        navigator.navigate(Screen.Home)
+                                    } catch (e: Exception) {
+                                        // Error is handled by viewModel.showError inside createIdentity
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = name.isNotBlank() && !isLoading,
+                            enabled = name.isNotBlank() && !isLoggedIn,
                         ) {
-                            if (isLoading) {
+                            if (isLoggedIn) {
                                 LoadingIndicator()
                             } else {
                                 Text(
