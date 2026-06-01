@@ -183,6 +183,7 @@ fun NewIdentityScreen() {
                             BasicTextField(
                                 value = name,
                                 onValueChange = { name = it },
+                                enabled = !isLoggedIn,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(
@@ -194,10 +195,10 @@ fun NewIdentityScreen() {
                                     }
                                 ),
                                 textStyle = MaterialTheme.typography.headlineLargeEmphasized.copy(
-                                    color = MaterialTheme.colorScheme.primaryFixed,
+                                    color = MaterialTheme.colorScheme.tertiaryFixedDim,
                                     fontWeight = FontWeight.SemiBold,
                                 ),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.tertiaryContainer),
                                 decorationBox = { innerTextField ->
                                     Box(contentAlignment = Alignment.CenterStart) {
                                         if (name.isEmpty()) {
@@ -225,6 +226,7 @@ fun NewIdentityScreen() {
                             BasicTextField(
                                 value = bio,
                                 onValueChange = { bio = it },
+                                enabled = !isLoggedIn,
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 3,
                                 keyboardOptions = KeyboardOptions(

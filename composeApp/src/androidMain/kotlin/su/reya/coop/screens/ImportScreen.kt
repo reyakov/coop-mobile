@@ -90,7 +90,7 @@ fun ImportScreen() {
     val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
     val picture = profile?.picture
-
+    
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             runCatching {
@@ -205,6 +205,7 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
+                                enabled = !isLoggedIn,
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 4,
                                 keyboardOptions = KeyboardOptions(
@@ -217,10 +218,10 @@ fun ImportScreen() {
                                 ),
                                 visualTransformation = PasswordVisualTransformation('*'),
                                 textStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
-                                    color = MaterialTheme.colorScheme.primaryFixed,
+                                    color = MaterialTheme.colorScheme.tertiaryFixedDim,
                                     fontWeight = FontWeight.SemiBold,
                                 ),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.tertiaryContainer),
                                 decorationBox = { innerTextField ->
                                     Box(contentAlignment = Alignment.CenterStart) {
                                         if (secret.isEmpty()) {
@@ -263,7 +264,7 @@ fun ImportScreen() {
                                 LoadingIndicator()
                             } else {
                                 Text(
-                                    text = if (pubkey == null) "Verify" else "Continue",
+                                    text = if (pubkey == null) "Verify" else "Click again to Continue",
                                     style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }

@@ -375,13 +375,16 @@ class NostrViewModel(
     }
 
     suspend fun verifyIdentity(secret: String): PublicKey? {
-        return runCatching {
+        try {
             val signer = createSigner(secret)
             if (secret.startsWith("bunker://")) {
                 showError("Please approve the connection.")
             }
-            signer.getPublicKeyAsync()
-        }.getOrNull()
+            return signer.getPublicKeyAsync()
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            return null
+        }
     }
 
     suspend fun importIdentity(secret: String) {
@@ -394,7 +397,7 @@ class NostrViewModel(
             showError("Error: ${e.message}")
         } finally {
             _signerRequired.value = false
-            _isLoggedIn.value = true
+            _isLoggedIn.value = false
         }
     }
 
