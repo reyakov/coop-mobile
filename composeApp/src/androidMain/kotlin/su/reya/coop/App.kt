@@ -189,25 +189,10 @@ fun App(viewModel: NostrViewModel) {
                         OnboardingScreen()
                     }
                     entry<Screen.Import> {
-                        ImportScreen(
-                            onSave = { secret ->
-                                viewModel.importIdentity(secret)
-                            }
-                        )
+                        ImportScreen()
                     }
                     entry<Screen.NewIdentity> {
-                        NewIdentityScreen(
-                            onSave = { name, bio, uri ->
-                                val contentType =
-                                    uri?.let { context.contentResolver.getType(it) }
-                                val picture = uri?.let {
-                                    context.contentResolver.openInputStream(it)?.use { input ->
-                                        input.readBytes()
-                                    }
-                                }
-                                viewModel.createIdentity(name, bio, picture, contentType)
-                            }
-                        )
+                        NewIdentityScreen()
                     }
                     entry<Screen.Chat> { key ->
                         ChatScreen(id = key.id)
