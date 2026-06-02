@@ -2,7 +2,6 @@ package su.reya.coop
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import kotlinx.coroutines.Job
@@ -106,17 +105,16 @@ class Nostr {
             // Initialize the logger for nostr client
             initLogger(LogLevel.DEBUG)
 
+            // Initialize the database and gossip instance
             val lmdb = NostrDatabase.lmdb(dbPath)
             val gossip = NostrGossip.inMemory()
+
+            // Set the idle timeout for relays
             val idleTimeout = Duration.parse("5m")
-            val httpClient = HttpClient {
-                install(WebSockets)
-            }
 
             client =
                 ClientBuilder()
                     .signer(signer)
-                    .websocketTransport(CoopWebSocketClient(httpClient))
                     .database(lmdb)
                     .gossip(gossip)
                     .gossipConfig(
