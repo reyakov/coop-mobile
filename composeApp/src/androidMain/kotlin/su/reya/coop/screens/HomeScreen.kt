@@ -111,6 +111,7 @@ fun HomeScreen() {
     val userProfile by currentUserProfile.collectAsState(initial = null)
     val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
     val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
+    val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -221,7 +222,7 @@ fun HomeScreen() {
                 modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                if (!isNotificationEnabled) {
+                if (!isNotificationEnabled && !isBannerDismissed) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -253,7 +254,7 @@ fun HomeScreen() {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = { },
+                                    onClick = { viewModel.dismissNotificationBanner() },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(text = "Maybe later")
