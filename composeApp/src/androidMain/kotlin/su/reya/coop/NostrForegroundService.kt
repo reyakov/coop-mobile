@@ -6,8 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -22,7 +24,7 @@ import java.io.File
 
 class NostrForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val nostr = NostrManager.instance
+    private val nostr by lazy { NostrManager.instance }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -30,18 +32,30 @@ class NostrForegroundService : Service() {
         return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onCreate() {
+        super.onCreate()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             createNotificationChannel()
         }
-
         val notification = createNotification()
-        startForeground(1, notification)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(1, notification)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         serviceScope.launch {
             try {
+                Log.d("Coop", "Starting Nostr in background")
+
+                // Create a database directory
                 val dbDir = File(filesDir, "nostr")
                 dbDir.mkdirs()
+
                 // Initialize Nostr client
                 nostr.init(dbDir.absolutePath)
                 // Connect to bootstrap relays
@@ -67,10 +81,9 @@ class NostrForegroundService : Service() {
                     }
                 )
             } catch (e: Exception) {
-                println("Failed to start Nostr in background: ${e.message}")
+                Log.e("Coop", "Failed to start Nostr", e)
             }
         }
-
         return START_STICKY
     }
 
