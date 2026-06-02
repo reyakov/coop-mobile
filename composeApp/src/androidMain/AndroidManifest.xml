@@ -20,6 +20,12 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
+            android:name=".CrashActivity"
+            android:exported="false"
+            android:process=":crash_handler"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.App.Starting">
