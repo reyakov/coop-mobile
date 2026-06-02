@@ -40,6 +40,9 @@ class NostrViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage
 ) : ViewModel() {
+    private val _isNotificationBannerDismissed = MutableStateFlow(false)
+    val isNotificationBannerDismissed = _isNotificationBannerDismissed.asStateFlow()
+
     private val _signerRequired = MutableStateFlow<Boolean?>(null)
     val signerRequired = _signerRequired.asStateFlow()
 
@@ -72,6 +75,9 @@ class NostrViewModel(
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
+        // Check if the notification banner has been dismissed
+        checkNotificationBannerDismissedStatus()
+
         // Check local stored secret (secret key or bunker)
         login()
 
@@ -101,6 +107,13 @@ class NostrViewModel(
     private fun showError(message: String) {
         viewModelScope.launch {
             _errorEvents.send(message)
+        }
+    }
+
+    private fun checkNotificationBannerDismissedStatus() {
+        viewModelScope.launch {
+            _isNotificationBannerDismissed.value =
+                secretStore.get("notification_banner_dismissed") == "true"
         }
     }
 
@@ -287,6 +300,13 @@ class NostrViewModel(
             secretStore.clear("user_signer")
             nostr.signer.switch(Keys.generate())
             _signerRequired.value = true
+        }
+    }
+
+    fun dismissNotificationBanner() {
+        viewModelScope.launch {
+            secretStore.set("notification_banner_dismissed", "true")
+            _isNotificationBannerDismissed.value = true
         }
     }
 
