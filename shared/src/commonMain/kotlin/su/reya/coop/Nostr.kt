@@ -500,7 +500,7 @@ class Nostr {
 
     suspend fun getAllCacheMetadata(): Map<PublicKey, Metadata> {
         try {
-            val filter = Filter().kind(Kind.fromStd(KindStandard.METADATA)).limit(200u)
+            val filter = Filter().kind(Kind.fromStd(KindStandard.METADATA)).limit(100u)
             val events = client?.database()?.query(filter)
             val results = mutableMapOf<PublicKey, Metadata>()
 

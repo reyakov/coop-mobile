@@ -34,6 +34,7 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class NostrViewModel(
@@ -177,7 +178,7 @@ class NostrViewModel(
                 val lastFlushTime = Clock.System.now().toEpochMilliseconds()
 
                 while (batch.isNotEmpty()) {
-                    val nextKey = withTimeoutOrNull(timeout) {
+                    val nextKey = withTimeoutOrNull(timeout.milliseconds) {
                         metadataRequestChannel.receive()
                     }
 
@@ -255,7 +256,7 @@ class NostrViewModel(
                     nostr.getUserMetadata()
 
                     // Small delay to ensure all relays are connected
-                    delay(3000)
+                    delay(3000.milliseconds)
 
                     // Check if the relay list is empty
                     val relays = nostr.getMsgRelays(pubkey)
@@ -266,7 +267,7 @@ class NostrViewModel(
                     break
                 }
 
-                delay(500)
+                delay(500.milliseconds)
             }
         }
     }
