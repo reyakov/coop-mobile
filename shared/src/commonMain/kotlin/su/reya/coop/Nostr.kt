@@ -505,13 +505,18 @@ class Nostr {
             val results = mutableMapOf<PublicKey, Metadata>()
 
             events?.toVec()?.forEach { event ->
-                val metadata = Metadata.fromJson(event.content())
-                results[event.author()] = metadata
+                try {
+                    val metadata = Metadata.fromJson(event.content())
+                    results[event.author()] = metadata
+                } catch (e: Exception) {
+                    println("Failed to parse metadata: $e")
+                }
             }
 
             return results
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to get cache metadata: ${e.message}", e)
+            println("Failed to get all cache metadata: ${e.message}")
+            return emptyMap()
         }
     }
 
