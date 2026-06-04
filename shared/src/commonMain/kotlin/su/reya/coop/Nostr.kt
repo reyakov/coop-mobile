@@ -599,7 +599,7 @@ class Nostr {
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
             // Get all events sent by the user
-            val filter = Filter().kind(kind).author(userPubkey).customTag(kTag, "14")
+            val filter = Filter().kind(kind).author(userPubkey).customTags(kTag, listOf("14", "dm"))
             val events = client?.database()?.query(filter)
 
             // Collect rooms
