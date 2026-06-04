@@ -55,6 +55,7 @@ import rust.nostr.sdk.giftWrapAsync
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 object NostrManager {
     val instance = Nostr()
@@ -228,7 +229,7 @@ class Nostr {
 
             client?.subscribe(
                 target = ReqTarget.manual(target),
-                id = "all-gift-wraps"
+                id = "gift-wraps"
             )
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
@@ -293,7 +294,7 @@ class Nostr {
                                     eoseTrackerJob?.cancel()
                                     // Start a new tracker
                                     eoseTrackerJob = launch {
-                                        delay(10000) // Wait for 10 seconds
+                                        delay(10000.milliseconds) // Wait for 10 seconds
                                         onSubscriptionClose()
                                     }
 
@@ -312,7 +313,7 @@ class Nostr {
                         is RelayMessageEnum.EndOfStoredEvents -> {
                             val subscriptionId = message.subscriptionId
 
-                            if (subscriptionId == "all-gift-wraps" || subscriptionId == "newest-gift-wraps") {
+                            if (subscriptionId == "gift-wraps") {
                                 onSubscriptionClose()
                             }
                         }
@@ -366,7 +367,7 @@ class Nostr {
                 Tag.identifier(giftId.toHex()),
                 Tag.event(rumor.id()!!),
                 Tag.reference(roomId.toString()),
-                Tag.custom(TagKind.Unknown("k"), listOf("dm"))
+                Tag.custom(TagKind.Unknown("k"), listOf("14"))
             )
 
             // Set event kind
@@ -395,7 +396,6 @@ class Nostr {
         // Try to unwrap the gift with each signer
         for (signer in signers) {
             try {
-                // TODO: custom unwrapping logic
                 val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
                 val rumor = gift.rumor()
                 // Save the rumor to the database
@@ -644,6 +644,8 @@ class Nostr {
             return events
                 ?.toVec()
                 ?.map { UnsignedEvent.fromJson(it.content()) }
+                // Filter out events without public keys (receivers)
+                ?.filter { it.tags().publicKeys().isNotEmpty() }
                 ?.sortedByDescending { it.createdAt().asSecs() } ?: emptyList()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
@@ -723,9 +725,7 @@ class Nostr {
 
             // Add public key tags for each recipient
             to.forEach { pubkey ->
-                if (pubkey != currentUser) {
-                    tags.add(Tag.publicKey(pubkey))
-                }
+                tags.add(Tag.publicKey(pubkey))
             }
 
             for (receiver in listOf(currentUser) + to) {
@@ -734,6 +734,7 @@ class Nostr {
                 val rumor = EventBuilder
                     .privateMsgRumor(receiver = receiver, message = content)
                     .tags(tags)
+                    .allowSelfTagging()
                     .build(currentUser)
                     // Ensure the event ID is set
                     .ensureId()
