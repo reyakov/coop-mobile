@@ -248,7 +248,7 @@ class NostrViewModel(
                     // Get chat rooms
                     val rooms = nostr.getChatRooms() ?: emptySet()
                     if (rooms.isNotEmpty()) {
-                        _chatRooms.value = rooms
+                        mergeChatRooms(rooms)
                         _isPartialProcessedGiftWrap.value = true
                     }
 
@@ -476,7 +476,7 @@ class NostrViewModel(
 
             // Update the chat rooms state
             _chatRooms.update { currentRooms ->
-                currentRooms + room
+                (currentRooms + room).sortedDescending().toSet()
             }
 
             return room.id
@@ -490,21 +490,29 @@ class NostrViewModel(
             ?: throw IllegalArgumentException("Room not found")
     }
 
+    private fun mergeChatRooms(rooms: Set<Room>) {
+        _chatRooms.update { currentRooms ->
+            val merged = currentRooms.associateBy { it.id }.toMutableMap()
+            // Add or update rooms from the database
+            rooms.forEach { room ->
+                merged[room.id] = room
+            }
+            // Return as a sorted set to maintain UI consistency
+            merged.values.sortedDescending().toSet()
+        }
+    }
+
     fun getChatRooms() {
         viewModelScope.launch {
             val rooms = nostr.getChatRooms() ?: emptySet()
-            _chatRooms.update { currentRooms ->
-                val virtualRooms = currentRooms.filter { local ->
-                    rooms.none { db -> db.id == local.id }
-                }
-                rooms + virtualRooms
-            }
+            mergeChatRooms(rooms)
         }
     }
 
     suspend fun refreshChatRooms() {
         try {
-            _chatRooms.value = nostr.getChatRooms() ?: emptySet()
+            val rooms = nostr.getChatRooms() ?: emptySet()
+            mergeChatRooms(rooms)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -540,7 +548,7 @@ class NostrViewModel(
             try {
                 val room = getChatRoom(roomId)
                 nostr.sendMessage(
-                    to = room.members.toList(),
+                    to = room.members,
                     content = message,
                     subject = room.subject,
                     replies = replies,

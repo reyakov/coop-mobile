@@ -35,9 +35,7 @@ class NostrForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createNotificationChannel()
-        }
+        createNotificationChannel()
         val notification = createNotification()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
