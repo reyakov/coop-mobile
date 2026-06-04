@@ -548,7 +548,7 @@ class NostrViewModel(
             try {
                 val room = getChatRoom(roomId)
                 nostr.sendMessage(
-                    to = room.members.toList(),
+                    to = room.members,
                     content = message,
                     subject = room.subject,
                     replies = replies,

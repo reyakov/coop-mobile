@@ -9,25 +9,32 @@ import su.reya.coop.Room
 import su.reya.coop.short
 
 fun Room.displayNameFlow(viewModel: NostrViewModel): Flow<String> {
-    if (!subject.isNullOrBlank()) return flowOf<String>(subject!!)
+    // Return early if there's a custom subject/room name
+    subject?.takeIf { it.isNotBlank() }?.let { return flowOf(it) }
 
-    val memberFlows = members.map { viewModel.getMetadata(it) }
+    val displayMembers = if (isGroup()) members.take(2) else members.take(1)
+    if (displayMembers.isEmpty()) return flowOf("Unknown")
 
-    return combine(memberFlows) { metadataArray ->
+    return combine(displayMembers.map { viewModel.getMetadata(it) }) { metadataArray ->
+        val names = metadataArray.mapIndexed { i, metadata ->
+            val profile = metadata?.asRecord()
+            profile?.name?.takeIf { it.isNotBlank() }
+                ?: profile?.displayName?.takeIf { it.isNotBlank() }
+                ?: displayMembers[i].short()
+        }
+
         if (isGroup()) {
-            val profiles = metadataArray.map { it?.asRecord() }
-            val names = profiles.take(2).mapNotNull { it?.name ?: it?.displayName }
-            var combined = names.joinToString(", ")
-            if (profiles.size > 2) combined += ", +${profiles.size - 2}"
-            combined.ifBlank { "Unknown group" }
+            val combined = names.joinToString(", ")
+            val extraCount = members.size - names.size
+            if (extraCount > 0) "$combined, +$extraCount" else combined
         } else {
-            val profile = metadataArray.firstOrNull()?.asRecord()
-            profile?.name ?: profile?.displayName ?: members.firstOrNull()?.short() ?: "Unknown"
+            val name = names.first()
+            if (displayMembers.first() == viewModel.currentUser()) "$name (you)" else name
         }
     }
 }
 
 fun Room.pictureFlow(viewModel: NostrViewModel): Flow<String?> {
-    val firstMember = members.firstOrNull() ?: return kotlinx.coroutines.flow.flowOf(null)
+    val firstMember = members.firstOrNull() ?: return flowOf(null)
     return viewModel.getMetadata(firstMember).map { it?.asRecord()?.picture }
 }

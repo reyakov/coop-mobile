@@ -699,7 +699,7 @@ class Nostr {
     }
 
     suspend fun sendMessage(
-        to: List<PublicKey>,
+        to: Set<PublicKey>,
         content: String,
         subject: String? = null,
         replies: List<EventId> = emptyList(),
@@ -728,7 +728,7 @@ class Nostr {
                 tags.add(Tag.publicKey(pubkey))
             }
 
-            for (receiver in listOf(currentUser) + to) {
+            for (receiver in setOf(currentUser) + to) {
                 // Construct the rumor event
                 // NEVER SIGN this event with the current user signer
                 val rumor = EventBuilder
