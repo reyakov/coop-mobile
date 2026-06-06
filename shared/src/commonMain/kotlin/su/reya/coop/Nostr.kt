@@ -99,12 +99,15 @@ class Nostr {
     suspend fun emitContactListUpdate(contacts: List<PublicKey>) =
         _contactListUpdates.emit(contacts)
 
-    suspend fun init(dbPath: String) {
+    suspend fun init(
+        dbPath: String,
+        logLevel: LogLevel = LogLevel.WARN
+    ) {
         try {
             if (isInitialized.value) return
 
             // Initialize the logger for nostr client
-            initLogger(LogLevel.DEBUG)
+            initLogger(logLevel)
 
             // Initialize the database and gossip instance
             val lmdb = NostrDatabase.lmdb(dbPath)

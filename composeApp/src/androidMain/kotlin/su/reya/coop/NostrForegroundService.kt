@@ -10,13 +10,13 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -25,6 +25,7 @@ import java.io.File
 class NostrForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val nostr by lazy { NostrManager.instance }
+    private var notificationJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,10 +47,12 @@ class NostrForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        serviceScope.launch {
+        if (notificationJob?.isActive == true) return START_STICKY
+
+        notificationJob = serviceScope.launch {
             try {
                 Log.d("Coop", "Starting Nostr in background")
-
+                
                 // Create a database directory
                 val dbDir = File(filesDir, "nostr")
                 dbDir.mkdirs()
@@ -82,10 +85,10 @@ class NostrForegroundService : Service() {
                 Log.e("Coop", "Failed to start Nostr", e)
             }
         }
+
         return START_STICKY
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java)
 
