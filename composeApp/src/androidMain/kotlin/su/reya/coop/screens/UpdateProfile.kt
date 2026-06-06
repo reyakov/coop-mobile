@@ -32,7 +32,7 @@ fun UpdateProfileScreen() {
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {
-                //viewModel.updateProfile(name, bio, bytes, type)
+                viewModel.updateProfile(name, bio, bytes, type)
                 navigator.goBack()
             }
         }

@@ -344,6 +344,53 @@ class NostrViewModel(
         }
     }
 
+    private suspend fun blossomUpload(file: ByteArray, contentType: String): String? {
+        try {
+            var avatarUrl: String? = null
+
+            // Upload picture to Blossom
+            val blossom = BlossomClient(
+                url = "https://blossom.band",
+                client = HttpClient {
+                    install(ContentNegotiation) {
+                        json(Json {
+                            ignoreUnknownKeys = true
+                            prettyPrint = true
+                            isLenient = true
+                        })
+                    }
+                }
+            )
+
+            val descriptor = blossom.upload(
+                file = file,
+                contentType = contentType,
+                signer = nostr.signer
+            )
+
+            avatarUrl = descriptor?.url
+
+            return avatarUrl
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            return null
+        }
+    }
+
+    suspend fun updateProfile(
+        name: String? = null,
+        bio: String? = null,
+        picture: ByteArray? = null,
+        contentType: String? = null
+    ) {
+        try {
+            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
+            nostr.updateProfile(name, bio, avatarUrl)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
     suspend fun createIdentity(
         name: String,
         bio: String?,
@@ -354,31 +401,7 @@ class NostrViewModel(
         try {
             val keys = Keys.generate()
             val secret = keys.secretKey().toBech32()
-            var avatarUrl = ""
-
-            // Upload picture to Blossom
-            if (picture != null) {
-                val blossom = BlossomClient(
-                    url = "https://blossom.band",
-                    client = HttpClient {
-                        install(ContentNegotiation) {
-                            json(Json {
-                                ignoreUnknownKeys = true
-                                prettyPrint = true
-                                isLenient = true
-                            })
-                        }
-                    }
-                )
-
-                val descriptor = blossom.upload(
-                    file = picture,
-                    contentType = contentType,
-                    signer = keys
-                )
-
-                avatarUrl = descriptor?.url ?: ""
-            }
+            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
 
             // Create identity
             nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
