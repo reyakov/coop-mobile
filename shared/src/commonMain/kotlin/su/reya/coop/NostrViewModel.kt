@@ -76,6 +76,11 @@ class NostrViewModel(
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
+        // Skip the splash screen if a user is already logged in
+        if (nostr.signer.currentUser != null) {
+            _signerRequired.value = false
+        }
+
         // Check if the notification banner has been dismissed
         checkNotificationBannerDismissedStatus()
 
@@ -216,7 +221,9 @@ class NostrViewModel(
     private fun login() {
         viewModelScope.launch {
             try {
-                val secret = secretStore.get("user_signer")
+                val secret = withTimeoutOrNull(3.seconds) {
+                    secretStore.get("user_signer")
+                }
 
                 if (secret == null) {
                     _signerRequired.value = true
