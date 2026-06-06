@@ -1,13 +1,13 @@
 package su.reya.coop
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import su.reya.coop.coop.storage.SecretStore
@@ -50,17 +50,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val serviceIntent = Intent(this, NostrForegroundService::class.java)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
+        startForegroundService(serviceIntent)
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
             viewModel.signerRequired.value == null
         }
+
+        // Bind the lifecycle of the ViewModel to the Activity's lifecycle'
+        viewModel.bindLifecycle(ProcessLifecycleOwner.get().lifecycle)
 
         setContent {
             App(viewModel = viewModel)

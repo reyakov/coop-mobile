@@ -63,7 +63,6 @@ object NostrManager {
 
     val BOOTSTRAP_RELAYS = listOf(
         "wss://relay.primal.net",
-        "wss://user.kindpag.es",
         "wss://purplepag.es"
     )
 
@@ -612,7 +611,6 @@ class Nostr {
                 ReqTarget.manual(
                     mapOf(
                         RelayUrl.parse("wss://purplepag.es") to listOf(filter),
-                        RelayUrl.parse("wss://user.kindpag.es") to listOf(filter),
                         RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
                     )
                 )

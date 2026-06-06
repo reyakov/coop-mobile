@@ -1,19 +1,26 @@
 package su.reya.coop
 
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,12 +57,6 @@ class NostrViewModel(
     private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn = _isLoggedIn.asStateFlow()
 
-    private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
-    val chatRooms = _chatRooms.asStateFlow()
-
-    private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
-    val contactList = _contactList.asStateFlow()
-
     private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
     val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
 
@@ -74,6 +75,28 @@ class NostrViewModel(
     private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
+    private val manualRoomUpdates = MutableSharedFlow<Set<Room>>()
+    private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
+
+    val chatRooms: StateFlow<Set<Room>> = merge(
+        nostr.newEvents.map { event ->
+            processIncomingEvent(event)
+            _chatRooms.value
+        },
+        manualRoomUpdates
+    ).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptySet()
+    )
+
+    val contactList: StateFlow<Set<PublicKey>> = nostr.contactListUpdates
+        .map { it.toSet() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
 
     init {
         // Skip the splash screen if a user is already logged in
@@ -95,12 +118,18 @@ class NostrViewModel(
 
         // Get all local stored metadata
         getCacheMetadata()
+    }
 
-        // Observe new events from the Nostr client
-        runObserver()
-
-        // Wait and merge metadata requests into a single batch
-        runMetadataBatching()
+    fun bindLifecycle(lifecycle: Lifecycle) {
+        viewModelScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                coroutineScope {
+                    launch { refreshChatRooms() }
+                    launch { runObserver() }
+                    launch { runMetadataBatching() }
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -134,81 +163,66 @@ class NostrViewModel(
         }
     }
 
-    private fun runObserver() {
-        viewModelScope.launch {
-            // Observe new messages
-            launch {
-                nostr.newEvents.collect { event ->
-                    val roomId = event.roomId()
-                    val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
+    private fun processIncomingEvent(event: UnsignedEvent) {
+        val roomId = event.roomId()
+        val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
 
-                    if (existingRoom == null) {
-                        val currentUser = nostr.signer.currentUser
-                        if (currentUser != null) {
-                            val newRoom = Room.new(event, currentUser)
-                            _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
-                        }
-                    } else {
-                        updateRoomList(roomId, event)
-                    }
-
-                    _newEvents.emit(event)
-                }
+        if (existingRoom == null) {
+            nostr.signer.currentUser?.let { user ->
+                val newRoom = Room.new(event, user)
+                _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
             }
+        } else {
+            updateRoomList(roomId, event)
+        }
+    }
 
-            // Observe metadata updates
-            launch {
-                nostr.metadataUpdates.collect { (pubkey, metadata) ->
-                    updateMetadata(pubkey, metadata)
-                }
+    private suspend fun runObserver() = coroutineScope {
+        // Observe metadata updates
+        launch {
+            nostr.metadataUpdates.collect { (pubkey, metadata) ->
+                updateMetadata(pubkey, metadata)
             }
+        }
 
-            // Observe contact list updates
-            launch {
-                nostr.contactListUpdates.collect { contacts ->
-                    _contactList.value = contacts.toSet()
-                }
-            }
-
-            // Observes subscription close
-            launch {
-                nostr.subscriptionClosed.collect {
-                    getChatRooms()
-                    _isPartialProcessedGiftWrap.value = true
-                }
+        // Observes subscription close
+        launch {
+            nostr.subscriptionClosed.collect {
+                getChatRooms()
+                _isPartialProcessedGiftWrap.value = true
             }
         }
     }
 
-    private fun runMetadataBatching() {
-        viewModelScope.launch {
-            // Wait until the client is ready
-            nostr.waitUntilInitialized()
+    private suspend fun runMetadataBatching() = coroutineScope {
+        // Wait until the client is ready
+        nostr.waitUntilInitialized()
 
-            val batch = mutableSetOf<PublicKey>()
-            val timeout = 500L // 500ms timeout for batching
+        val batch = mutableSetOf<PublicKey>()
+        val timeout = 500L // 500ms timeout for batching
 
-            while (true) {
-                val firstKey = metadataRequestChannel.receive()
-                batch.add(firstKey)
-                val lastFlushTime = Clock.System.now().toEpochMilliseconds()
+        while (true) {
+            val firstKey = metadataRequestChannel.receive()
+            batch.add(firstKey)
+            val lastFlushTime = Clock.System.now().toEpochMilliseconds()
 
-                while (batch.isNotEmpty()) {
-                    val nextKey = withTimeoutOrNull(timeout.milliseconds) {
-                        metadataRequestChannel.receive()
-                    }
+            while (batch.isNotEmpty()) {
+                val nextKey = withTimeoutOrNull(timeout.milliseconds) {
+                    metadataRequestChannel.receive()
+                }
 
-                    if (nextKey != null) {
-                        batch.add(nextKey)
-                    }
+                // Only add the key if it's not null
+                if (nextKey != null) batch.add(nextKey)
 
-                    val now = Clock.System.now().toEpochMilliseconds()
-                    if (batch.size >= 10 || (now - lastFlushTime) >= timeout || nextKey == null) {
-                        val keysToRequest = batch.toList()
-                        batch.clear()
+                // Get current time
+                val now = Clock.System.now().toEpochMilliseconds()
 
-                        nostr.fetchMetadataBatch(keysToRequest)
-                    }
+                // Check if the batch is full or timeout has passed
+                if (batch.size >= 10 || (now - lastFlushTime) >= timeout || nextKey == null) {
+                    val keysToRequest = batch.toList()
+                    batch.clear()
+
+                    nostr.fetchMetadataBatch(keysToRequest)
                 }
             }
         }
