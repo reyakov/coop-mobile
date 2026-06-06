@@ -2,10 +2,12 @@ package su.reya.coop
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Event
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.UnsignedEvent
+import kotlin.time.Duration.Companion.seconds
 
 class UniversalSigner(initialSigner: AsyncNostrSigner) : AsyncNostrSigner {
     private val mutex = Mutex()
@@ -26,7 +28,13 @@ class UniversalSigner(initialSigner: AsyncNostrSigner) : AsyncNostrSigner {
      */
     suspend fun switch(newSigner: AsyncNostrSigner) = mutex.withLock {
         signer = newSigner
-        currentUser = newSigner.getPublicKeyAsync()
+        try {
+            currentUser = withTimeoutOrNull(20.seconds) {
+                newSigner.getPublicKeyAsync()
+            }
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get public key from signer", e)
+        }
     }
 
     override suspend fun getPublicKeyAsync(): PublicKey? {
