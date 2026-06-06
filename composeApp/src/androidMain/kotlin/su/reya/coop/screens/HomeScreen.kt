@@ -501,9 +501,10 @@ fun BottomMenuList(
     val viewModel = LocalNostrViewModel.current
 
     val defaultMenuList = listOf(
-        "Relay Management" to { navigator.navigate(Screen.Relay) },
+        "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
+        "Contact List" to { },
         "Spams & Blocks" to { },
-        "Contacts" to { },
+        "Relay Management" to { navigator.navigate(Screen.Relay) },
         "Settings" to { }
     )
 

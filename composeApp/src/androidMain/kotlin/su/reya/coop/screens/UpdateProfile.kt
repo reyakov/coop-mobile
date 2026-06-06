@@ -1,31 +1,39 @@
 package su.reya.coop.screens
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
-import su.reya.coop.Screen
 import su.reya.coop.shared.ProfileEditor
 
 @Composable
-fun NewIdentityScreen() {
+fun UpdateProfileScreen() {
     val viewModel = LocalNostrViewModel.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
-    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
+
+    val currentUser = viewModel.currentUser() ?: return
+    val metadata by viewModel.getMetadata(currentUser).collectAsState(initial = null)
+    val isBusy by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
+
+    val profile = metadata?.asRecord()
 
     ProfileEditor(
-        title = "Create a new identity",
-        buttonLabel = "Continue",
-        isBusy = isLoggedIn,
+        title = "Update profile",
+        buttonLabel = "Save changes",
+        initialName = profile?.displayName ?: profile?.name ?: "",
+        initialBio = profile?.about ?: "",
+        initialPicture = profile?.picture,
+        isBusy = isBusy,
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {
-                viewModel.createIdentity(name, bio, bytes, type)
-                navigator.navigate(Screen.Home)
+                //viewModel.updateProfile(name, bio, bytes, type)
+                navigator.goBack()
             }
         }
     )

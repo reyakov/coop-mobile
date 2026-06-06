@@ -176,7 +176,7 @@ fun ProfileScreen(pubkey: String) {
                             }
                             Text(
                                 text = "Message",
-                                style = MaterialTheme.typography.labelSmall
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                         Column(

@@ -811,13 +811,12 @@ class Nostr {
 
             val kinds = listOf(Kind.fromStd(KindStandard.METADATA))
             val filter = Filter().kinds(kinds).search(query).limit(10u)
-            val target =
-                ReqTarget.manual(mapOf(RelayUrl.parse("wss://antiprimal.net") to listOf(filter)))
+            val target = ReqTarget.manual(mapOf(searchRelay to listOf(filter)))
 
             val stream = client?.streamEvents(
                 target = target,
                 id = "search",
-                timeout = Duration.parse("4s"),
+                timeout = Duration.parse("3s"),
                 policy = ReqExitPolicy.ExitOnEose
             )
 

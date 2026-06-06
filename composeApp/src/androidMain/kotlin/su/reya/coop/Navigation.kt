@@ -30,6 +30,9 @@ sealed interface Screen : NavKey {
     data class Profile(val pubkey: String) : Screen
 
     @Serializable
+    data object UpdateProfile : Screen
+
+    @Serializable
     data object NewChat : Screen
 
     @Serializable
