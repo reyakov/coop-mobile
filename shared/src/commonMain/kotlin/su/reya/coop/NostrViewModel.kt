@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import rust.nostr.sdk.AsyncNostrSigner
@@ -102,12 +100,7 @@ class NostrViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // Ensure all relays are disconnect
-        viewModelScope.launch {
-            withContext(NonCancellable) {
-                nostr.disconnect()
-            }
-        }
+        // TODO: optimize relay connection
     }
 
     private fun showError(message: String) {
@@ -516,9 +509,8 @@ class NostrViewModel(
         }
     }
 
-    fun getChatRoom(id: Long): Room {
+    fun getChatRoom(id: Long): Room? {
         return chatRooms.value.firstOrNull { it.id == id }
-            ?: throw IllegalArgumentException("Room not found")
     }
 
     private fun mergeChatRooms(rooms: Set<Room>) {
@@ -560,14 +552,19 @@ class NostrViewModel(
     }
 
     suspend fun chatRoomConnect(roomId: Long): Map<PublicKey, List<RelayUrl>> {
-        val room = getChatRoom(roomId)
-        val members = room.members
+        try {
+            val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
+            val members = room.members
 
-        return runCatching {
-            nostr.chatRoomConnect(members.toList())
-        }.getOrElse { e ->
+            return runCatching {
+                nostr.chatRoomConnect(members.toList())
+            }.getOrElse { e ->
+                showError("Error: ${e.message}")
+                members.associateWith { emptyList() }
+            }
+        } catch (e: Exception) {
             showError("Error: ${e.message}")
-            members.associateWith { emptyList<RelayUrl>() }
+            return emptyMap()
         }
     }
 
@@ -577,7 +574,7 @@ class NostrViewModel(
         }
         viewModelScope.launch {
             try {
-                val room = getChatRoom(roomId)
+                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
                 nostr.sendMessage(
                     to = room.members,
                     content = message,

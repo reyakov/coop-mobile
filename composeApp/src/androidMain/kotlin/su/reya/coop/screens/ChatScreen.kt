@@ -73,16 +73,20 @@ fun ChatScreen(id: Long) {
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
-    val listState = rememberLazyListState()
-    val chatRooms by viewModel.chatRooms.collectAsState()
-    val room = remember(chatRooms, id) { chatRooms.firstOrNull { it.id == id } }
+    // Get chat room by ID
+    val room = viewModel.getChatRoom(id)
 
+    // Show empty screen
     if (room == null) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            LoadingIndicator()
+            Text(
+                text = "Chat room not found",
+                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
         return
     }
@@ -94,7 +98,9 @@ fun ChatScreen(id: Long) {
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
 
+    val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
+
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
