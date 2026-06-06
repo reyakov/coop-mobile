@@ -64,6 +64,7 @@ import su.reya.coop.screens.OnboardingScreen
 import su.reya.coop.screens.ProfileScreen
 import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.ScanScreen
+import su.reya.coop.screens.UpdateProfileScreen
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
@@ -202,6 +203,9 @@ fun App(viewModel: NostrViewModel) {
                     }
                     entry<Screen.Profile> { key ->
                         ProfileScreen(pubkey = key.pubkey)
+                    }
+                    entry<Screen.UpdateProfile> {
+                        UpdateProfileScreen()
                     }
                     entry<Screen.Scan> {
                         ScanScreen()

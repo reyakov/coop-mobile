@@ -498,6 +498,48 @@ class Nostr {
         setSigner(keys)
     }
 
+    suspend fun updateProfile(
+        name: String? = null,
+        bio: String? = null,
+        picture: String? = null
+    ): Metadata {
+        val currentUser = signer.currentUser ?: throw IllegalStateException("User not signed in")
+
+        try {
+            val record = getLatestMetadata(currentUser)?.asRecord() ?: MetadataRecord()
+            val newRecord = record.copy(
+                displayName = name ?: record.displayName,
+                about = bio ?: record.about,
+                picture = picture ?: record.picture
+            )
+            val newMetadata = Metadata.fromRecord(newRecord)
+            val event = EventBuilder.metadata(newMetadata).signAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.broadcast(),
+                ackPolicy = AckPolicy.none()
+            )
+
+            return newMetadata
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to update identity: ${e.message}", e)
+        }
+    }
+
+    private suspend fun getLatestMetadata(pubkey: PublicKey): Metadata? {
+        return try {
+            val kind = Kind.fromStd(KindStandard.METADATA);
+            val filter = Filter().kind(kind).author(pubkey).limit(1u)
+            val event = client?.database()?.query(filter)?.first() ?: return null
+
+            Metadata.fromJson(event.content())
+        } catch (e: Exception) {
+            println("Failed to get latest metadata: ${e.message}")
+            null
+        }
+    }
+
     suspend fun getAllCacheMetadata(): Map<PublicKey, Metadata> {
         try {
             val filter = Filter().kind(Kind.fromStd(KindStandard.METADATA)).limit(100u)
@@ -811,13 +853,12 @@ class Nostr {
 
             val kinds = listOf(Kind.fromStd(KindStandard.METADATA))
             val filter = Filter().kinds(kinds).search(query).limit(10u)
-            val target =
-                ReqTarget.manual(mapOf(RelayUrl.parse("wss://antiprimal.net") to listOf(filter)))
+            val target = ReqTarget.manual(mapOf(searchRelay to listOf(filter)))
 
             val stream = client?.streamEvents(
                 target = target,
                 id = "search",
-                timeout = Duration.parse("4s"),
+                timeout = Duration.parse("3s"),
                 policy = ReqExitPolicy.ExitOnEose
             )
 
