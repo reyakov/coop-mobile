@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import rust.nostr.sdk.AsyncNostrSigner
@@ -85,6 +87,9 @@ class NostrViewModel(
         // Check local stored secret (secret key or bunker)
         login()
 
+        // Automatically reconnect bootstrap relays
+        reconnect()
+
         // Observe the signer state and verify the relay list
         observeSignerAndCheckRelays()
 
@@ -100,7 +105,13 @@ class NostrViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // TODO: optimize relay connection
+
+        // Disconnect to all bootstrap relays
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                nostr.disconnect()
+            }
+        }
     }
 
     private fun showError(message: String) {
@@ -113,6 +124,13 @@ class NostrViewModel(
         viewModelScope.launch {
             _isNotificationBannerDismissed.value =
                 secretStore.get("notification_banner_dismissed") == "true"
+        }
+    }
+
+    private fun reconnect() {
+        viewModelScope.launch {
+            nostr.waitUntilInitialized()
+            nostr.reconnect()
         }
     }
 
