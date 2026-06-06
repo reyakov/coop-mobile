@@ -13,14 +13,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,6 +59,12 @@ class NostrViewModel(
     private val _isRelayListEmpty = MutableStateFlow(false)
     val isRelayListEmpty = _isRelayListEmpty.asStateFlow()
 
+    private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
+    val chatRooms = _chatRooms.asStateFlow()
+
+    private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
+    val contactList = _contactList.asStateFlow()
+
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
@@ -75,28 +77,6 @@ class NostrViewModel(
     private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
-    private val manualRoomUpdates = MutableSharedFlow<Set<Room>>()
-    private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
-
-    val chatRooms: StateFlow<Set<Room>> = merge(
-        nostr.newEvents.map { event ->
-            processIncomingEvent(event)
-            _chatRooms.value
-        },
-        manualRoomUpdates
-    ).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptySet()
-    )
-
-    val contactList: StateFlow<Set<PublicKey>> = nostr.contactListUpdates
-        .map { it.toSet() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptySet()
-        )
 
     init {
         // Skip the splash screen if a user is already logged in
@@ -178,6 +158,33 @@ class NostrViewModel(
     }
 
     private suspend fun runObserver() = coroutineScope {
+        // Observe new messages
+        launch {
+            nostr.newEvents.collect { event ->
+                val roomId = event.roomId()
+                val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
+
+                if (existingRoom == null) {
+                    val currentUser = nostr.signer.currentUser
+                    if (currentUser != null) {
+                        val newRoom = Room.new(event, currentUser)
+                        _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
+                    }
+                } else {
+                    updateRoomList(roomId, event)
+                }
+
+                _newEvents.emit(event)
+            }
+        }
+
+        // Observe contact list updates
+        launch {
+            nostr.contactListUpdates.collect { contacts ->
+                _contactList.value = contacts.toSet()
+            }
+        }
+
         // Observe metadata updates
         launch {
             nostr.metadataUpdates.collect { (pubkey, metadata) ->
