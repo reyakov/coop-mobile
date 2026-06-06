@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,9 +28,11 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -69,16 +73,27 @@ fun ProfileEditor(
     onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
 ) {
     val context = LocalContext.current
+    val snackbarHostState = LocalSnackbarHostState.current
     val focusManager = LocalFocusManager.current
     var name by remember(initialName) { mutableStateOf(initialName) }
     var bio by remember(initialBio) { mutableStateOf(initialBio) }
     var picture by remember(initialPicture) { mutableStateOf(initialPicture) }
+
+    val hasPicture = remember(picture) {
+        when (picture) {
+            null -> false
+            is String -> (picture as CharSequence).isNotBlank()
+            else -> true
+        }
+    }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         picture = uri
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(title, style = MaterialTheme.typography.titleMediumEmphasized) },
@@ -89,7 +104,10 @@ fun ProfileEditor(
                             contentDescription = "Back"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                )
             )
         }
     ) { innerPadding ->
@@ -112,7 +130,7 @@ fun ProfileEditor(
                         .clickable { launcher.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (picture != null) {
+                    if (hasPicture) {
                         AsyncImage(
                             model = picture,
                             contentDescription = "Profile picture",
@@ -121,16 +139,15 @@ fun ProfileEditor(
                         )
                     } else {
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
                             modifier = Modifier.fillMaxSize()
-
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     painter = painterResource(Res.drawable.ic_plus),
                                     contentDescription = "Pick avatar",
                                     modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onTertiaryFixed
                                 )
                             }
                         }
@@ -243,6 +260,9 @@ fun ProfileEditor(
                     }
                     Spacer(modifier = Modifier.size(16.dp))
                     Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .size(ButtonDefaults.MediumContainerHeight),
                         onClick = {
                             val scope = CoroutineScope(Dispatchers.Main)
                             scope.launch {
@@ -258,7 +278,14 @@ fun ProfileEditor(
                         },
                         enabled = name.isNotBlank() && !isBusy
                     ) {
-                        if (isBusy) LoadingIndicator() else Text(buttonLabel)
+                        if (isBusy) {
+                            LoadingIndicator()
+                        } else {
+                            Text(
+                                text = buttonLabel,
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
                     }
                 }
             }

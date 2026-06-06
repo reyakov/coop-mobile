@@ -502,7 +502,7 @@ class Nostr {
         name: String? = null,
         bio: String? = null,
         picture: String? = null
-    ) {
+    ): Metadata {
         val currentUser = signer.currentUser ?: throw IllegalStateException("User not signed in")
 
         try {
@@ -512,13 +512,16 @@ class Nostr {
                 about = bio ?: record.about,
                 picture = picture ?: record.picture
             )
-            val event = EventBuilder.metadata(Metadata.fromRecord(newRecord)).signAsync(signer)
+            val newMetadata = Metadata.fromRecord(newRecord)
+            val event = EventBuilder.metadata(newMetadata).signAsync(signer)
 
             client?.sendEvent(
                 event = event,
                 target = SendEventTarget.broadcast(),
                 ackPolicy = AckPolicy.none()
             )
+
+            return newMetadata
         } catch (e: Exception) {
             throw IllegalStateException("Failed to update identity: ${e.message}", e)
         }

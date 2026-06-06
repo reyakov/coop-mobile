@@ -346,8 +346,6 @@ class NostrViewModel(
 
     private suspend fun blossomUpload(file: ByteArray, contentType: String): String? {
         try {
-            var avatarUrl: String? = null
-
             // Upload picture to Blossom
             val blossom = BlossomClient(
                 url = "https://blossom.band",
@@ -365,12 +363,10 @@ class NostrViewModel(
             val descriptor = blossom.upload(
                 file = file,
                 contentType = contentType,
-                signer = nostr.signer
+                signer = nostr.signer.get()
             )
 
-            avatarUrl = descriptor?.url
-
-            return avatarUrl
+            return descriptor?.url
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return null
@@ -383,11 +379,16 @@ class NostrViewModel(
         picture: ByteArray? = null,
         contentType: String? = null
     ) {
+        _isLoggedIn.value = true
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
-            nostr.updateProfile(name, bio, avatarUrl)
+            val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
+            // Update the metadata state after successfully published
+            updateMetadata(nostr.signer.currentUser!!, newMetadata)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
+        } finally {
+            _isLoggedIn.value = false
         }
     }
 
@@ -414,7 +415,7 @@ class NostrViewModel(
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         } finally {
-            _isLoggedIn.value = true
+            _isLoggedIn.value = false
         }
     }
 
