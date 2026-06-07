@@ -38,6 +38,7 @@ import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayCapabilities
 import rust.nostr.sdk.RelayMessageEnum
 import rust.nostr.sdk.RelayMetadata
+import rust.nostr.sdk.RelayStatus
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
@@ -59,6 +60,17 @@ import kotlin.time.Duration.Companion.milliseconds
 
 object NostrManager {
     val instance = Nostr()
+
+    val BOOTSTRAP_RELAYS = listOf(
+        "wss://relay.primal.net",
+        "wss://purplepag.es"
+    )
+
+    val INDEXER_RELAY = listOf(
+        "wss://indexer.coracle.social",
+    )
+
+    val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
 }
 
 class Nostr {
@@ -75,7 +87,6 @@ class Nostr {
 
     private val isInitialized = MutableStateFlow(false)
 
-    // Add these to the Nostr class
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
     val newEvents = _newEvents.asSharedFlow()
 
@@ -99,12 +110,15 @@ class Nostr {
     suspend fun emitContactListUpdate(contacts: List<PublicKey>) =
         _contactListUpdates.emit(contacts)
 
-    suspend fun init(dbPath: String) {
+    suspend fun init(
+        dbPath: String,
+        logLevel: LogLevel = LogLevel.WARN
+    ) {
         try {
             if (isInitialized.value) return
 
             // Initialize the logger for nostr client
-            initLogger(LogLevel.DEBUG)
+            initLogger(logLevel)
 
             // Initialize the database and gossip instance
             val lmdb = NostrDatabase.lmdb(dbPath)
@@ -141,24 +155,43 @@ class Nostr {
     }
 
     suspend fun connectBootstrapRelays() {
-        // Bootstrap relays
-        client?.addRelay(RelayUrl.parse("wss://relay.primal.net"))
-        client?.addRelay(RelayUrl.parse("wss://user.kindpag.es"))
-        client?.addRelay(RelayUrl.parse("wss://purplepag.es"))
+        NostrManager.BOOTSTRAP_RELAYS.forEach { url ->
+            client?.addRelay(RelayUrl.parse(url))
+        }
+        NostrManager.INDEXER_RELAY.forEach { url ->
+            client?.addRelay(
+                url = RelayUrl.parse(url),
+                capabilities = RelayCapabilities.gossip()
+            )
+        }
+        // Connect to all bootstrap relays
+        client?.connect()
+    }
 
-
-        // Indexer relay for NIP-65 discovery
-        client?.addRelay(
-            url = RelayUrl.parse("wss://indexer.coracle.social"),
-            capabilities = RelayCapabilities.gossip()
-        )
-
-        // Connect to all bootstrap relays and wait for all connections to be established
-        client?.connect(Duration.parse("2s"))
+    suspend fun reconnect() {
+        NostrManager.ALL_RELAYS.forEach { url ->
+            try {
+                client?.relay(RelayUrl.parse(url)).let { relay ->
+                    if (relay != null) {
+                        if (relay.status() != RelayStatus.CONNECTED) {
+                            relay.connect()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                println("Failed to reconnect relay: ${e.message}")
+            }
+        }
     }
 
     suspend fun disconnect() {
-        client?.shutdown()
+        NostrManager.ALL_RELAYS.forEach { url ->
+            try {
+                client?.disconnectRelay(RelayUrl.parse(url))
+            } catch (e: Exception) {
+                println("Failed to disconnect relay: ${e.message}")
+            }
+        }
     }
 
     suspend fun exit() {
@@ -578,7 +611,6 @@ class Nostr {
                 ReqTarget.manual(
                     mapOf(
                         RelayUrl.parse("wss://purplepag.es") to listOf(filter),
-                        RelayUrl.parse("wss://user.kindpag.es") to listOf(filter),
                         RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
                     )
                 )

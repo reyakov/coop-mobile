@@ -2,6 +2,7 @@ package su.reya.coop
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -31,7 +32,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.util.Consumer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -93,8 +94,8 @@ fun App(viewModel: NostrViewModel) {
     val navigator = remember(backStack) { Navigator(backStack) }
     val qrScanResult = remember { QrScanResult() }
 
-    val signerRequired by viewModel.signerRequired.collectAsState(initial = null)
-    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsState()
+    val signerRequired by viewModel.signerRequired.collectAsStateWithLifecycle()
+    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -105,7 +106,7 @@ fun App(viewModel: NostrViewModel) {
     // Enabled the dynamic color scheme
     val colorScheme = when {
         // Enable the dynamic color scheme for Android 12+
-        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(
                 context
             )

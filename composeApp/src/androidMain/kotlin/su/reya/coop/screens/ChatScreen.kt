@@ -39,6 +39,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_send
@@ -73,28 +75,37 @@ fun ChatScreen(id: Long) {
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
 
-    val listState = rememberLazyListState()
-    val chatRooms by viewModel.chatRooms.collectAsState()
-    val room = remember(chatRooms, id) { chatRooms.firstOrNull { it.id == id } }
+    // Get chat room by ID
+    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
+    val room by remember(id) {
+        derivedStateOf { chatRooms.firstOrNull { it.id == id } }
+    }
 
+    // Show empty screen
     if (room == null) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            LoadingIndicator()
+            Text(
+                text = "Chat room not found",
+                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
         return
     }
 
-    val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
-    val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)
+    val displayName by remember(room) { room!!.displayNameFlow(viewModel) }.collectAsState("Loading...")
+    val picture by remember(room) { room!!.pictureFlow(viewModel) }.collectAsState(null)
 
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
 
+    val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
+
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
@@ -151,7 +162,7 @@ fun ChatScreen(id: Long) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable {
-                            room.members.firstOrNull()?.let { pubkey ->
+                            room!!.members.firstOrNull()?.let { pubkey ->
                                 navigator.navigate(Screen.Profile(pubkey.toBech32()))
                             }
                         }

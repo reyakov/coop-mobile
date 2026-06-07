@@ -76,6 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
@@ -108,8 +109,8 @@ fun HomeScreen() {
     val currentUser = viewModel.currentUser() ?: return
     val currentUserProfile = viewModel.getMetadata(currentUser) ?: return
 
-    val userProfile by currentUserProfile.collectAsState(initial = null)
-    val chatRooms by viewModel.chatRooms.collectAsState(initial = emptyList())
+    val userProfile by currentUserProfile.collectAsStateWithLifecycle()
+    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
