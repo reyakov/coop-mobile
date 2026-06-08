@@ -6,7 +6,6 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import kotlin.time.Clock
@@ -37,7 +36,7 @@ data class Room(
         fun new(rumor: UnsignedEvent, userPubkey: PublicKey): Room {
             val id = rumor.roomId()
             val createdAt = rumor.createdAt()
-            val subject = rumor.tags().find(TagKind.Subject)?.content()
+            val subject = rumor.tags().toVec().find { it.kind() == "subject" }?.content()
 
             // Collect the author's public key and all public keys from tags
             val pubkeys: MutableSet<PublicKey> = mutableSetOf()

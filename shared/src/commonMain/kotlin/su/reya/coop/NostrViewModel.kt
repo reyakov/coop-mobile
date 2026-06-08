@@ -26,6 +26,8 @@ import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.EventBuilder
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
+import rust.nostr.sdk.Kind
+import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
@@ -438,23 +440,20 @@ class NostrViewModel(
         contentType: String? = null
     ) {
         _isLoggedIn.value = true
-        try {
-            val keys = Keys.generate()
-            val secret = keys.secretKey().toBech32()
-            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
 
+        val keys = Keys.generate()
+        val secret = keys.secretKey().toBech32()
+
+        try {
+            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             // Create identity
             nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
-
-            // Save secret to the secret storage
-            secretStore.set("user_signer", secret)
-
-            // Set an empty secret state
-            _signerRequired.value = false
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         } finally {
+            secretStore.set("user_signer", secret)
             _isLoggedIn.value = false
+            _signerRequired.value = false
         }
     }
 
@@ -476,10 +475,10 @@ class NostrViewModel(
         try {
             val signer = createSigner(secret)
             nostr.setSigner(signer)
-            secretStore.set("user_signer", secret)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         } finally {
+            secretStore.set("user_signer", secret)
             _signerRequired.value = false
             _isLoggedIn.value = false
         }
@@ -520,10 +519,9 @@ class NostrViewModel(
             val currentUser = nostr.signer.currentUser!!
 
             // Construct the rumor event
-            val rumor = EventBuilder
-                .privateMsgRumor(to.first(), "")
+            val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), "")
                 .tags(to.map { Tag.publicKey(it) })
-                .build(currentUser)
+                .finalizeUnsigned(currentUser)
 
             // Check if the room already exists
             val id = rumor.roomId()

@@ -52,13 +52,17 @@ class NostrForegroundService : Service() {
         notificationJob = serviceScope.launch {
             try {
                 Log.d("Coop", "Starting Nostr in background")
-                
+
                 // Create a database directory
                 val dbDir = File(filesDir, "nostr")
                 dbDir.mkdirs()
 
                 // Initialize Nostr client
-                nostr.init(dbDir.absolutePath)
+                try {
+                    nostr.init(dbDir.absolutePath)
+                } catch (e: Exception) {
+                    throw IllegalStateException("Failed to initialize Nostr Client", e)
+                }
                 // Connect to bootstrap relays
                 nostr.connectBootstrapRelays()
                 // Handle notifications

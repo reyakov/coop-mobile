@@ -43,18 +43,18 @@ import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.ReqExitPolicy
 import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.SendEventTarget
+import rust.nostr.sdk.SignerAuthenticator
 import rust.nostr.sdk.SingleLetterTag
 import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
-import rust.nostr.sdk.TagKind
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.UnwrappedGift
 import rust.nostr.sdk.extractRelayList
-import rust.nostr.sdk.giftWrapAsync
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
+import rust.nostr.sdk.nip59MakeGiftWrapAsync
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -120,27 +120,23 @@ class Nostr {
             // Initialize the logger for nostr client
             initLogger(logLevel)
 
-            // Initialize the database and gossip instance
+            // Initialize configurations for nostr client
             val lmdb = NostrDatabase.lmdb(dbPath)
             val gossip = NostrGossip.inMemory()
-
-            // Set the idle timeout for relays
+            val authenticator = SignerAuthenticator(signer)
             val idleTimeout = Duration.parse("5m")
 
             client =
                 ClientBuilder()
-                    .signer(signer)
+                    .authenticator(authenticator)
                     .database(lmdb)
                     .gossip(gossip)
                     .gossipConfig(
                         GossipConfig()
                             .noBackgroundRefresh()
                             .fetchTimeout(Duration.parse("2s"))
-                            .syncIdleTimeout(Duration.parse("100ms"))
-                            .syncInitialTimeout(Duration.parse("100ms"))
                     )
                     .verifySubscriptions(false)
-                    .automaticAuthentication(true)
                     .sleepWhenIdle(SleepWhenIdle.Enabled(idleTimeout))
                     .build()
 
@@ -391,16 +387,15 @@ class Nostr {
             val currentUser =
                 signer.currentUser ?: throw IllegalStateException("User not signed in")
 
-            // Ensure the rumor ID is set
-            val rumor = rumor.ensureId()
+            // Construct the room id
             val roomId = rumor.roomId()
 
             // Construct reference tags
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
                 Tag.event(rumor.id()!!),
-                Tag.reference(roomId.toString()),
-                Tag.custom(TagKind.Unknown("k"), listOf("14"))
+                Tag.custom("a", listOf(roomId.toString())),
+                Tag.custom("k", listOf("14"))
             )
 
             // Set event kind
@@ -408,8 +403,8 @@ class Nostr {
 
             val event = EventBuilder(kind, rumor.asJson())
                 .tags(tags)
-                .build(currentUser)
-                .signWithKeys(Keys.generate())
+                .finalizeUnsigned(currentUser)
+                .signAsync(Keys.generate())
 
             client?.database()?.saveEvent(event)
         } catch (e: Exception) {
@@ -487,7 +482,7 @@ class Nostr {
     suspend fun createIdentity(keys: Keys, name: String, bio: String?, picture: String?) {
         // Send relay list event
         val relayList = getDefaultRelayList()
-        val relayListEvent = EventBuilder.relayList(relayList).signWithKeys(keys);
+        val relayListEvent = EventBuilder.relayList(relayList).finalizeAsync(keys);
 
         client?.sendEvent(
             event = relayListEvent,
@@ -498,7 +493,7 @@ class Nostr {
 
         // Send messaging relay list event
         val msgRelayList = getDefaultMsgRelayList()
-        val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).signWithKeys(keys)
+        val msgRelayListEvent = EventBuilder.nip17RelayList(msgRelayList).finalizeAsync(keys)
 
         client?.sendEvent(
             event = msgRelayListEvent,
@@ -509,7 +504,7 @@ class Nostr {
         // Send metadata event
         val metadata =
             Metadata.fromRecord(MetadataRecord(displayName = name, about = bio, picture = picture))
-        val metadataEvent = EventBuilder.metadata(metadata).signWithKeys(keys)
+        val metadataEvent = EventBuilder.metadata(metadata).finalizeAsync(keys)
 
         client?.sendEvent(
             event = metadataEvent,
@@ -519,8 +514,8 @@ class Nostr {
 
         // Send contact list event
         val defaultContact =
-            listOf(Contact(publicKey = PublicKey.parse("npub1j3rz3ndl902lya6ywxvy5c983lxs8mpukqnx4pa4lt5wrykwl5ys7wpw3x")))
-        val contactListEvent = EventBuilder.contactList(defaultContact).signWithKeys(keys)
+            Contact(PublicKey.parse("npub1j3rz3ndl902lya6ywxvy5c983lxs8mpukqnx4pa4lt5wrykwl5ys7wpw3x"))
+        val contactListEvent = EventBuilder.contactList(listOf(defaultContact)).finalizeAsync(keys)
 
         client?.sendEvent(
             event = contactListEvent,
@@ -546,7 +541,7 @@ class Nostr {
                 picture = picture ?: record.picture
             )
             val newMetadata = Metadata.fromRecord(newRecord)
-            val event = EventBuilder.metadata(newMetadata).signAsync(signer)
+            val event = EventBuilder.metadata(newMetadata).finalizeAsync(signer)
 
             client?.sendEvent(
                 event = event,
@@ -623,7 +618,7 @@ class Nostr {
 
     suspend fun setMsgRelays(urls: List<RelayUrl>) {
         try {
-            val event = EventBuilder.nip17RelayList(urls).signAsync(signer)
+            val event = EventBuilder.nip17RelayList(urls).finalizeAsync(signer)
 
             client?.sendEvent(
                 event = event,
@@ -787,7 +782,7 @@ class Nostr {
 
             // Add a subject tag if provided
             if (subject != null) {
-                tags.add(Tag.custom(TagKind.Subject, listOf(subject)))
+                tags.add(Tag.custom("subject", listOf(subject)))
             }
 
             // Add event tags for replies
@@ -805,13 +800,9 @@ class Nostr {
             for (receiver in setOf(currentUser) + to) {
                 // Construct the rumor event
                 // NEVER SIGN this event with the current user signer
-                val rumor = EventBuilder
-                    .privateMsgRumor(receiver = receiver, message = content)
+                val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), content)
                     .tags(tags)
-                    .allowSelfTagging()
-                    .build(currentUser)
-                    // Ensure the event ID is set
-                    .ensureId()
+                    .finalizeUnsigned(currentUser)
 
                 // Emit the rumor to the chat screen
                 if (receiver == currentUser) {
@@ -819,12 +810,12 @@ class Nostr {
                 }
 
                 // Construct the gift wrap event
-                val gift = giftWrapAsync(
+                val gift = nip59MakeGiftWrapAsync(
                     signer = signer,
                     receiverPubkey = receiver,
                     rumor = rumor,
                     extraTags = listOf(
-                        Tag.custom(TagKind.Unknown("k"), listOf("14"))
+                        Tag.custom("k", listOf("14"))
                     )
                 )
 

@@ -75,7 +75,7 @@ class BlossomClient(
         signer: AsyncNostrSigner,
         authz: BlossomAuthorization
     ): HeaderValue {
-        val authEvent = EventBuilder.blossomAuth(authz).signAsync(signer)
+        val authEvent = EventBuilder.blossomAuth(authz).finalizeAsync(signer)
         val encodedAuth = Base64.encode(authEvent.asJson().toByteArray())
         val value = "Nostr $encodedAuth"
         return HeaderValue(value)
