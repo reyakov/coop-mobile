@@ -372,11 +372,18 @@ class NostrViewModel(
     private suspend fun createSigner(secret: String): AsyncNostrSigner {
         return when {
             secret.startsWith("nsec1") -> Keys.parse(secret)
+
             secret.startsWith("bunker://") -> {
                 val appKeys = getOrInitAppKeys()
                 val bunker = NostrConnectUri.parse(secret)
                 val timeout = 50.seconds // or Duration.parse("50s")
                 NostrConnect(uri = bunker, appKeys, timeout, null)
+            }
+
+            secret == "external" -> {
+                val launcher = ExternalSignerLauncherProvider.launcher
+                    ?: throw IllegalStateException("External signer not supported on this platform")
+                ExternalSigner(launcher)
             }
 
             else -> throw IllegalArgumentException("Invalid secret format")

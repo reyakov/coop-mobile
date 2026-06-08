@@ -2,6 +2,8 @@ package su.reya.coop
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Process
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,50 +16,28 @@ import su.reya.coop.coop.storage.SecretStore
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
-    private val viewModel: NostrViewModel by viewModels {
-        object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val secretStore = SecretStore(this@MainActivity)
-                return NostrViewModel(NostrManager.instance, secretStore) as T
-            }
-        }
-    }
+    private lateinit var externalSignerLauncher: AndroidExternalSignerLauncher
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            throwable.printStackTrace()
-            android.util.Log.e(
-                "CoopCrash",
-                "Uncaught exception in thread ${thread.name}",
-                throwable
-            )
-
-            // Start the Crash Activity
-            val intent = Intent(this, CrashActivity::class.java).apply {
-                putExtra("error", throwable.stackTraceToString())
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            }
-            startActivity(intent)
-
-            // Exit
-            android.os.Process.killProcess(android.os.Process.myPid())
-            exitProcess(1)
-        }
-
         val splashScreen = installSplashScreen()
+        setupCrashHandler()
         enableEdgeToEdge()
 
         super.onCreate(savedInstanceState)
 
-        val serviceIntent = Intent(this, NostrForegroundService::class.java)
-        startForegroundService(serviceIntent)
+        // Initialize the nostr service and external signer
+        setupExternalSigner()
+        startNostrService()
+
+        // Initialize the ViewModel
+        val viewModel: NostrViewModel by viewModels { NostrViewModelFactory(this) }
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
             viewModel.signerRequired.value == null
         }
 
-        // Bind the lifecycle of the ViewModel to the Activity's lifecycle'
+        // Bind the lifecycle of the ViewModel to the Activity's lifecycle
         viewModel.bindLifecycle(ProcessLifecycleOwner.get().lifecycle)
 
         setContent {
@@ -65,8 +45,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun setupExternalSigner() {
+        val launcher = AndroidExternalSignerLauncher(this)
+        ExternalSignerLauncherProvider.launcher = launcher
+    }
+
+    private fun startNostrService() {
+        val intent = Intent(this, NostrForegroundService::class.java)
+        startForegroundService(intent)
+    }
+
+    private fun setupCrashHandler() {
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            throwable.printStackTrace()
+
+            Log.e("CoopCrash", "Uncaught exception in thread ${thread.name}", throwable)
+
+            val intent = Intent(this, CrashActivity::class.java).apply {
+                putExtra("error", throwable.stackTraceToString())
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            startActivity(intent)
+
+            Process.killProcess(Process.myPid())
+            exitProcess(1)
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+    }
+}
+
+class NostrViewModelFactory(
+    private val activity: ComponentActivity
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val secretStore = SecretStore(activity)
+        return NostrViewModel(NostrManager.instance, secretStore) as T
     }
 }
