@@ -483,10 +483,10 @@ class NostrViewModel(
         try {
             val signer = createSigner(secret)
             nostr.setSigner(signer)
-            secretStore.set("user_signer", secret)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         } finally {
+            secretStore.set("user_signer", secret)
             _signerRequired.value = false
             _isLoggedIn.value = false
         }
