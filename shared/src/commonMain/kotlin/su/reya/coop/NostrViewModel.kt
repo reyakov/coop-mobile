@@ -372,33 +372,6 @@ class NostrViewModel(
         return keys
     }
 
-    private suspend fun createSigner(secret: String): AsyncNostrSigner {
-        return when {
-            secret.startsWith("nsec1") -> Keys.parse(secret)
-
-            secret.startsWith("bunker://") -> {
-                val appKeys = getOrInitAppKeys()
-                val bunker = NostrConnectUri.parse(secret)
-                val timeout = 50.seconds // or Duration.parse("50s")
-                NostrConnect(uri = bunker, appKeys, timeout, null)
-            }
-
-            secret.startsWith("nip55://") -> {
-                val handler = externalSignerHandler
-                    ?: throw IllegalStateException("External signer not available on this platform")
-
-                // Format: nip55://packageName/hexPubkey
-                val parts = secret.removePrefix("nip55://").split("/", limit = 2)
-                val packageName = parts[0]
-                val pubkey = PublicKey.parse(parts[1])
-
-                ExternalSignerProxy(handler, packageName, pubkey)
-            }
-
-            else -> throw IllegalArgumentException("Invalid secret format")
-        }
-    }
-
     private suspend fun blossomUpload(file: ByteArray, contentType: String): String? {
         try {
             // Upload picture to Blossom
@@ -471,6 +444,34 @@ class NostrViewModel(
         }
     }
 
+    private suspend fun createSigner(secret: String): AsyncNostrSigner {
+        return when {
+            secret.startsWith("nsec1") -> Keys.parse(secret)
+
+            secret.startsWith("bunker://") -> {
+                val appKeys = getOrInitAppKeys()
+                val bunker = NostrConnectUri.parse(secret)
+                val timeout = 50.seconds // or Duration.parse("50s")
+                NostrConnect(uri = bunker, appKeys, timeout, null)
+            }
+
+            secret.startsWith("nip55://") -> {
+                val handler = externalSignerHandler
+                    ?: throw IllegalStateException("External signer not available on this platform")
+
+                // Format: nip55://packageName/hexPubkey
+                val parts = secret.removePrefix("nip55://").split("/", limit = 2)
+                val packageName = parts[0]
+                val pubkey = PublicKey.parse(parts[1])
+
+                handler.setPackageName(packageName)
+                ExternalSignerProxy(handler, pubkey)
+            }
+
+            else -> throw IllegalArgumentException("Invalid secret format")
+        }
+    }
+
     suspend fun verifyIdentity(secret: String): PublicKey? {
         try {
             val signer = createSigner(secret)
@@ -496,6 +497,39 @@ class NostrViewModel(
             _signerRequired.value = false
             _isLoggedIn.value = false
         }
+    }
+
+    suspend fun connectExternalSigner() {
+        val handler = externalSignerHandler ?: throw IllegalStateException("Signer not available")
+        _isLoggedIn.value = true
+        try {
+            val permissions = SignerPermissions.toJson(
+                listOf(
+                    SignerPermissions.signEvent(),
+                    SignerPermissions.nip04Encrypt(),
+                    SignerPermissions.nip04Decrypt(),
+                    SignerPermissions.nip44Encrypt(),
+                    SignerPermissions.nip44Decrypt(),
+                )
+            )
+            val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
+            val signer = ExternalSignerProxy(handler, result.pubkey)
+
+            // Update signer
+            nostr.setSigner(signer)
+
+            // Store the signer in the secret storage
+            secretStore.set("user_signer", "nip55://${result.packageName}/${result.pubkey.toHex()}")
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        } finally {
+            _signerRequired.value = false
+            _isLoggedIn.value = false
+        }
+    }
+
+    fun isExternalSignerAvailable(): Boolean {
+        return externalSignerHandler?.isAvailable() == true
     }
 
     suspend fun useDefaultMsgRelayList() {

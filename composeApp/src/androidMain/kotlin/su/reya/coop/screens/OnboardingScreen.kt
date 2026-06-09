@@ -1,5 +1,6 @@
 package su.reya.coop.screens
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,13 +14,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -27,6 +32,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -34,10 +40,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalNavigator
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.getExpressiveFontFamily
@@ -45,8 +54,11 @@ import su.reya.coop.shared.getExpressiveFontFamily
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun OnboardingScreen() {
+    val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
+    val viewModel = LocalNostrViewModel.current
+    val scope = rememberCoroutineScope()
 
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
@@ -142,7 +154,44 @@ fun OnboardingScreen() {
                                 )
                             }
                             Spacer(modifier = Modifier.size(8.dp))
-                            OutlinedButton(
+                            FilledTonalButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (viewModel.isExternalSignerAvailable()) {
+                                            try {
+                                                viewModel.connectExternalSigner()
+                                                navigator.navigate(Screen.Home)
+                                            } catch (e: Exception) {
+                                                e.message?.let { snackbarHostState.showSnackbar(it) }
+                                            }
+                                        } else {
+                                            val result = snackbarHostState.showSnackbar(
+                                                message = "External signer not installed. Please install Amber or alternatives.",
+                                                actionLabel = "Install",
+                                                withDismissAction = true,
+                                                duration = SnackbarDuration.Long
+                                            )
+                                            if (result == SnackbarResult.ActionPerformed) {
+                                                val intent = Intent(
+                                                    Intent.ACTION_VIEW,
+                                                    "https://zapstore.dev/apps/com.greenart7c3.nostrsigner".toUri()
+                                                )
+                                                context.startActivity(intent)
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(ButtonDefaults.MediumContainerHeight),
+                            ) {
+                                Text(
+                                    text = "Connect with Amber",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            TextButton(
                                 onClick = { navigator.navigate(Screen.Import) },
                                 modifier = Modifier
                                     .fillMaxWidth()

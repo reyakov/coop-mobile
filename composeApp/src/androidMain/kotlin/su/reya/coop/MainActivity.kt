@@ -81,4 +81,9 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
     }
+
+    override fun onDestroy() {
+        externalSignerLauncher.unregister()
+        super.onDestroy()
+    }
 }

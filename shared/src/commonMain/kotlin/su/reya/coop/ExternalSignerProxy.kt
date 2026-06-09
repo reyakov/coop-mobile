@@ -7,7 +7,6 @@ import rust.nostr.sdk.UnsignedEvent
 
 class ExternalSignerProxy(
     private val handler: ExternalSignerHandler,
-    private val packageName: String,
     private val currentUser: PublicKey,
 ) : AsyncNostrSigner {
     override suspend fun getPublicKeyAsync(): PublicKey {

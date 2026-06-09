@@ -12,7 +12,6 @@ class AndroidExternalSigner(
     private val launcher: ExternalSignerLauncher,
 ) : ExternalSignerHandler {
     private var cachedPackageName: String? = null
-    private var cachedPublicKey: PublicKey? = null
 
     private data class ContentResolverResult(
         val result: String,
@@ -26,9 +25,15 @@ class AndroidExternalSigner(
         currentUser: PublicKey? = null,
     ): ContentResolverResult? {
         val uri = "content://$cachedPackageName.${type.uppercase()}".toUri()
+        val projection = mutableListOf<String?>().apply {
+            add(payload)
+            add(pubkey?.toHex() ?: "")
+            add(currentUser?.toHex() ?: "")
+        }
+
         val cursor = context.contentResolver.query(
             uri,
-            listOf(payload, pubkey, currentUser) as Array<out String?>?,
+            projection.toTypedArray(),
             null, null, null,
         ) ?: return null
 
@@ -79,6 +84,10 @@ class AndroidExternalSigner(
         return context.packageManager.queryIntentActivities(intent, 0).isNotEmpty()
     }
 
+    override fun setPackageName(packageName: String) {
+        cachedPackageName = packageName
+    }
+
     override suspend fun getPublicKey(permissions: String?): ExternalSignerResult? {
         val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:".toUri()).apply {
             putExtra("type", "get_public_key")
@@ -93,8 +102,9 @@ class AndroidExternalSigner(
 
         val pubkey = data.getStringExtra("result") ?: return null
         val packageName = data.getStringExtra("package") ?: return null
+        cachedPackageName = packageName
 
-        return ExternalSignerResult(pubkey, packageName)
+        return ExternalSignerResult(PublicKey.parse(pubkey), packageName)
     }
 
     override suspend fun signEvent(event: UnsignedEvent, currentUser: PublicKey): String? {
