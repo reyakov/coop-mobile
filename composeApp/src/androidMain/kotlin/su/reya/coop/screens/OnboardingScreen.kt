@@ -160,9 +160,10 @@ fun OnboardingScreen() {
                                         if (viewModel.isExternalSignerAvailable()) {
                                             try {
                                                 viewModel.connectExternalSigner()
-                                                navigator.navigate(Screen.Home)
                                             } catch (e: Exception) {
                                                 e.message?.let { snackbarHostState.showSnackbar(it) }
+                                            } finally {
+                                                navigator.navigate(Screen.Home)
                                             }
                                         } else {
                                             val result = snackbarHostState.showSnackbar(

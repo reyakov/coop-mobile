@@ -18,7 +18,7 @@ fun UpdateProfileScreen() {
 
     val currentUser = viewModel.currentUser() ?: return
     val metadata by viewModel.getMetadata(currentUser).collectAsState(initial = null)
-    val isBusy by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
+    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle(false)
 
     val profile = metadata?.asRecord()
 

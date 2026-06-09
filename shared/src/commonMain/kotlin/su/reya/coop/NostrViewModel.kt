@@ -53,8 +53,8 @@ class NostrViewModel(
     private val _signerRequired = MutableStateFlow<Boolean?>(null)
     val signerRequired = _signerRequired.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(false)
-    val isLoggedIn = _isLoggedIn.asStateFlow()
+    private val _isBusy = MutableStateFlow(false)
+    val isBusy = _isBusy.asStateFlow()
 
     private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
     val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
@@ -407,7 +407,7 @@ class NostrViewModel(
         picture: ByteArray? = null,
         contentType: String? = null
     ) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
@@ -416,7 +416,7 @@ class NostrViewModel(
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         } finally {
-            _isLoggedIn.value = false
+            _isBusy.value = false
         }
     }
 
@@ -426,7 +426,7 @@ class NostrViewModel(
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
 
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
@@ -439,7 +439,7 @@ class NostrViewModel(
             showError("Error: ${e.message}")
         } finally {
             secretStore.set("user_signer", secret)
-            _isLoggedIn.value = false
+            _isBusy.value = false
             _signerRequired.value = false
         }
     }
@@ -486,7 +486,7 @@ class NostrViewModel(
     }
 
     suspend fun importIdentity(secret: String) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
         try {
             val signer = createSigner(secret)
             nostr.setSigner(signer)
@@ -495,13 +495,13 @@ class NostrViewModel(
         } finally {
             secretStore.set("user_signer", secret)
             _signerRequired.value = false
-            _isLoggedIn.value = false
+            _isBusy.value = false
         }
     }
 
     suspend fun connectExternalSigner() {
         val handler = externalSignerHandler ?: throw IllegalStateException("Signer not available")
-        _isLoggedIn.value = true
+        _isBusy.value = true
         try {
             val permissions = SignerPermissions.toJson(
                 listOf(
@@ -524,7 +524,7 @@ class NostrViewModel(
             showError("Error: ${e.message}")
         } finally {
             _signerRequired.value = false
-            _isLoggedIn.value = false
+            _isBusy.value = false
         }
     }
 
