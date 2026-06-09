@@ -44,7 +44,8 @@ import kotlin.time.Duration.Companion.seconds
 
 class NostrViewModel(
     private val nostr: Nostr,
-    private val secretStore: SecretStorage
+    private val secretStore: SecretStorage,
+    private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : ViewModel() {
     private val _isNotificationBannerDismissed = MutableStateFlow(false)
     val isNotificationBannerDismissed = _isNotificationBannerDismissed.asStateFlow()
@@ -374,11 +375,24 @@ class NostrViewModel(
     private suspend fun createSigner(secret: String): AsyncNostrSigner {
         return when {
             secret.startsWith("nsec1") -> Keys.parse(secret)
+
             secret.startsWith("bunker://") -> {
                 val appKeys = getOrInitAppKeys()
                 val bunker = NostrConnectUri.parse(secret)
                 val timeout = 50.seconds // or Duration.parse("50s")
                 NostrConnect(uri = bunker, appKeys, timeout, null)
+            }
+
+            secret.startsWith("nip55://") -> {
+                val handler = externalSignerHandler
+                    ?: throw IllegalStateException("External signer not available on this platform")
+
+                // Format: nip55://packageName/hexPubkey
+                val parts = secret.removePrefix("nip55://").split("/", limit = 2)
+                val packageName = parts[0]
+                val pubkey = PublicKey.parse(parts[1])
+
+                ExternalSignerProxy(handler, packageName, pubkey)
             }
 
             else -> throw IllegalArgumentException("Invalid secret format")
