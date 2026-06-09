@@ -56,6 +56,8 @@ class AndroidExternalSigner(
         payload: String,
         pubkey: PublicKey? = null,
         currentUser: PublicKey? = null,
+        resultKey: String = "result",
+        extras: Map<String, String> = emptyMap(),
     ): String? {
         // Try Content Resolver first
         queryContentResolver(type, payload, pubkey, currentUser)?.let {
@@ -68,6 +70,7 @@ class AndroidExternalSigner(
             putExtra("type", type)
             if (pubkey != null) putExtra("pubkey", pubkey.toHex())
             if (currentUser != null) putExtra("current_user", currentUser.toHex())
+            extras.forEach { (k, v) -> putExtra(k, v) }
         }
 
         val result = launcher.launch(intent)
@@ -76,7 +79,7 @@ class AndroidExternalSigner(
         val data = result.data ?: return null
         if (data.getBooleanExtra("rejected", false)) return null
 
-        return data.getStringExtra("result")
+        return data.getStringExtra(resultKey)
     }
 
     override fun isAvailable(): Boolean {
@@ -108,31 +111,14 @@ class AndroidExternalSigner(
     }
 
     override suspend fun signEvent(event: UnsignedEvent, currentUser: PublicKey): String? {
-        // Try Content Resolver first
-        queryContentResolver(
-            "SIGN_EVENT",
-            event.asJson(),
-            null,
-            currentUser
-        )?.let { result ->
-            if (result.event != null) return result.event
-        }
-
-        // Fall back to Intent
-        val intent = Intent(Intent.ACTION_VIEW, "nostrsigner:${event.asJson()}".toUri()).apply {
-            `package` = cachedPackageName
-            putExtra("type", "sign_event")
-            putExtra("current_user", currentUser.toHex())
-            if (event.id() != null) putExtra("id", event.id()!!.toHex())
-        }
-
-        val result = launcher.launch(intent)
-        if (result.resultCode != Activity.RESULT_OK) return null
-
-        val data = result.data ?: return null
-        if (data.getBooleanExtra("rejected", false)) return null
-
-        return data.getStringExtra("event")
+        val extras = event.id()?.let { mapOf("id" to it.toHex()) } ?: emptyMap()
+        return request(
+            type = "sign_event",
+            payload = event.asJson(),
+            currentUser = currentUser,
+            resultKey = "event",
+            extras = extras,
+        )
     }
 
     override suspend fun nip04Encrypt(plaintext: String, pubkey: PublicKey): String? {

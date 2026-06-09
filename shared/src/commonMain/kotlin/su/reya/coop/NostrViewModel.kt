@@ -508,9 +508,14 @@ class NostrViewModel(
         try {
             val permissions = SignerPermissions.toJson(
                 listOf(
-                    SignerPermissions.signEvent(),
-                    SignerPermissions.nip04Encrypt(),
-                    SignerPermissions.nip04Decrypt(),
+                    SignerPermissions.signEvent(0),
+                    SignerPermissions.signEvent(3),
+                    SignerPermissions.signEvent(10000),
+                    SignerPermissions.signEvent(10050),
+                    SignerPermissions.signEvent(10063),
+                    SignerPermissions.signEvent(22242),
+                    SignerPermissions.signEvent(30030),
+                    SignerPermissions.signEvent(30315),
                     SignerPermissions.nip44Encrypt(),
                     SignerPermissions.nip44Decrypt(),
                 )

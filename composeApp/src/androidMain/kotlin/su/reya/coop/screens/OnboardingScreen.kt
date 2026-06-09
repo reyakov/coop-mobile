@@ -62,6 +62,7 @@ fun OnboardingScreen() {
 
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
+    
     val annotatedText = buildAnnotatedString {
         append("By using Coop, you agree to accept\nour ")
         // Push "Terms of Use" link
