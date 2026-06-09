@@ -13,12 +13,6 @@ class ExternalSignerLauncher {
         this.launcher = launcher
     }
 
-    fun unregister() {
-        launcher = null
-        pendingResult?.cancel()
-        pendingResult = null
-    }
-
     suspend fun launch(intent: Intent): ActivityResult {
         val deferred = CompletableDeferred<ActivityResult>()
         pendingResult = deferred

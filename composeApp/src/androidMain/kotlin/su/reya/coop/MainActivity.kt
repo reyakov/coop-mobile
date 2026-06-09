@@ -17,7 +17,9 @@ import su.reya.coop.coop.storage.SecretStore
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
-    private val externalSignerLauncher = ExternalSignerLauncher()
+    companion object {
+        val externalSignerLauncher = ExternalSignerLauncher()
+    }
 
     private val viewModel: NostrViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -80,10 +82,5 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-    }
-
-    override fun onDestroy() {
-        externalSignerLauncher.unregister()
-        super.onDestroy()
     }
 }

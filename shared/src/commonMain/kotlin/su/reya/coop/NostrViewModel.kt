@@ -413,10 +413,10 @@ class NostrViewModel(
             val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
             // Update the metadata state after successfully published
             updateMetadata(nostr.signer.currentUser!!, newMetadata)
+            // Update local state
+            _isBusy.value = false
         } catch (e: Exception) {
             showError("Error: ${e.message}")
-        } finally {
-            _isBusy.value = false
         }
     }
 
@@ -435,12 +435,13 @@ class NostrViewModel(
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             // Create identity
             nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        } finally {
+            // Persist the secret in the secret storage
             secretStore.set("user_signer", secret)
+            // Update local states
             _isBusy.value = false
             _signerRequired.value = false
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 
@@ -489,13 +490,15 @@ class NostrViewModel(
         _isBusy.value = true
         try {
             val signer = createSigner(secret)
+            // Update signer
             nostr.setSigner(signer)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        } finally {
+            // Persist the secret in the secret storage
             secretStore.set("user_signer", secret)
+            // Update local states
             _signerRequired.value = false
             _isBusy.value = false
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 
@@ -512,19 +515,19 @@ class NostrViewModel(
                     SignerPermissions.nip44Decrypt(),
                 )
             )
+
             val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
             val signer = ExternalSignerProxy(handler, result.pubkey)
 
             // Update signer
             nostr.setSigner(signer)
-
             // Store the signer in the secret storage
             secretStore.set("user_signer", "nip55://${result.packageName}/${result.pubkey.toHex()}")
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        } finally {
+            // Update local states
             _signerRequired.value = false
             _isBusy.value = false
+        } catch (e: Exception) {
+            throw Exception("Notice: ${e.message}")
         }
     }
 
