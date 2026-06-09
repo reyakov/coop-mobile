@@ -44,7 +44,8 @@ import kotlin.time.Duration.Companion.seconds
 
 class NostrViewModel(
     private val nostr: Nostr,
-    private val secretStore: SecretStorage
+    private val secretStore: SecretStorage,
+    private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : ViewModel() {
     private val _isNotificationBannerDismissed = MutableStateFlow(false)
     val isNotificationBannerDismissed = _isNotificationBannerDismissed.asStateFlow()
@@ -52,8 +53,8 @@ class NostrViewModel(
     private val _signerRequired = MutableStateFlow<Boolean?>(null)
     val signerRequired = _signerRequired.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(false)
-    val isLoggedIn = _isLoggedIn.asStateFlow()
+    private val _isBusy = MutableStateFlow(false)
+    val isBusy = _isBusy.asStateFlow()
 
     private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
     val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
@@ -371,20 +372,6 @@ class NostrViewModel(
         return keys
     }
 
-    private suspend fun createSigner(secret: String): AsyncNostrSigner {
-        return when {
-            secret.startsWith("nsec1") -> Keys.parse(secret)
-            secret.startsWith("bunker://") -> {
-                val appKeys = getOrInitAppKeys()
-                val bunker = NostrConnectUri.parse(secret)
-                val timeout = 50.seconds // or Duration.parse("50s")
-                NostrConnect(uri = bunker, appKeys, timeout, null)
-            }
-
-            else -> throw IllegalArgumentException("Invalid secret format")
-        }
-    }
-
     private suspend fun blossomUpload(file: ByteArray, contentType: String): String? {
         try {
             // Upload picture to Blossom
@@ -420,16 +407,16 @@ class NostrViewModel(
         picture: ByteArray? = null,
         contentType: String? = null
     ) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
             // Update the metadata state after successfully published
             updateMetadata(nostr.signer.currentUser!!, newMetadata)
+            // Update local state
+            _isBusy.value = false
         } catch (e: Exception) {
             showError("Error: ${e.message}")
-        } finally {
-            _isLoggedIn.value = false
         }
     }
 
@@ -439,7 +426,7 @@ class NostrViewModel(
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
 
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
@@ -448,12 +435,41 @@ class NostrViewModel(
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             // Create identity
             nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
+            // Persist the secret in the secret storage
+            secretStore.set("user_signer", secret)
+            // Update local states
+            _isBusy.value = false
+            _signerRequired.value = false
         } catch (e: Exception) {
             showError("Error: ${e.message}")
-        } finally {
-            secretStore.set("user_signer", secret)
-            _isLoggedIn.value = false
-            _signerRequired.value = false
+        }
+    }
+
+    private suspend fun createSigner(secret: String): AsyncNostrSigner {
+        return when {
+            secret.startsWith("nsec1") -> Keys.parse(secret)
+
+            secret.startsWith("bunker://") -> {
+                val appKeys = getOrInitAppKeys()
+                val bunker = NostrConnectUri.parse(secret)
+                val timeout = 50.seconds // or Duration.parse("50s")
+                NostrConnect(uri = bunker, appKeys, timeout, null)
+            }
+
+            secret.startsWith("nip55://") -> {
+                val handler = externalSignerHandler
+                    ?: throw IllegalStateException("External signer not available on this platform")
+
+                // Format: nip55://packageName/hexPubkey
+                val parts = secret.removePrefix("nip55://").split("/", limit = 2)
+                val packageName = parts[0]
+                val pubkey = PublicKey.parse(parts[1])
+
+                handler.setPackageName(packageName)
+                ExternalSignerProxy(handler, pubkey)
+            }
+
+            else -> throw IllegalArgumentException("Invalid secret format")
         }
     }
 
@@ -471,17 +487,57 @@ class NostrViewModel(
     }
 
     suspend fun importIdentity(secret: String) {
-        _isLoggedIn.value = true
+        _isBusy.value = true
         try {
             val signer = createSigner(secret)
+            // Update signer
             nostr.setSigner(signer)
+            // Persist the secret in the secret storage
+            secretStore.set("user_signer", secret)
+            // Update local states
+            _signerRequired.value = false
+            _isBusy.value = false
         } catch (e: Exception) {
             showError("Error: ${e.message}")
-        } finally {
-            secretStore.set("user_signer", secret)
-            _signerRequired.value = false
-            _isLoggedIn.value = false
         }
+    }
+
+    suspend fun connectExternalSigner() {
+        val handler = externalSignerHandler ?: throw IllegalStateException("Signer not available")
+        _isBusy.value = true
+        try {
+            val permissions = SignerPermissions.toJson(
+                listOf(
+                    SignerPermissions.signEvent(0),
+                    SignerPermissions.signEvent(3),
+                    SignerPermissions.signEvent(10000),
+                    SignerPermissions.signEvent(10050),
+                    SignerPermissions.signEvent(10063),
+                    SignerPermissions.signEvent(22242),
+                    SignerPermissions.signEvent(30030),
+                    SignerPermissions.signEvent(30315),
+                    SignerPermissions.nip44Encrypt(),
+                    SignerPermissions.nip44Decrypt(),
+                )
+            )
+
+            val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
+            val signer = ExternalSignerProxy(handler, result.pubkey)
+
+            // Update signer
+            nostr.setSigner(signer)
+            // Store the signer in the secret storage
+            secretStore.set("user_signer", "nip55://${result.packageName}/${result.pubkey.toHex()}")
+            // Update local states
+            _signerRequired.value = false
+            _isBusy.value = false
+        } catch (e: Exception) {
+            throw Exception("Notice: ${e.message}")
+        }
+    }
+
+    fun isExternalSignerAvailable(): Boolean {
+        return externalSignerHandler?.isAvailable() == true
     }
 
     suspend fun useDefaultMsgRelayList() {

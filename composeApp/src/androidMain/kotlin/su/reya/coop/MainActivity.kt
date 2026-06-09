@@ -2,9 +2,12 @@ package su.reya.coop
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Process
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -14,11 +17,16 @@ import su.reya.coop.coop.storage.SecretStore
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        val externalSignerLauncher = ExternalSignerLauncher()
+    }
+
     private val viewModel: NostrViewModel by viewModels {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val secretStore = SecretStore(this@MainActivity)
-                return NostrViewModel(NostrManager.instance, secretStore) as T
+                val androidSigner = AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
+                return NostrViewModel(NostrManager.instance, secretStore, androidSigner) as T
             }
         }
     }
@@ -26,10 +34,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             throwable.printStackTrace()
-            android.util.Log.e(
-                "CoopCrash",
-                "Uncaught exception in thread ${thread.name}",
-                throwable
+
+            Log.e(
+                "CoopCrash", "Uncaught exception in thread ${thread.name}", throwable
             )
 
             // Start the Crash Activity
@@ -40,9 +47,16 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
 
             // Exit
-            android.os.Process.killProcess(android.os.Process.myPid())
+            Process.killProcess(Process.myPid())
             exitProcess(1)
         }
+
+        val resultLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            externalSignerLauncher.onResult(result)
+        }
+        externalSignerLauncher.register(resultLauncher)
 
         val splashScreen = installSplashScreen()
         enableEdgeToEdge()

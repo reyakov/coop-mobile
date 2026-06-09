@@ -15,12 +15,12 @@ fun NewIdentityScreen() {
     val viewModel = LocalNostrViewModel.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
-    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
+    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle(false)
 
     ProfileEditor(
         title = "Create a new identity",
         buttonLabel = "Continue",
-        isBusy = isLoggedIn,
+        isBusy = isBusy,
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {

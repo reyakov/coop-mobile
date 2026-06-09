@@ -78,7 +78,7 @@ fun ImportScreen() {
 
     val scope = rememberCoroutineScope()
 
-    val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(false)
+    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle(false)
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
 
@@ -90,7 +90,7 @@ fun ImportScreen() {
     val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
     val picture = profile?.picture
-    
+
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             runCatching {
@@ -205,7 +205,7 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
-                                enabled = !isLoggedIn,
+                                enabled = !isBusy,
                                 modifier = Modifier.fillMaxWidth(),
                                 maxLines = 4,
                                 keyboardOptions = KeyboardOptions(
@@ -258,9 +258,9 @@ fun ImportScreen() {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !isLoggedIn,
+                            enabled = secret.isNotBlank() && !isBusy,
                         ) {
-                            if (isLoggedIn) {
+                            if (isBusy) {
                                 LoadingIndicator()
                             } else {
                                 Text(
