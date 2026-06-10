@@ -55,7 +55,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_send
-import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
@@ -67,7 +66,6 @@ import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.pictureFlow
-import su.reya.coop.short
 
 @Composable
 fun ChatScreen(id: Long) {
@@ -77,9 +75,7 @@ fun ChatScreen(id: Long) {
 
     // Get chat room by ID
     val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
-    val room by remember(id) {
-        derivedStateOf { chatRooms.firstOrNull { it.id == id } }
-    }
+    val room by remember(id) { derivedStateOf { chatRooms.firstOrNull { it.id == id } } }
 
     // Show empty screen
     if (room == null) {
@@ -88,7 +84,7 @@ fun ChatScreen(id: Long) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Chat room not found",
+                text = "Something went wrong.",
                 style = MaterialTheme.typography.titleMediumEmphasized,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -114,23 +110,14 @@ fun ChatScreen(id: Long) {
         // Start loading spinner
         loading = true
 
+        // Get msg relays for each member
+        viewModel.chatRoomConnect(id)
+
         // Get messages
         val initialMessages = viewModel.getChatRoomMessages(id)
         messages.clear()
         messages.addAll(initialMessages)
-
-        // Get msg relays for each member
-        val results = viewModel.chatRoomConnect(id)
-        results.forEach { (member, relays) ->
-            if (relays.isNotEmpty()) {
-                val metadata = viewModel.getMetadata(member).first { it != null }
-                val profile = metadata?.asRecord()
-                val name = profile?.displayName ?: profile?.name ?: member.short()
-
-                snackbarHostState.showSnackbar("Connected to messaging relays for $name")
-            }
-        }
-
+        
         // Stop loading spinner
         loading = false
 

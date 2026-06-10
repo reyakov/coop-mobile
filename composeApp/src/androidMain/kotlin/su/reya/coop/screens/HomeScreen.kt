@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -72,7 +74,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -111,6 +115,7 @@ fun HomeScreen() {
 
     val userProfile by currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
+    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
@@ -448,6 +453,77 @@ fun HomeScreen() {
             }
         },
     )
+
+    // Show the relay setup dialog if the msg relay list is empty
+    if (isRelayListEmpty) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.dismissRelayWarning() },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "Messaging Relays are required",
+                    style = MaterialTheme.typography.headlineSmallEmphasized.copy(
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "Coop cannot found your messaging relays. To send and receive messages on Coop, you need to set up at least one messaging relay.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "Please click the button below to continue with the default set of relays. You can always change them later in the settings.",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontStyle = FontStyle.Italic,
+                    ),
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(
+                        onClick = { },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(ButtonDefaults.MediumContainerHeight),
+                    ) {
+                        Text(
+                            text = "Retry",
+                            style = MaterialTheme.typography.titleMediumEmphasized,
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                viewModel.useDefaultMsgRelayList()
+                                sheetState.hide()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(ButtonDefaults.MediumContainerHeight),
+                    ) {
+                        Text(
+                            text = "Use Default",
+                            style = MaterialTheme.typography.titleMediumEmphasized,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

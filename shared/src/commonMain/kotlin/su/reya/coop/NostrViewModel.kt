@@ -644,20 +644,16 @@ class NostrViewModel(
         return emptyList()
     }
 
-    suspend fun chatRoomConnect(roomId: Long): Map<PublicKey, List<RelayUrl>> {
-        try {
-            val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
-            val members = room.members
+    fun chatRoomConnect(roomId: Long) {
+        viewModelScope.launch {
+            try {
+                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
+                val members = room.members
 
-            return runCatching {
                 nostr.chatRoomConnect(members.toList())
-            }.getOrElse { e ->
+            } catch (e: Exception) {
                 showError("Error: ${e.message}")
-                members.associateWith { emptyList() }
             }
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            return emptyMap()
         }
     }
 
