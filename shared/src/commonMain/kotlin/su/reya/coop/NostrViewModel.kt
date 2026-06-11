@@ -146,20 +146,6 @@ class NostrViewModel(
         }
     }
 
-    private fun processIncomingEvent(event: UnsignedEvent) {
-        val roomId = event.roomId()
-        val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
-
-        if (existingRoom == null) {
-            nostr.signer.currentUser?.let { user ->
-                val newRoom = Room.new(event, user)
-                _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
-            }
-        } else {
-            updateRoomList(roomId, event)
-        }
-    }
-
     private suspend fun runObserver() = coroutineScope {
         // Observe new messages
         launch {
@@ -298,13 +284,11 @@ class NostrViewModel(
                     nostr.getUserMetadata()
 
                     // Small delay to ensure all relays are connected
-                    delay(3000.milliseconds)
+                    delay(2.seconds)
 
                     // Check if the relay list is empty
                     val relays = nostr.getMsgRelays(pubkey)
-                    if (relays.isEmpty()) {
-                        _isRelayListEmpty.value = true
-                    }
+                    if (relays.isEmpty()) _isRelayListEmpty.value = true
 
                     break
                 }
@@ -538,6 +522,11 @@ class NostrViewModel(
 
     fun isExternalSignerAvailable(): Boolean {
         return externalSignerHandler?.isAvailable() == true
+    }
+
+    suspend fun refetchMsgRelays(pubkey: PublicKey) {
+        val relays = nostr.fetchMsgRelays(pubkey)
+        if (relays.isNotEmpty()) dismissRelayWarning()
     }
 
     suspend fun useDefaultMsgRelayList() {

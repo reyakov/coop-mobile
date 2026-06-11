@@ -190,11 +190,6 @@ class Nostr {
         }
     }
 
-    suspend fun exit() {
-        signer.switch(Keys.generate())
-        deviceSigner = null
-    }
-
     suspend fun setSigner(new: AsyncNostrSigner) {
         try {
             signer.switch(new)
@@ -647,6 +642,19 @@ class Nostr {
             return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get msg relays: ${e.message}", e)
+        }
+    }
+
+    suspend fun fetchMsgRelays(publicKey: PublicKey): List<RelayUrl> {
+        try {
+            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
+            val filter = Filter().kind(kind).author(publicKey).limit(1u)
+            val target = ReqTarget.auto(listOf(filter))
+            val events = client?.fetchEvents(target, timeout = Duration.parse("3s"))
+
+            return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch msg relays: ${e.message}", e)
         }
     }
 

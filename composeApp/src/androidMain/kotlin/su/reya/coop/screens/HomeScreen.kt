@@ -82,6 +82,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_close
 import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
 import coop.composeapp.generated.resources.ic_scanner
@@ -97,6 +98,7 @@ import su.reya.coop.Screen
 import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
+import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
@@ -120,13 +122,14 @@ fun HomeScreen() {
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(true)
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var isBusy by remember { mutableStateOf(false) }
 
     var isNotificationEnabled by remember {
         mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
@@ -465,60 +468,138 @@ fun HomeScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.5f)
-                    .padding(24.dp),
+                    .padding(horizontal = 24.dp)
+                    .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "Messaging Relays are required",
-                    style = MaterialTheme.typography.headlineSmallEmphasized.copy(
+                    text = "Messaging Relays are missing",
+                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
                         fontWeight = FontWeight.SemiBold,
+                        fontFamily = getExpressiveFontFamily()
                     ),
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    text = "Coop cannot found your messaging relays. To send and receive messages on Coop, you need to set up at least one messaging relay.",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.size(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(24.dp),
+                        shape = MaterialShapes.Circle.toShape(),
+                        color = MaterialTheme.colorScheme.error,
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_close),
+                                contentDescription = "X",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Other people won't be able to send you messages.",
+                        style = MaterialTheme.typography.titleSmallEmphasized,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(24.dp),
+                        shape = MaterialShapes.Circle.toShape(),
+                        color = MaterialTheme.colorScheme.error,
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_close),
+                                contentDescription = "X",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                    Text(
+                        text = "You cannot store your messages.",
+                        style = MaterialTheme.typography.titleSmallEmphasized,
+                    )
+                }
                 Text(
                     text = "Please click the button below to continue with the default set of relays. You can always change them later in the settings.",
-                    style = MaterialTheme.typography.bodyLarge.copy(
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = FontStyle.Italic,
+                    ),
+                )
+                Text(
+                    text = "If you believe this is a mistake, please click the Retry button to check again.",
+                    style = MaterialTheme.typography.bodySmall.copy(
                         fontStyle = FontStyle.Italic,
                     ),
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    TextButton(
-                        onClick = { },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(ButtonDefaults.MediumContainerHeight),
+                if (isBusy) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Retry",
-                            style = MaterialTheme.typography.titleMediumEmphasized,
-                        )
+                        LoadingIndicator()
                     }
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                viewModel.useDefaultMsgRelayList()
-                                sheetState.hide()
-                            }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(ButtonDefaults.MediumContainerHeight),
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "Use Default",
-                            style = MaterialTheme.typography.titleMediumEmphasized,
-                        )
+                        TextButton(
+                            enabled = !isBusy,
+                            onClick = {
+                                scope.launch {
+                                    isBusy = true
+                                    try {
+                                        viewModel.refetchMsgRelays(currentUser)
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
+                                    }
+                                    isBusy = false
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(ButtonDefaults.MediumContainerHeight),
+                        ) {
+                            Text(
+                                text = "Retry",
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
+                        Button(
+                            enabled = !isBusy,
+                            onClick = {
+                                scope.launch {
+                                    viewModel.useDefaultMsgRelayList()
+                                    sheetState.hide()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(ButtonDefaults.MediumContainerHeight),
+                        ) {
+                            Text(
+                                text = "Use Default",
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
                     }
                 }
             }
