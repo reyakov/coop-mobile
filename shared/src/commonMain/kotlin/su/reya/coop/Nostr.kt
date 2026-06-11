@@ -190,11 +190,6 @@ class Nostr {
         }
     }
 
-    suspend fun exit() {
-        signer.switch(Keys.generate())
-        deviceSigner = null
-    }
-
     suspend fun setSigner(new: AsyncNostrSigner) {
         try {
             signer.switch(new)
@@ -453,9 +448,10 @@ class Nostr {
             client?.addRelay(
                 url = relay,
                 capabilities =
-                    if (metadata == RelayMetadata.READ) RelayCapabilities.read()
-                    else if (metadata == RelayMetadata.WRITE) RelayCapabilities.write()
-                    else RelayCapabilities.none()
+                    when (metadata) {
+                        RelayMetadata.READ -> RelayCapabilities.read()
+                        RelayMetadata.WRITE -> RelayCapabilities.write()
+                    }
             )
             client?.connectRelay(relay)
         }
@@ -466,7 +462,7 @@ class Nostr {
     suspend fun getDefaultMsgRelayList(): List<RelayUrl> {
         // Construct a list of messaging relays
         val msgRelayList = listOf(
-            RelayUrl.parse("wss://relay.0xchat.com"),
+            RelayUrl.parse("wss://auth.nostr1.com"),
             RelayUrl.parse("wss://nip17.com"),
         )
 
@@ -649,6 +645,19 @@ class Nostr {
         }
     }
 
+    suspend fun fetchMsgRelays(publicKey: PublicKey): List<RelayUrl> {
+        try {
+            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
+            val filter = Filter().kind(kind).author(publicKey).limit(1u)
+            val target = ReqTarget.auto(listOf(filter))
+            val events = client?.fetchEvents(target, timeout = Duration.parse("3s"))
+
+            return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch msg relays: ${e.message}", e)
+        }
+    }
+
     suspend fun getRelayList(publicKey: PublicKey): Map<RelayUrl, RelayMetadata?> {
         try {
             val kind = Kind.fromStd(KindStandard.RELAY_LIST)
@@ -658,6 +667,20 @@ class Nostr {
             return extractRelayList(events?.toVec()?.firstOrNull() ?: return emptyMap())
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get relay list: ${e.message}", e)
+        }
+    }
+
+    suspend fun setRelaylist(relays: Map<RelayUrl, RelayMetadata?>) {
+        try {
+            val event = EventBuilder.relayList(relays).finalizeAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.broadcast(),
+                ackPolicy = AckPolicy.none(),
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
         }
     }
 
@@ -721,33 +744,25 @@ class Nostr {
         }
     }
 
-    suspend fun chatRoomConnect(members: List<PublicKey>): Map<PublicKey, List<RelayUrl>> {
+    suspend fun chatRoomConnect(members: List<PublicKey>) {
         try {
-            val results = mutableMapOf<PublicKey, MutableList<RelayUrl>>()
-
             members.forEach { member ->
-                results[member] = mutableListOf<RelayUrl>()
                 val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
                 val filter = Filter().kind(kind).author(member).limit(1u)
 
                 val stream = client?.streamEvents(
                     target = ReqTarget.auto(listOf(filter)),
-                    id = "room-${member.toBech32().substring(0, 10)}",
+                    id = null,
                     timeout = Duration.parse("3s"),
                     policy = ReqExitPolicy.ExitOnEose
                 )
 
                 stream?.next()?.let { res ->
                     if (res.event != null) {
-                        // Connect to the msg relays
                         connectMsgRelays(res.event!!)
-                        // Mark the member as connected
-                        results[member]?.add(res.relayUrl)
                     }
                 }
             }
-
-            return results
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch relays: ${e.message}", e)
         }
@@ -757,10 +772,8 @@ class Nostr {
         try {
             val urls = nip17ExtractRelayList(event);
             for (url in urls) {
-                if (client?.relay(url) == null) {
-                    client?.addRelay(url)
-                    client?.connectRelay(url)
-                }
+                client?.addRelay(url, RelayCapabilities.gossip())
+                client?.connectRelay(url)
             }
         } catch (e: Exception) {
             throw IllegalStateException("Failed to connect to relays: ${e.message}", e)

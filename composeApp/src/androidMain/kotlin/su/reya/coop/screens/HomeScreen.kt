@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,12 +73,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_close
 import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
 import coop.composeapp.generated.resources.ic_scanner
@@ -93,6 +97,7 @@ import su.reya.coop.Screen
 import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.displayNameFlow
+import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
@@ -111,17 +116,19 @@ fun HomeScreen() {
 
     val userProfile by currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
+    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(true)
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var isBusy by remember { mutableStateOf(false) }
 
     var isNotificationEnabled by remember {
         mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled())
@@ -352,102 +359,248 @@ fun HomeScreen() {
                             }
                         }
                     }
-
-                    if (showBottomSheet) {
-                        ModalBottomSheet(
-                            onDismissRequest = { showBottomSheet = false },
-                            sheetState = sheetState,
-                            modifier = Modifier
-                                .imePadding()
-                                .navigationBarsPadding(),
-                        ) {
-                            val pubkey = viewModel.currentUser()
-                            val shortPubkey = pubkey?.short() ?: "Not available"
-
-                            val userName =
-                                userProfile?.asRecord()?.displayName
-                                    ?: userProfile?.asRecord()?.name
-                                    ?: "No name"
-
-                            val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
-                                scope.launch {
-                                    sheetState.hide()
-                                    showBottomSheet = false
-                                    action()
-                                }
-                            }
-
-                            Column(
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .fillMaxWidth(),
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(84.dp)
-                                            .clip(MaterialShapes.Cookie9Sided.toShape()),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Avatar(
-                                            picture = userProfile?.asRecord()?.picture,
-                                            description = userProfile?.asRecord()?.displayName,
-                                            shape = MaterialShapes.Cookie9Sided.toShape(),
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Box(
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = userName,
-                                            style = MaterialTheme.typography.titleLargeEmphasized,
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    pubkey?.let {
-                                                        val bech32 = it.toBech32()
-                                                        val data =
-                                                            ClipData.newPlainText(bech32, bech32)
-                                                        clipboardManager.setClipEntry(ClipEntry(data))
-                                                    }
-                                                }
-                                            },
-                                        ) {
-                                            Text(text = shortPubkey)
-                                        }
-                                        FilledIconButton(
-                                            onClick = {
-                                                dismissAndRun { navigator.navigate(Screen.MyQr) }
-                                            },
-                                            shape = MaterialShapes.Square.toShape()
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(Res.drawable.ic_qr),
-                                                contentDescription = "My QR"
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.size(16.dp))
-                                BottomMenuList(onDismiss = dismissAndRun)
-                            }
-                        }
-                    }
                 }
             }
         },
     )
+
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+        ) {
+            val pubkey = viewModel.currentUser()
+            val shortPubkey = pubkey?.short() ?: "Not available"
+
+            val userName =
+                userProfile?.asRecord()?.displayName
+                    ?: userProfile?.asRecord()?.name
+                    ?: "No name"
+
+            val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
+                scope.launch {
+                    sheetState.hide()
+                    showBottomSheet = false
+                    action()
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(MaterialShapes.Cookie9Sided.toShape()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Avatar(
+                            picture = userProfile?.asRecord()?.picture,
+                            description = userProfile?.asRecord()?.displayName,
+                            shape = MaterialShapes.Cookie9Sided.toShape(),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Box(
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = userName,
+                            style = MaterialTheme.typography.titleLargeEmphasized,
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    pubkey?.let {
+                                        val bech32 = it.toBech32()
+                                        val data =
+                                            ClipData.newPlainText(bech32, bech32)
+                                        clipboardManager.setClipEntry(ClipEntry(data))
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(text = shortPubkey)
+                        }
+                        FilledIconButton(
+                            onClick = {
+                                dismissAndRun { navigator.navigate(Screen.MyQr) }
+                            },
+                            shape = MaterialShapes.Square.toShape()
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_qr),
+                                contentDescription = "My QR"
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.size(16.dp))
+                BottomMenuList(onDismiss = dismissAndRun)
+            }
+        }
+    }
+
+    // Show the relay setup dialog if the msg relay list is empty
+    if (isRelayListEmpty) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.dismissRelayWarning() },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
+                    .padding(horizontal = 24.dp)
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "Messaging Relays are missing",
+                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = getExpressiveFontFamily()
+                    ),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(24.dp),
+                        shape = MaterialShapes.Circle.toShape(),
+                        color = MaterialTheme.colorScheme.error,
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_close),
+                                contentDescription = "X",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Other people won't be able to send you messages.",
+                        style = MaterialTheme.typography.titleSmallEmphasized,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(24.dp),
+                        shape = MaterialShapes.Circle.toShape(),
+                        color = MaterialTheme.colorScheme.error,
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_close),
+                                contentDescription = "X",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onError
+                            )
+                        }
+                    }
+                    Text(
+                        text = "You cannot store your messages.",
+                        style = MaterialTheme.typography.titleSmallEmphasized,
+                    )
+                }
+                Text(
+                    text = "Please click the button below to continue with the default set of relays. You can always change them later in the settings.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = FontStyle.Italic,
+                    ),
+                )
+                Text(
+                    text = "If you believe this is a mistake, please click the Retry button to check again.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = FontStyle.Italic,
+                    ),
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (isBusy) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(
+                            enabled = !isBusy,
+                            onClick = {
+                                scope.launch {
+                                    isBusy = true
+                                    try {
+                                        viewModel.refetchMsgRelays(currentUser)
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
+                                    }
+                                    isBusy = false
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(ButtonDefaults.MediumContainerHeight),
+                        ) {
+                            Text(
+                                text = "Retry",
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
+                        Button(
+                            enabled = !isBusy,
+                            onClick = {
+                                scope.launch {
+                                    viewModel.useDefaultMsgRelayList()
+                                    sheetState.hide()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(ButtonDefaults.MediumContainerHeight),
+                        ) {
+                            Text(
+                                text = "Use Default",
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

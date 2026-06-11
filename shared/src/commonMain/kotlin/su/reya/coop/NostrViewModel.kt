@@ -146,20 +146,6 @@ class NostrViewModel(
         }
     }
 
-    private fun processIncomingEvent(event: UnsignedEvent) {
-        val roomId = event.roomId()
-        val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
-
-        if (existingRoom == null) {
-            nostr.signer.currentUser?.let { user ->
-                val newRoom = Room.new(event, user)
-                _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
-            }
-        } else {
-            updateRoomList(roomId, event)
-        }
-    }
-
     private suspend fun runObserver() = coroutineScope {
         // Observe new messages
         launch {
@@ -298,13 +284,11 @@ class NostrViewModel(
                     nostr.getUserMetadata()
 
                     // Small delay to ensure all relays are connected
-                    delay(3000.milliseconds)
+                    delay(2.seconds)
 
                     // Check if the relay list is empty
                     val relays = nostr.getMsgRelays(pubkey)
-                    if (relays.isEmpty()) {
-                        _isRelayListEmpty.value = true
-                    }
+                    if (relays.isEmpty()) _isRelayListEmpty.value = true
 
                     break
                 }
@@ -540,6 +524,11 @@ class NostrViewModel(
         return externalSignerHandler?.isAvailable() == true
     }
 
+    suspend fun refetchMsgRelays(pubkey: PublicKey) {
+        val relays = nostr.fetchMsgRelays(pubkey)
+        if (relays.isNotEmpty()) dismissRelayWarning()
+    }
+
     suspend fun useDefaultMsgRelayList() {
         try {
             val defaultRelays = nostr.getDefaultMsgRelayList()
@@ -558,12 +547,72 @@ class NostrViewModel(
         }
     }
 
+    suspend fun addInboxRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays[relayUrl] = RelayMetadata.WRITE
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun addOutboxRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays[relayUrl] = RelayMetadata.READ
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun removeRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays.remove(relayUrl)
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
     suspend fun currentUserMsgRelayList(): List<RelayUrl> {
         try {
             return nostr.getMsgRelays(nostr.signer.currentUser!!)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyList()
+        }
+    }
+
+    suspend fun addMsgRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserMsgRelayList().toMutableSet()
+            relays.add(relayUrl)
+
+            nostr.setMsgRelays(relays.toList())
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun removeMsgRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserMsgRelayList().toMutableSet()
+            relays.remove(relayUrl)
+
+            nostr.setMsgRelays(relays.toList())
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 
@@ -644,20 +693,16 @@ class NostrViewModel(
         return emptyList()
     }
 
-    suspend fun chatRoomConnect(roomId: Long): Map<PublicKey, List<RelayUrl>> {
-        try {
-            val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
-            val members = room.members
+    fun chatRoomConnect(roomId: Long) {
+        viewModelScope.launch {
+            try {
+                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
+                val members = room.members
 
-            return runCatching {
                 nostr.chatRoomConnect(members.toList())
-            }.getOrElse { e ->
+            } catch (e: Exception) {
                 showError("Error: ${e.message}")
-                members.associateWith { emptyList() }
             }
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            return emptyMap()
         }
     }
 

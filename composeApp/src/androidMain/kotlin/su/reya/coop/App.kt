@@ -6,23 +6,11 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -38,13 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.core.util.Consumer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -54,7 +36,6 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import kotlinx.coroutines.launch
 import su.reya.coop.screens.ChatScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
@@ -95,7 +76,6 @@ fun App(viewModel: NostrViewModel) {
     val qrScanResult = remember { QrScanResult() }
 
     val signerRequired by viewModel.signerRequired.collectAsStateWithLifecycle()
-    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -219,61 +199,6 @@ fun App(viewModel: NostrViewModel) {
                     }
                 }
             )
-
-            // Show the relay setup dialog if the msg relay list is empty
-            if (isRelayListEmpty) {
-                ModalBottomSheet(
-                    onDismissRequest = { viewModel.dismissRelayWarning() },
-                    sheetState = sheetState,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.5f)
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "Messaging Relays are required",
-                            style = MaterialTheme.typography.headlineSmallEmphasized.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text(
-                            text = "Coop cannot found your messaging relays. To send and receive messages on Coop, you need to set up at least one messaging relay.",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text(
-                            text = "Please click the button below to continue with the default set of relays. You can always change them later in the settings.",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontStyle = FontStyle.Italic,
-                            ),
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    viewModel.useDefaultMsgRelayList()
-                                    sheetState.hide()
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(ButtonDefaults.MediumContainerHeight),
-                        ) {
-                            Text(
-                                text = "Continue",
-                                style = MaterialTheme.typography.titleMediumEmphasized,
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
