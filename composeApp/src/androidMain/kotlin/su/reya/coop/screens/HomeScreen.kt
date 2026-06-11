@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -360,102 +359,99 @@ fun HomeScreen() {
                             }
                         }
                     }
-
-                    if (showBottomSheet) {
-                        ModalBottomSheet(
-                            onDismissRequest = { showBottomSheet = false },
-                            sheetState = sheetState,
-                            modifier = Modifier
-                                .imePadding()
-                                .navigationBarsPadding(),
-                        ) {
-                            val pubkey = viewModel.currentUser()
-                            val shortPubkey = pubkey?.short() ?: "Not available"
-
-                            val userName =
-                                userProfile?.asRecord()?.displayName
-                                    ?: userProfile?.asRecord()?.name
-                                    ?: "No name"
-
-                            val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
-                                scope.launch {
-                                    sheetState.hide()
-                                    showBottomSheet = false
-                                    action()
-                                }
-                            }
-
-                            Column(
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .fillMaxWidth(),
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(84.dp)
-                                            .clip(MaterialShapes.Cookie9Sided.toShape()),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Avatar(
-                                            picture = userProfile?.asRecord()?.picture,
-                                            description = userProfile?.asRecord()?.displayName,
-                                            shape = MaterialShapes.Cookie9Sided.toShape(),
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Box(
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = userName,
-                                            style = MaterialTheme.typography.titleLargeEmphasized,
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.size(8.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    pubkey?.let {
-                                                        val bech32 = it.toBech32()
-                                                        val data =
-                                                            ClipData.newPlainText(bech32, bech32)
-                                                        clipboardManager.setClipEntry(ClipEntry(data))
-                                                    }
-                                                }
-                                            },
-                                        ) {
-                                            Text(text = shortPubkey)
-                                        }
-                                        FilledIconButton(
-                                            onClick = {
-                                                dismissAndRun { navigator.navigate(Screen.MyQr) }
-                                            },
-                                            shape = MaterialShapes.Square.toShape()
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(Res.drawable.ic_qr),
-                                                contentDescription = "My QR"
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.size(16.dp))
-                                BottomMenuList(onDismiss = dismissAndRun)
-                            }
-                        }
-                    }
                 }
             }
         },
     )
+
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+        ) {
+            val pubkey = viewModel.currentUser()
+            val shortPubkey = pubkey?.short() ?: "Not available"
+
+            val userName =
+                userProfile?.asRecord()?.displayName
+                    ?: userProfile?.asRecord()?.name
+                    ?: "No name"
+
+            val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
+                scope.launch {
+                    sheetState.hide()
+                    showBottomSheet = false
+                    action()
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(MaterialShapes.Cookie9Sided.toShape()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Avatar(
+                            picture = userProfile?.asRecord()?.picture,
+                            description = userProfile?.asRecord()?.displayName,
+                            shape = MaterialShapes.Cookie9Sided.toShape(),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Box(
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = userName,
+                            style = MaterialTheme.typography.titleLargeEmphasized,
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    pubkey?.let {
+                                        val bech32 = it.toBech32()
+                                        val data =
+                                            ClipData.newPlainText(bech32, bech32)
+                                        clipboardManager.setClipEntry(ClipEntry(data))
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(text = shortPubkey)
+                        }
+                        FilledIconButton(
+                            onClick = {
+                                dismissAndRun { navigator.navigate(Screen.MyQr) }
+                            },
+                            shape = MaterialShapes.Square.toShape()
+                        ) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_qr),
+                                contentDescription = "My QR"
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.size(16.dp))
+                BottomMenuList(onDismiss = dismissAndRun)
+            }
+        }
+    }
 
     // Show the relay setup dialog if the msg relay list is empty
     if (isRelayListEmpty) {

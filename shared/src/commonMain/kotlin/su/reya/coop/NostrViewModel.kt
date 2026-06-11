@@ -547,12 +547,72 @@ class NostrViewModel(
         }
     }
 
+    suspend fun addInboxRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays[relayUrl] = RelayMetadata.WRITE
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun addOutboxRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays[relayUrl] = RelayMetadata.READ
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun removeRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserRelayList().toMutableMap()
+            relays.remove(relayUrl)
+
+            nostr.setRelaylist(relays)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
     suspend fun currentUserMsgRelayList(): List<RelayUrl> {
         try {
             return nostr.getMsgRelays(nostr.signer.currentUser!!)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyList()
+        }
+    }
+
+    suspend fun addMsgRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserMsgRelayList().toMutableSet()
+            relays.add(relayUrl)
+
+            nostr.setMsgRelays(relays.toList())
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun removeMsgRelay(relay: String) {
+        try {
+            val relayUrl = RelayUrl.parse(relay)
+            val relays = currentUserMsgRelayList().toMutableSet()
+            relays.remove(relayUrl)
+
+            nostr.setMsgRelays(relays.toList())
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
         }
     }
 

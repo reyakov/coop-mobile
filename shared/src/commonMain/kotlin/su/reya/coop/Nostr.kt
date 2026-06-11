@@ -670,6 +670,20 @@ class Nostr {
         }
     }
 
+    suspend fun setRelaylist(relays: Map<RelayUrl, RelayMetadata?>) {
+        try {
+            val event = EventBuilder.relayList(relays).finalizeAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.broadcast(),
+                ackPolicy = AckPolicy.none(),
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
+        }
+    }
+
     suspend fun getChatRooms(): Set<Room>? {
         try {
             val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
