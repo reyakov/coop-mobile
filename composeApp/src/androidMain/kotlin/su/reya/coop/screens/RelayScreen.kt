@@ -15,6 +15,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -74,6 +76,7 @@ fun RelayScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val viewModel = LocalNostrViewModel.current
 
+    val scope = rememberCoroutineScope()
     val msgRelayList = remember { mutableStateListOf<RelayUrl>() }
     val relayList = remember { mutableStateMapOf<RelayUrl, RelayMetadata?>() }
 
@@ -90,6 +93,7 @@ fun RelayScreen() {
     }
 
     var openAddRelayDialog by remember { mutableStateOf(false) }
+    var relayToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         relayList.putAll(viewModel.currentUserRelayList())
@@ -168,7 +172,8 @@ fun RelayScreen() {
                         if (msgRelayList.isNotEmpty()) {
                             msgRelayList.forEachIndexed { index, relayUrl ->
                                 SegmentedListItem(
-                                    onClick = { },
+                                    onClick = { /* No action */ },
+                                    onLongClick = { relayToDelete = relayUrl.toString() },
                                     shapes = ListItemDefaults.segmentedShapes(
                                         index = index,
                                         count = msgRelayList.size
@@ -290,13 +295,60 @@ fun RelayScreen() {
     )
 
     if (openAddRelayDialog) {
-        AddRelayDialog(onDismissRequest = { openAddRelayDialog = false })
+        AddRelayDialog(
+            onDismissRequest = { openAddRelayDialog = false },
+            onMsgRelayAdded = { newRelay ->
+                msgRelayList.add(RelayUrl.parse(newRelay))
+            },
+            onRelayAdded = { newRelay, metadata ->
+                relayList[RelayUrl.parse(newRelay)] = metadata
+            }
+        )
+    }
+
+    if (relayToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { relayToDelete = null },
+            title = { Text("Remove Relay") },
+            text = { Text("Are you sure you want to remove $relayToDelete?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            if (msgRelayList.size == 1) {
+                                snackbarHostState.showSnackbar("You must have at least one relay")
+                                relayToDelete = null
+                                return@launch
+                            }
+                            try {
+                                viewModel.removeMsgRelay(relayToDelete!!)
+                                msgRelayList.removeIf { it.toString() == relayToDelete }
+                                relayToDelete = null
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("Failed to remove relay")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { relayToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AddRelayDialog(onDismissRequest: () -> Unit) {
+fun AddRelayDialog(
+    onDismissRequest: () -> Unit,
+    onMsgRelayAdded: (newRelay: String) -> Unit,
+    onRelayAdded: (newRelay: String, metadata: RelayMetadata?) -> Unit,
+) {
     val viewModel = LocalNostrViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
@@ -348,9 +400,20 @@ fun AddRelayDialog(onDismissRequest: () -> Unit) {
                             scope.launch {
                                 if (!isError) {
                                     when (selected) {
-                                        "Messaging" -> viewModel.addMsgRelay(relayAddress)
-                                        "Inbox" -> viewModel.addInboxRelay(relayAddress)
-                                        "Outbox" -> viewModel.addOutboxRelay(relayAddress)
+                                        "Messaging" -> {
+                                            viewModel.addMsgRelay(relayAddress)
+                                            onMsgRelayAdded(relayAddress)
+                                        }
+
+                                        "Inbox" -> {
+                                            viewModel.addInboxRelay(relayAddress)
+                                            onRelayAdded(relayAddress, RelayMetadata.WRITE)
+                                        }
+
+                                        "Outbox" -> {
+                                            viewModel.addOutboxRelay(relayAddress)
+                                            onRelayAdded(relayAddress, RelayMetadata.READ)
+                                        }
                                     }
                                     onDismissRequest()
                                 }
