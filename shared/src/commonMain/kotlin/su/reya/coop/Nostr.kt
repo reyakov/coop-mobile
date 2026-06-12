@@ -379,9 +379,6 @@ class Nostr {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         try {
-            val currentUser =
-                signer.currentUser ?: throw IllegalStateException("User not signed in")
-
             // Construct the room id
             val roomId = rumor.roomId()
 
@@ -396,10 +393,10 @@ class Nostr {
             // Set event kind
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
 
+            // Construct event
             val event = EventBuilder(kind, rumor.asJson())
                 .tags(tags)
-                .finalizeUnsigned(currentUser)
-                .signAsync(Keys.generate())
+                .finalizeAsync(signer)
 
             client?.database()?.saveEvent(event)
         } catch (e: Exception) {
