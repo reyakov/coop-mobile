@@ -61,7 +61,7 @@ class AndroidExternalSigner(
     ): String? {
         // Try Content Resolver first
         queryContentResolver(type, payload, pubkey, currentUser)?.let {
-            return it.result
+            return if (resultKey == "event") it.event else it.result
         }
 
         // Fall back to Intent

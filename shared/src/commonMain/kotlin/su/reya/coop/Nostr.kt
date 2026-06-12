@@ -412,23 +412,16 @@ class Nostr {
         val cachedRumor = getCachedRumor(event.id())
         if (cachedRumor != null) return cachedRumor
 
-        // Get all signers
-        val signers = listOfNotNull(signer, deviceSigner)
-        if (signers.isEmpty()) return null
-
         // Try to unwrap the gift with each signer
-        for (signer in signers) {
-            try {
-                val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
-                val rumor = gift.rumor()
-                // Save the rumor to the database
-                setCachedRumor(event.id(), rumor)
-                // Return the rumor
-                return rumor
-            } catch (e: Exception) {
-                println("Failed to unwrap gift: ${e.message}")
-                continue
-            }
+        try {
+            val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
+            val rumor = gift.rumor()
+            // Save the rumor to the database
+            setCachedRumor(event.id(), rumor)
+            // Return the rumor
+            return rumor
+        } catch (e: Exception) {
+            println("Failed to unwrap gift: ${e.message}")
         }
 
         return null
