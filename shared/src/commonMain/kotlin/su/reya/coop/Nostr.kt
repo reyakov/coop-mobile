@@ -386,7 +386,7 @@ class Nostr {
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
                 Tag.event(rumor.id()!!),
-                Tag.custom("a", listOf(roomId.toString())),
+                Tag.custom("r", listOf(roomId.toString())),
                 Tag.custom("k", listOf("14"))
             )
 
@@ -396,7 +396,7 @@ class Nostr {
             // Construct event
             val event = EventBuilder(kind, rumor.asJson())
                 .tags(tags)
-                .finalizeAsync(signer)
+                .finalizeAsync(Keys.generate())
 
             client?.database()?.saveEvent(event)
         } catch (e: Exception) {

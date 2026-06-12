@@ -110,16 +110,16 @@ fun ChatScreen(id: Long) {
         // Start loading spinner
         loading = true
 
-        // Get msg relays for each member
-        viewModel.chatRoomConnect(id)
-
         // Get messages
         val initialMessages = viewModel.getChatRoomMessages(id)
         messages.clear()
         messages.addAll(initialMessages)
-        
+
         // Stop loading spinner
         loading = false
+
+        // Get msg relays for each member
+        viewModel.chatRoomConnect(id)
 
         // Handle new messages
         viewModel.newEvents.collect { event ->
