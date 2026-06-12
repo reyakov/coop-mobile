@@ -385,6 +385,7 @@ class Nostr {
             // Construct reference tags
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
+                Tag.publicKey(rumor.author()),
                 Tag.event(rumor.id()!!),
                 Tag.custom("r", listOf(roomId.toString())),
                 Tag.custom("k", listOf("14"))
@@ -405,16 +406,18 @@ class Nostr {
     }
 
     private suspend fun extractRumor(event: Event): UnsignedEvent? {
-        // Check if the rumor is already cached
-        val cachedRumor = getCachedRumor(event.id())
-        if (cachedRumor != null) return cachedRumor
-
-        // Try to unwrap the gift with each signer
         try {
+            // Check if the rumor is already cached
+            val cachedRumor = getCachedRumor(event.id())
+            if (cachedRumor != null) return cachedRumor
+
+            // Unwrap the gift with current signer
             val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
             val rumor = gift.rumor()
+
             // Save the rumor to the database
             setCachedRumor(event.id(), rumor)
+
             // Return the rumor
             return rumor
         } catch (e: Exception) {
@@ -676,12 +679,14 @@ class Nostr {
 
     suspend fun getChatRooms(): Set<Room>? {
         try {
-            val userPubkey = signer.currentUser ?: throw IllegalStateException("User not signed in")
+            val userPubkey =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
             // Get all events sent by the user
-            val filter = Filter().kind(kind).author(userPubkey).customTags(kTag, listOf("14", "dm"))
+            val filter = Filter().kind(kind).pubkey(userPubkey).customTags(kTag, listOf("14", "dm"))
             val events = client?.database()?.query(filter)
 
             // Collect rooms
@@ -697,8 +702,9 @@ class Nostr {
 
                     // Check if the room already exists
                     if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
-                        val filter =
-                            Filter().kind(kind).author(userPubkey).pubkeys(newRoom.members.toList())
+                        val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
+                        val pubkeys = newRoom.members.toList()
+                        val filter = Filter().kind(kind).author(userPubkey).pubkeys(pubkeys)
 
                         // Determine if it's an ongoing room
                         val isOngoing = client?.database()?.query(filter)?.isEmpty() == false
@@ -779,7 +785,7 @@ class Nostr {
     ) {
         try {
             val currentUser =
-                signer.currentUser ?: throw IllegalStateException("User not signed in")
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
 
             val tags = mutableListOf<Tag>()
 
@@ -806,6 +812,7 @@ class Nostr {
                 val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), content)
                     .tags(tags)
                     .finalizeUnsigned(currentUser)
+                    .ensureId()
 
                 // Emit the rumor to the chat screen
                 if (receiver == currentUser) {
