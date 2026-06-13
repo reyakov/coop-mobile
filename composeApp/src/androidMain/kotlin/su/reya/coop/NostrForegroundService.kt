@@ -35,20 +35,17 @@ class NostrForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
         createNotificationChannel()
-        val notification = createNotification()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(1, notification)
-        }
+        startAsForeground()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startAsForeground()
+
+        // Check if the service is already running
         if (notificationJob?.isActive == true) return START_STICKY
 
+        // Start the Nostr client
         notificationJob = serviceScope.launch {
             try {
                 Log.d("Coop", "Starting Nostr in background")
@@ -92,6 +89,16 @@ class NostrForegroundService : Service() {
 
         return START_STICKY
     }
+
+    private fun startAsForeground() {
+        val notification = createNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(1, notification)
+        }
+    }
+
 
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java)
