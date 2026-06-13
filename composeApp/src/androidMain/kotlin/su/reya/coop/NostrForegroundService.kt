@@ -22,16 +22,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
 
+private const val GROUP_KEY_MESSAGES = "su.reya.coop.MESSAGES"
+
 class NostrForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val nostr by lazy { NostrManager.instance }
     private var notificationJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun isUserInApp(): Boolean {
-        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -40,6 +38,13 @@ class NostrForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "STOP_SERVICE") {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        // Start the nostr service in the foreground
         startAsForeground()
 
         // Check if the service is already running
@@ -90,15 +95,25 @@ class NostrForegroundService : Service() {
         return START_STICKY
     }
 
+    private fun isUserInApp(): Boolean {
+        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    }
+
     private fun startAsForeground() {
         val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING)
         } else {
             startForeground(1, notification)
         }
     }
 
+    private fun getStopServicePendingIntent(): PendingIntent {
+        val intent = Intent(this, NostrForegroundService::class.java).apply {
+            action = "STOP_SERVICE"
+        }
+        return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+    }
 
     private fun createNotificationChannel() {
         val manager = getSystemService(NotificationManager::class.java)
@@ -122,10 +137,12 @@ class NostrForegroundService : Service() {
 
     private fun createNotification(content: String? = null): Notification {
         val builder = NotificationCompat.Builder(this, "nostr_service")
+            .setGroup(GROUP_KEY_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(R.drawable.ic_notification, "Stop", getStopServicePendingIntent())
 
         if (content != null) {
             builder.setContentTitle("Coop")
