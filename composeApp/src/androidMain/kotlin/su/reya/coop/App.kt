@@ -16,14 +16,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.expressiveLightColorScheme
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +35,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import su.reya.coop.screens.ChatScreen
+import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
 import su.reya.coop.screens.MyQrScreen
@@ -69,8 +68,6 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 fun App(viewModel: NostrViewModel) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
-    val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState()
     val backStack = rememberNavBackStack(Screen.Home)
     val navigator = remember(backStack) { Navigator(backStack) }
     val qrScanResult = remember { QrScanResult() }
@@ -193,6 +190,9 @@ fun App(viewModel: NostrViewModel) {
                     }
                     entry<Screen.MyQr> {
                         MyQrScreen()
+                    }
+                    entry<Screen.ContactList> {
+                        ContactListScreen()
                     }
                     entry<Screen.Relay> {
                         RelayScreen()
