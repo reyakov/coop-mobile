@@ -677,6 +677,21 @@ class Nostr {
         }
     }
 
+    suspend fun setContactList(contacts: List<PublicKey>) {
+        try {
+            val contacts = contacts.map { Contact(it) }
+            val event = EventBuilder.contactList(contacts).finalizeAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.broadcast(),
+                ackPolicy = AckPolicy.none(),
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to set contact list: ${e.message}", e)
+        }
+    }
+
     suspend fun getChatRooms(): Set<Room>? {
         try {
             val userPubkey =

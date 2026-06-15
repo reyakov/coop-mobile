@@ -616,6 +616,54 @@ class NostrViewModel(
         }
     }
 
+    private suspend fun newContact(publicKey: PublicKey) {
+        if (publicKey in contactList.value) return
+
+        try {
+            val updated = contactList.value + publicKey
+            // Publish new event
+            nostr.setContactList(updated.toList())
+            // Optimistic local update
+            _contactList.update { it + publicKey }
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+        }
+    }
+
+    suspend fun addContact(address: String): Boolean {
+        val pubkey = try {
+            if (address.contains("@")) {
+                nostr.searchByAddress(address)
+            } else {
+                PublicKey.parse(address)
+            }
+        } catch (e: Exception) {
+            showError("Invalid contact address: ${e.message}")
+            return false
+        }
+
+        return run {
+            newContact(pubkey)
+            true
+        }
+    }
+
+    fun removeContact(publicKey: PublicKey) {
+        viewModelScope.launch {
+            if (publicKey !in contactList.value) return@launch
+
+            try {
+                val updated = contactList.value - publicKey
+                // Publish new event
+                nostr.setContactList(updated.toList())
+                // Optimistic local update
+                _contactList.update { it - publicKey }
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
+        }
+    }
+
     fun createChatRoom(to: List<PublicKey>): Long {
         try {
             if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
