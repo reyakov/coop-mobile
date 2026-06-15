@@ -656,8 +656,7 @@ fun BottomMenuList(
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
-        "Contact List" to { },
-        "Spams & Blocks" to { },
+        "Contact List" to { navigator.navigate(Screen.ContactList) },
         "Relay Management" to { navigator.navigate(Screen.Relay) },
         "Settings" to { }
     )

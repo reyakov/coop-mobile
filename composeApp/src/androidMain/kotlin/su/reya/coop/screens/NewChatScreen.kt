@@ -61,6 +61,7 @@ import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
 import su.reya.coop.short
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -78,7 +79,7 @@ fun NewChatScreen() {
 
     LaunchedEffect(query) {
         if (query.length >= 3) {
-            delay(500) // 500ms debounce
+            delay(500.milliseconds)
 
             if (query.startsWith("npub1")) {
                 val pubkey = try {
