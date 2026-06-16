@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -84,7 +85,9 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_close
 import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
+import coop.composeapp.generated.resources.ic_request
 import coop.composeapp.generated.resources.ic_scanner
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
@@ -93,6 +96,7 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.RoomKind
 import su.reya.coop.Screen
 import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
@@ -111,19 +115,20 @@ fun HomeScreen() {
     val clipboardManager = LocalClipboard.current
     val viewModel = LocalNostrViewModel.current
 
+
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(true)
+    val listState = rememberLazyListState()
+    val pullToRefreshState = rememberPullToRefreshState()
+
     val currentUser = viewModel.currentUser() ?: return
-    val currentUserProfile = viewModel.getMetadata(currentUser) ?: return
+    val currentUserProfile = viewModel.getMetadata(currentUser)
 
     val userProfile by currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
     val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
-
-    val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(true)
-    val listState = rememberLazyListState()
-    val pullToRefreshState = rememberPullToRefreshState()
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -138,6 +143,11 @@ fun HomeScreen() {
         ActivityResultContracts.RequestPermission()
     ) { _ ->
         // State will be updated by LifecycleResumeEffect
+    }
+
+    // Partition chat rooms into requests and ongoing
+    val (requests, ongoing) = remember(chatRooms) {
+        chatRooms.partition { it.kind == RoomKind.Request }
     }
 
     LifecycleResumeEffect(context) {
@@ -350,7 +360,11 @@ fun HomeScreen() {
                                 state = listState,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(chatRooms.toList(), key = { it.id }) { room ->
+                                if (requests.isNotEmpty()) {
+                                    item { NewRequests(requests) }
+                                }
+
+                                items(ongoing, key = { it.id }) { room ->
                                     ChatRoom(
                                         room = room,
                                         onClick = { navigator.navigate(Screen.Chat(room.id)) }
@@ -603,6 +617,89 @@ fun HomeScreen() {
     }
 }
 
+@Composable
+fun NewRequests(requests: List<Room>) {
+    val navigator = LocalNavigator.current
+    val viewModel = LocalNostrViewModel.current
+
+    val total = requests.size
+    val firstRoom = requests.getOrNull(0)
+    val secondRoom = requests.getOrNull(1)
+
+    val firstName by remember(firstRoom) {
+        firstRoom?.displayNameFlow(viewModel) ?: flowOf("")
+    }.collectAsStateWithLifecycle("Loading...")
+
+    val secondName by remember(secondRoom) {
+        secondRoom?.displayNameFlow(viewModel) ?: flowOf("")
+    }.collectAsStateWithLifecycle("")
+
+    val supportingText = when {
+        total == 1 && firstRoom != null -> {
+            val message = firstRoom.lastMessage ?: ""
+            "$firstName: $message"
+        }
+
+        total == 2 -> {
+            "$firstName and $secondName"
+        }
+
+        total > 2 -> {
+            val othersCount = total - 2
+            val othersText = if (othersCount == 1) "1 other" else "$othersCount others"
+            "$firstName, $secondName and $othersText"
+        }
+
+        else -> ""
+    }
+
+    ListItem(
+        modifier = Modifier.clickable {
+            navigator.navigate(Screen.RequestList)
+        },
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialShapes.Clover4Leaf.toShape()),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_request),
+                            contentDescription = "Requests",
+                            tint = MaterialTheme.colorScheme.onTertiaryFixed
+                        )
+                    }
+                }
+            }
+        },
+        headlineContent = {
+            Text(
+                text = "Requests",
+                style = MaterialTheme.typography.titleMediumEmphasized
+            )
+        },
+        supportingContent = {
+            if (supportingText.isNotEmpty()) {
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    )
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
@@ -636,7 +733,8 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
             if (!room.lastMessage.isNullOrBlank()) {
                 Text(
                     text = room.lastMessage!!,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         },
