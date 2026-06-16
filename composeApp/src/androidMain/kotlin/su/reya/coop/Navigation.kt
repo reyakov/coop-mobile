@@ -24,6 +24,9 @@ sealed interface Screen : NavKey {
     data object Home : Screen
 
     @Serializable
+    data object RequestList : Screen
+
+    @Serializable
     data class Chat(val id: Long) : Screen
 
     @Serializable
