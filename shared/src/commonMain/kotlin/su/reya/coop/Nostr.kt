@@ -50,11 +50,11 @@ import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
-import rust.nostr.sdk.UnwrappedGift
 import rust.nostr.sdk.extractRelayList
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -77,8 +77,6 @@ class Nostr {
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
-        private set
-    var deviceSigner: AsyncNostrSigner? = null
         private set
     var sentEvents: MutableMap<EventId, List<RelayUrl>> = mutableMapOf()
         private set
@@ -310,26 +308,22 @@ class Nostr {
                             }
 
                             if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
-                                try {
-                                    val rumor = extractRumor(event)
+                                val rumor = extractRumor(event)
 
-                                    // Logic to notify UI after processing
-                                    // Cancel previous tracker if it exists
-                                    eoseTrackerJob?.cancel()
-                                    // Start a new tracker
-                                    eoseTrackerJob = launch {
-                                        delay(10000.milliseconds) // Wait for 10 seconds
-                                        onSubscriptionClose()
-                                    }
+                                // Logic to notify UI after processing
+                                // Cancel previous tracker if it exists
+                                eoseTrackerJob?.cancel()
+                                // Start a new tracker
+                                eoseTrackerJob = launch {
+                                    delay(10000.milliseconds) // Wait for 10 seconds
+                                    onSubscriptionClose()
+                                }
 
-                                    // Handle new message
-                                    rumor?.createdAt()?.asSecs()?.let {
-                                        if (it >= now.asSecs()) {
-                                            onNewMessage(rumor)
-                                        }
+                                // Handle new message
+                                rumor?.createdAt()?.asSecs()?.let {
+                                    if (it >= now.asSecs()) {
+                                        onNewMessage(rumor)
                                     }
-                                } catch (e: Exception) {
-                                    println("Failed to extract rumor: $e")
                                 }
                             }
                         }
@@ -372,7 +366,7 @@ class Nostr {
             val event = client?.database()?.query(filter)?.first()
 
             return event?.content()?.let { UnsignedEvent.fromJson(it) }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             throw IllegalStateException("Failed to get cached rumor: ${e.message}", e)
         }
     }
@@ -392,7 +386,7 @@ class Nostr {
             )
 
             // Set event kind
-            val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA);
+            val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
 
             // Construct event
             val event = EventBuilder(kind, rumor.asJson())
@@ -400,36 +394,64 @@ class Nostr {
                 .finalizeAsync(Keys.generate())
 
             client?.database()?.saveEvent(event)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             println("Failed to set cached rumor: ${e.message}")
         }
     }
 
     private suspend fun extractRumor(event: Event): UnsignedEvent? {
         try {
+            // Gift wrap must have at least one 'p' tag
+            if (event.tags().publicKeys().isEmpty()) {
+                println("No recipient tags found.")
+                return null
+            }
+
+            // Event must be a gift wrap
+            if (event.kind().asStd().let { it != KindStandard.GIFT_WRAP }) {
+                println("Event is not a gift wrap.")
+                return null
+            }
+
             // Check if the rumor is already cached
             val cachedRumor = getCachedRumor(event.id())
             if (cachedRumor != null) return cachedRumor
 
-            // Unwrap the gift with current signer
-            val gift = UnwrappedGift.fromGiftWrapAsync(signer = signer, giftWrap = event)
-            val rumor = gift.rumor()
+            // Decrypt the gift wrap event
+            val seal = signer.nip44DecryptAsync(event.author(), event.content())
+            val sealEvent = Event.fromJson(seal)
 
-            // Save the rumor to the database
-            setCachedRumor(event.id(), rumor)
+            // Verify seal event
+            if (!sealEvent.verify()) {
+                println("Failed to verify seal event.")
+                return null
+            }
 
-            // Return the rumor
-            return rumor
-        } catch (e: Exception) {
-            println("Failed to unwrap gift: ${e.message}")
+            // Decrypt the rumor
+            val rumor = signer.nip44DecryptAsync(sealEvent.author(), sealEvent.content())
+            val unsignedEvent = UnsignedEvent.fromJson(rumor)
+
+            // Ensure the rumor author matches the seal
+            if (unsignedEvent.author() != sealEvent.author()) {
+                println("Author mismatch.")
+                return null
+            }
+
+            // Cache the rumor for later use
+            setCachedRumor(event.id(), unsignedEvent)
+
+            return unsignedEvent
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            println("Failed to unwrap gift ${event.id().toHex()}: ${e.message}")
+            return null
         }
-
-        return null
     }
 
     private suspend fun getDefaultRelayList(): Map<RelayUrl, RelayMetadata> {
         // Construct a list of relays
-        val relayList = mapOf<RelayUrl, RelayMetadata>(
+        val relayList = mapOf(
             RelayUrl.parse("wss://relay.damus.io") to RelayMetadata.READ,
             RelayUrl.parse("wss://relay.primal.net") to RelayMetadata.READ,
             RelayUrl.parse("wss://relay.nostr.net") to RelayMetadata.WRITE,
@@ -471,7 +493,7 @@ class Nostr {
     suspend fun createIdentity(keys: Keys, name: String, bio: String?, picture: String?) {
         // Send relay list event
         val relayList = getDefaultRelayList()
-        val relayListEvent = EventBuilder.relayList(relayList).finalizeAsync(keys);
+        val relayListEvent = EventBuilder.relayList(relayList).finalizeAsync(keys)
 
         client?.sendEvent(
             event = relayListEvent,
@@ -546,7 +568,7 @@ class Nostr {
 
     private suspend fun getLatestMetadata(pubkey: PublicKey): Metadata? {
         return try {
-            val kind = Kind.fromStd(KindStandard.METADATA);
+            val kind = Kind.fromStd(KindStandard.METADATA)
             val filter = Filter().kind(kind).author(pubkey).limit(1u)
             val event = client?.database()?.query(filter)?.first() ?: return null
 
@@ -581,7 +603,7 @@ class Nostr {
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
         try {
-            val limit = keys.size.toULong() * 4u;
+            val limit = keys.size.toULong() * 4u
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             // Construct a filter for metadata events
@@ -615,7 +637,7 @@ class Nostr {
                 ackPolicy = AckPolicy.none(),
             )
 
-            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS);
+            val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
             val filter = Filter().kind(kind).author(signer.currentUser!!).limit(1u)
             val target = ReqTarget.auto(listOf(filter))
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
@@ -781,7 +803,7 @@ class Nostr {
 
     suspend fun connectMsgRelays(event: Event) {
         try {
-            val urls = nip17ExtractRelayList(event);
+            val urls = nip17ExtractRelayList(event)
             for (url in urls) {
                 client?.addRelay(url, RelayCapabilities.gossip())
                 client?.connectRelay(url)

@@ -24,7 +24,7 @@ kotlin {
             implementation(libs.jetbrains.navigation3.ui)
             implementation(libs.jetbrains.lifecycle.viewmodelNavigation3)
             implementation(libs.androidx.core.splashscreen)
-            implementation("su.reya:nostr-sdk-kmp:0.2.7")
+            implementation("su.reya:nostr-sdk-kmp:0.3")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
             implementation("io.github.kalinjul.easyqrscan:scanner:0.7.0")
