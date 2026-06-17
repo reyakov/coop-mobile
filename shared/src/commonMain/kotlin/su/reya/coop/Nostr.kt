@@ -744,7 +744,7 @@ class Nostr {
                         val filter = Filter().kind(kind).author(userPubkey).pubkeys(pubkeys)
 
                         // Determine if it's an ongoing room
-                        val isOngoing = client?.database()?.query(filter)?.isEmpty() == false
+                        val isOngoing = client?.database()?.query(filter)?.isEmpty() ?: false
 
                         // Append room to map
                         roomsMap[newRoom.id] =
