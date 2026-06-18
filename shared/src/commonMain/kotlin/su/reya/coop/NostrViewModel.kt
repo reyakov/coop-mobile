@@ -821,16 +821,7 @@ class NostrViewModel(
         }
         return emptyList()
     }
-
-    suspend fun verifyAddress(pubkey: PublicKey, address: String): Boolean {
-        return try {
-            nostr.verifyAddress(pubkey, address)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            false
-        }
-    }
-
+    
     suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
         return try {
             nostr.verifyActivity(pubkey)

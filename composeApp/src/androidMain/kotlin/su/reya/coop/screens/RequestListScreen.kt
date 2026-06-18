@@ -146,7 +146,7 @@ fun RequestListScreen() {
                             items(requests.toList(), key = { it.id }) { room ->
                                 ChatRoom(
                                     room = room,
-                                    onClick = { navigator.navigate(Screen.Chat(room.id)) }
+                                    onClick = { navigator.navigate(Screen.Chat(room.id, true)) }
                                 )
                             }
                         }

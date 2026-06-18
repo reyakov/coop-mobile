@@ -296,7 +296,7 @@ class Nostr {
 
                             if (event.kind().asStd()?.equals(KindStandard.CONTACT_LIST) == true) {
                                 if (isSignedByUser(event = event)) {
-                                    val pubkeys = event.tags().publicKeys();
+                                    val pubkeys = event.tags().publicKeys()
                                     // Get mutual contacts
                                     getMutualContacts(pubkeys)
                                     // Emit contact list update
@@ -367,7 +367,7 @@ class Nostr {
 
     private suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
         try {
-            val kind = Kind.fromStd(KindStandard.CONTACT_LIST);
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
             val filter = Filter().kind(kind).authors(pubkeys).limit(200u)
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
@@ -971,17 +971,6 @@ class Nostr {
             return results
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search nostr: ${e.message}", e)
-        }
-    }
-
-    suspend fun verifyAddress(pubkey: PublicKey, address: String): Boolean {
-        try {
-            val address = Nip05Address.parse(address)
-            val profile = profileFromAddress(HttpClient(), address)
-
-            return profile.publicKey() == pubkey
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to verify address: ${e.message}", e)
         }
     }
 

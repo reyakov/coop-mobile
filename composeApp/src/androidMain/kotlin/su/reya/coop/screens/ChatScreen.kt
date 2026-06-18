@@ -22,12 +22,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
@@ -36,39 +40,45 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_send
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Room
 import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
-import su.reya.coop.shared.displayNameFlow
+import su.reya.coop.shared.nameFlow
 import su.reya.coop.shared.pictureFlow
 
 @Composable
-fun ChatScreen(id: Long) {
+fun ChatScreen(id: Long, screening: Boolean = false) {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
@@ -92,12 +102,13 @@ fun ChatScreen(id: Long) {
         return
     }
 
-    val displayName by remember(room) { room!!.displayNameFlow(viewModel) }.collectAsState("Loading...")
-    val picture by remember(room) { room!!.pictureFlow(viewModel) }.collectAsState(null)
+    val displayName by remember(room) { room!!.nameFlow(viewModel) }.collectAsStateWithLifecycle("Loading...")
+    val picture by remember(room) { room!!.pictureFlow(viewModel) }.collectAsStateWithLifecycle(null)
 
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
+    var requireScreening by remember { mutableStateOf(screening) }
 
     val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
@@ -155,9 +166,7 @@ fun ChatScreen(id: Long) {
                         }
                     ) {
                         if (loading) {
-                            LoadingIndicator(
-                                modifier = Modifier.size(32.dp),
-                            )
+                            LoadingIndicator(modifier = Modifier.size(32.dp))
                         } else {
                             Avatar(
                                 picture = picture,
@@ -208,64 +217,186 @@ fun ChatScreen(id: Long) {
                         .fillMaxSize()
                         .padding(bottom = innerPadding.calculateBottomPadding())
                 ) {
-                    if (messages.isNotEmpty()) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentPadding = PaddingValues(16.dp),
-                            reverseLayout = true,
-                            state = listState,
-                        ) {
-                            groupedMessages.forEach { (dateHeader, messagesInGroup) ->
-                                items(
-                                    messagesInGroup,
-                                    key = { it.id()?.toBech32()!! }) { event ->
-                                    ChatMessage(event)
-                                }
-                                item {
-                                    DateSeparator(dateHeader)
+                    if (requireScreening) {
+                        room?.let { ScreenerCard(it) }
+                    }
+
+                    when (messages.isNotEmpty()) {
+                        true -> {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp),
+                                reverseLayout = true,
+                                state = listState,
+                            ) {
+                                groupedMessages.forEach { (dateHeader, messagesInGroup) ->
+                                    items(
+                                        messagesInGroup,
+                                        key = { it.id()?.toBech32()!! }) { event ->
+                                        ChatMessage(event)
+                                    }
+                                    item {
+                                        DateSeparator(dateHeader)
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
+
+                        false -> {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "No messages yet",
-                                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Your conversations will appear here.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = "No messages yet",
+                                        style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Your conversations will appear here.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
                             }
                         }
                     }
-                    ChatInput(
-                        value = text,
-                        onValueChange = { text = it },
-                        onSend = {
-                            viewModel.sendMessage(id, text)
-                            text = ""
+
+                    when (requireScreening) {
+                        true -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FilledTonalButton(
+                                    onClick = { navigator.navigate(Screen.Home) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "Reject",
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                }
+                                Button(
+                                    onClick = { requireScreening = false },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "Accept",
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                }
+                            }
                         }
-                    )
+
+                        else -> {
+                            ChatInput(
+                                value = text,
+                                onValueChange = { text = it },
+                                onSend = {
+                                    viewModel.sendMessage(id, text)
+                                    text = ""
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
     )
+}
+
+@Composable
+fun ScreenerCard(room: Room) {
+    val pubkey = room.members.firstOrNull() ?: return
+
+    val viewModel = LocalNostrViewModel.current
+    val scope = rememberCoroutineScope()
+
+    var isContact by remember { mutableStateOf(false) }
+    var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
+    var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
+
+    val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
+    val metadata by metadataFlow.collectAsStateWithLifecycle()
+
+    val profile = metadata?.asRecord()
+    val displayName = profile?.displayName ?: profile?.name ?: "No name"
+    val picture = profile?.picture
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            // Check contact
+            viewModel.verifyContact(pubkey).let { isContact = it }
+            // Get mutual contacts
+            viewModel.mutualContacts(pubkey).let { mutualContacts = it }
+            // Get the last activity
+            viewModel.verifyActivity(pubkey)?.let { lastActivity = it }
+        }
+    }
+
+    OutlinedCard(
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Avatar(
+                picture = picture,
+                description = "Profile picture",
+                modifier = Modifier.size(48.dp),
+                shape = MaterialShapes.Cookie12Sided.toShape(),
+            )
+            Text(
+                text = displayName,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleMediumEmphasized,
+            )
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = if (isContact) "Contact" else "Not a contact",
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = if (mutualContacts.isEmpty()) "No contacts in common" else "${mutualContacts.size} contacts in common",
+                )
+            }
+            lastActivity?.toHumanDatetime()?.let {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Last activity: $it"
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -345,7 +476,6 @@ fun ChatInput(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
-
     Surface(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier

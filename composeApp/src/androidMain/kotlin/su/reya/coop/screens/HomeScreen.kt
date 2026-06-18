@@ -100,8 +100,8 @@ import su.reya.coop.RoomKind
 import su.reya.coop.Screen
 import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
-import su.reya.coop.shared.displayNameFlow
 import su.reya.coop.shared.getExpressiveFontFamily
+import su.reya.coop.shared.nameFlow
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
@@ -627,11 +627,11 @@ fun NewRequests(requests: List<Room>) {
     val secondRoom = requests.getOrNull(1)
 
     val firstName by remember(firstRoom) {
-        firstRoom?.displayNameFlow(viewModel) ?: flowOf("")
+        firstRoom?.nameFlow(viewModel) ?: flowOf("")
     }.collectAsStateWithLifecycle("Loading...")
 
     val secondName by remember(secondRoom) {
-        secondRoom?.displayNameFlow(viewModel) ?: flowOf("")
+        secondRoom?.nameFlow(viewModel) ?: flowOf("")
     }.collectAsStateWithLifecycle("")
 
     val supportingText = when {
@@ -704,8 +704,8 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val viewModel = LocalNostrViewModel.current
-    val displayName by remember(room) { room.displayNameFlow(viewModel) }.collectAsState("Loading...")
-    val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsState(null)
+    val displayName by remember(room) { room.nameFlow(viewModel) }.collectAsStateWithLifecycle("Loading...")
+    val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsStateWithLifecycle(null)
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

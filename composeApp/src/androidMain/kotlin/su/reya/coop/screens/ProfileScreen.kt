@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -24,15 +23,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +44,6 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.Timestamp
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -58,7 +54,7 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ProfileScreen(pubkey: String, screening: Boolean = false) {
+fun ProfileScreen(pubkey: String) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
@@ -83,41 +79,12 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
         )
     }
 
-    var addressVerified by remember { mutableStateOf(false) }
-    var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
-    var isContact by remember { mutableStateOf(false) }
-    var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
-
-    LaunchedEffect(screening) {
-        if (screening) {
-            scope.launch {
-                // Verify NIP-05 address if present
-                profile?.nip05?.let { it ->
-                    viewModel.verifyAddress(pubkey, it).let { addressVerified = it }
-                }
-                // Get the last activity
-                viewModel.verifyActivity(pubkey)?.let { lastActivity = it }
-                // Check contact
-                viewModel.verifyContact(pubkey).let { isContact = it }
-                // Get mutual contacts
-                viewModel.mutualContacts(pubkey).let { mutualContacts = it }
-            }
-        }
-    }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    if (screening) {
-                        Text(
-                            text = "Screening",
-                            style = MaterialTheme.typography.titleMediumEmphasized
-                        )
-                    }
-                },
+            TopAppBar(
+                title = { /* empty */ },
                 navigationIcon = {
                     IconButton(onClick = { navigator.goBack() }) {
                         Icon(
@@ -265,15 +232,6 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
                                 content = { Text(label) },
                                 supportingContent = { Text(value) },
                             )
-                        }
-                    }
-
-                    if (screening) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-                        ) {
-                            // TODO
                         }
                     }
                 }

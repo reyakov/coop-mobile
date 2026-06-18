@@ -178,13 +178,13 @@ fun App(viewModel: NostrViewModel) {
                         NewIdentityScreen()
                     }
                     entry<Screen.Chat> { key ->
-                        ChatScreen(id = key.id)
+                        ChatScreen(id = key.id, screening = key.screening)
                     }
                     entry<Screen.NewChat> {
                         NewChatScreen()
                     }
                     entry<Screen.Profile> { key ->
-                        ProfileScreen(pubkey = key.pubkey, screening = key.screening)
+                        ProfileScreen(pubkey = key.pubkey)
                     }
                     entry<Screen.UpdateProfile> {
                         UpdateProfileScreen()

@@ -12,7 +12,7 @@ sealed interface Screen : NavKey {
 
             return when (data.host) {
                 // Matches coop://chat/{id}
-                "chat" -> data.pathSegments.firstOrNull()?.toLongOrNull()?.let { Chat(it) }
+                "chat" -> data.pathSegments.firstOrNull()?.toLongOrNull()?.let { Chat(it, false) }
                 // Matches coop://profile/{pubkey}
                 "profile" -> data.pathSegments.firstOrNull()?.let { Profile(it) }
                 else -> null
@@ -27,10 +27,10 @@ sealed interface Screen : NavKey {
     data object RequestList : Screen
 
     @Serializable
-    data class Chat(val id: Long) : Screen
+    data class Chat(val id: Long, val screening: Boolean = false) : Screen
 
     @Serializable
-    data class Profile(val pubkey: String, val screening: Boolean = false) : Screen
+    data class Profile(val pubkey: String) : Screen
 
     @Serializable
     data object ContactList : Screen
