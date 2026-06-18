@@ -44,6 +44,7 @@ import su.reya.coop.screens.NewIdentityScreen
 import su.reya.coop.screens.OnboardingScreen
 import su.reya.coop.screens.ProfileScreen
 import su.reya.coop.screens.RelayScreen
+import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
 import su.reya.coop.screens.UpdateProfileScreen
 
@@ -163,6 +164,9 @@ fun App(viewModel: NostrViewModel) {
                 entryProvider = entryProvider {
                     entry<Screen.Home> {
                         HomeScreen()
+                    }
+                    entry<Screen.RequestList> {
+                        RequestListScreen()
                     }
                     entry<Screen.Onboarding> {
                         OnboardingScreen()
