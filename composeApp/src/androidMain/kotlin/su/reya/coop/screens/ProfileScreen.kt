@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -23,7 +24,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -54,27 +54,28 @@ import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ProfileScreen(pubkey: String) {
-    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
-
+fun ProfileScreen(pubkey: String, screening: Boolean = false) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
-
     val scope = rememberCoroutineScope()
+
+    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
+
     val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
-
     val profile = metadata?.asRecord()
+
     val displayName = profile?.displayName ?: profile?.name ?: "No name"
     val nip05 = profile?.nip05 ?: pubkey.short()
     val picture = profile?.picture
+
     val details = remember(profile) {
         listOf(
             "Username:" to (profile?.name ?: "None"),
             "Website:" to (profile?.website ?: "None"),
-            "Lightning Address:" to (profile?.lud16 ?: "None"),
+            "₿ Lightning Address:" to (profile?.lud16 ?: "None"),
         )
     }
 
@@ -82,8 +83,15 @@ fun ProfileScreen(pubkey: String) {
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { },
+            CenterAlignedTopAppBar(
+                title = {
+                    if (screening) {
+                        Text(
+                            text = "Screening",
+                            style = MaterialTheme.typography.titleMediumEmphasized
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navigator.goBack() }) {
                         Icon(
@@ -231,6 +239,15 @@ fun ProfileScreen(pubkey: String) {
                                 content = { Text(label) },
                                 supportingContent = { Text(value) },
                             )
+                        }
+                    }
+
+                    if (screening) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                        ) {
+                            // TODO
                         }
                     }
                 }

@@ -184,7 +184,7 @@ fun App(viewModel: NostrViewModel) {
                         NewChatScreen()
                     }
                     entry<Screen.Profile> { key ->
-                        ProfileScreen(pubkey = key.pubkey)
+                        ProfileScreen(pubkey = key.pubkey, screening = key.screening)
                     }
                     entry<Screen.UpdateProfile> {
                         UpdateProfileScreen()

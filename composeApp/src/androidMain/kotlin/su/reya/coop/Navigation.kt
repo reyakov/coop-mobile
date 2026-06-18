@@ -30,7 +30,7 @@ sealed interface Screen : NavKey {
     data class Chat(val id: Long) : Screen
 
     @Serializable
-    data class Profile(val pubkey: String) : Screen
+    data class Profile(val pubkey: String, val screening: Boolean = false) : Screen
 
     @Serializable
     data object ContactList : Screen

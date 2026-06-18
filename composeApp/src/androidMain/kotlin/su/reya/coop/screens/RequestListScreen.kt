@@ -71,7 +71,10 @@ fun RequestListScreen() {
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 title = {
-                    Text("New Requests", style = MaterialTheme.typography.titleMediumEmphasized)
+                    Text(
+                        text = "New Requests",
+                        style = MaterialTheme.typography.titleMediumEmphasized
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navigator.goBack() }) {
