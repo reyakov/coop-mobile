@@ -839,6 +839,24 @@ class NostrViewModel(
             null
         }
     }
+
+    suspend fun verifyContact(pubkey: PublicKey): Boolean {
+        return try {
+            nostr.verifyContact(pubkey)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
+        return try {
+            nostr.mutualContacts(pubkey)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            setOf()
+        }
+    }
 }
 
 fun PublicKey.short(): String {

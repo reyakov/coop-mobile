@@ -85,6 +85,8 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
 
     var addressVerified by remember { mutableStateOf(false) }
     var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
+    var isContact by remember { mutableStateOf(false) }
+    var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
 
     LaunchedEffect(screening) {
         if (screening) {
@@ -95,6 +97,10 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
                 }
                 // Get the last activity
                 viewModel.verifyActivity(pubkey)?.let { lastActivity = it }
+                // Check contact
+                viewModel.verifyContact(pubkey).let { isContact = it }
+                // Get mutual contacts
+                viewModel.mutualContacts(pubkey).let { mutualContacts = it }
             }
         }
     }

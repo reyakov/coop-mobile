@@ -296,7 +296,11 @@ class Nostr {
 
                             if (event.kind().asStd()?.equals(KindStandard.CONTACT_LIST) == true) {
                                 if (isSignedByUser(event = event)) {
-                                    onContactListUpdate(event.tags().publicKeys())
+                                    val pubkeys = event.tags().publicKeys();
+                                    // Get mutual contacts
+                                    getMutualContacts(pubkeys)
+                                    // Emit contact list update
+                                    onContactListUpdate(pubkeys)
                                 }
                             }
 
@@ -313,6 +317,7 @@ class Nostr {
                                 // Logic to notify UI after processing
                                 // Cancel previous tracker if it exists
                                 eoseTrackerJob?.cancel()
+
                                 // Start a new tracker
                                 eoseTrackerJob = launch {
                                     delay(10000.milliseconds) // Wait for 10 seconds
@@ -357,6 +362,27 @@ class Nostr {
                     /* Ignore other message types */
                 }
             }
+        }
+    }
+
+    private suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
+        try {
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST);
+            val filter = Filter().kind(kind).authors(pubkeys).limit(200u)
+            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
+
+            client?.subscribe(
+                target = ReqTarget.manual(target),
+                id = "mutual-contacts",
+                closeOn = opts,
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch mutual contacts: ${e.message}", e)
         }
     }
 
@@ -975,6 +1001,41 @@ class Nostr {
             return events?.first()?.createdAt()
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get latest activity: ${e.message}", e)
+        }
+    }
+
+    suspend fun verifyContact(pubkey: PublicKey): Boolean {
+        try {
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
+            val filter = Filter().kind(kind).author(pubkey).limit(1u)
+
+            val events = client?.database()?.query(filter)
+            val pubkeys = events?.first()?.tags()?.publicKeys() ?: listOf()
+
+            return pubkeys.contains(pubkey)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
+        }
+    }
+
+    suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
+        try {
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
+            val filter = Filter().kind(kind).pubkey(pubkey).limit(1u)
+
+            val events = client?.database()?.query(filter)
+            val contacts = mutableSetOf<PublicKey>()
+
+            events?.toVec()?.filter { it.author() != currentUser }?.forEach { event ->
+                contacts.add(event.author())
+            }
+
+            return contacts.toSet()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
         }
     }
 }
