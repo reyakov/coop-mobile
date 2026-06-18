@@ -27,16 +27,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_chat
@@ -44,6 +47,7 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import rust.nostr.sdk.Timestamp
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -64,9 +68,9 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
     val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
 
     val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-    val profile = metadata?.asRecord()
+    val metadata by metadataFlow.collectAsStateWithLifecycle()
 
+    val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: "No name"
     val nip05 = profile?.nip05 ?: pubkey.short()
     val picture = profile?.picture
@@ -77,6 +81,22 @@ fun ProfileScreen(pubkey: String, screening: Boolean = false) {
             "Website:" to (profile?.website ?: "None"),
             "₿ Lightning Address:" to (profile?.lud16 ?: "None"),
         )
+    }
+
+    var addressVerified by remember { mutableStateOf(false) }
+    var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
+
+    LaunchedEffect(screening) {
+        if (screening) {
+            scope.launch {
+                // Verify NIP-05 address if present
+                profile?.nip05?.let { it ->
+                    viewModel.verifyAddress(pubkey, it).let { addressVerified = it }
+                }
+                // Get the last activity
+                viewModel.verifyActivity(pubkey)?.let { lastActivity = it }
+            }
+        }
     }
 
     Scaffold(

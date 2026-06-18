@@ -947,4 +947,34 @@ class Nostr {
             throw IllegalStateException("Failed to search nostr: ${e.message}", e)
         }
     }
+
+    suspend fun verifyAddress(pubkey: PublicKey, address: String): Boolean {
+        try {
+            val address = Nip05Address.parse(address)
+            val profile = profileFromAddress(HttpClient(), address)
+
+            return profile.publicKey() == pubkey
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to verify address: ${e.message}", e)
+        }
+    }
+
+    suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
+        try {
+            val filter = Filter().author(pubkey).limit(3u)
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
+
+            val events = client?.fetchEvents(
+                target = ReqTarget.manual(target),
+                timeout = Duration.parse("3s")
+            )
+
+            return events?.first()?.createdAt()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get latest activity: ${e.message}", e)
+        }
+    }
 }
