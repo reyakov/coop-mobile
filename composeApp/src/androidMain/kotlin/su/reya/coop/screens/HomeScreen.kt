@@ -734,7 +734,8 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
                 Text(
                     text = room.lastMessage!!,
                     style = MaterialTheme.typography.bodyMedium,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
                 )
             }
         },

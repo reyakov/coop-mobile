@@ -399,15 +399,11 @@ class Nostr {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         try {
-            // Construct the room id
-            val roomId = rumor.roomId()
-
             // Construct reference tags
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
                 Tag.publicKey(rumor.author()),
-                Tag.event(rumor.id()!!),
-                Tag.custom("r", listOf(roomId.toString())),
+                Tag.custom("r", listOf(rumor.roomId().toString())),
                 Tag.custom("k", listOf("14"))
             )
 
@@ -748,8 +744,8 @@ class Nostr {
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
-            // Get all events sent by the user
-            val filter = Filter().kind(kind).pubkey(userPubkey).customTags(kTag, listOf("14", "dm"))
+            // Get all DM events
+            val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm"))
             val events = client?.database()?.query(filter)
 
             // Collect rooms
@@ -765,12 +761,13 @@ class Nostr {
 
                     // Check if the room already exists
                     if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
-                        val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
-                        val pubkeys = newRoom.members.toList()
-                        val filter = Filter().kind(kind).author(userPubkey).pubkeys(pubkeys)
+                        val rTag = SingleLetterTag.lowercase(Alphabet.R)
+                        val filter = Filter().kind(kind).pubkey(userPubkey)
+                            .customTag(rTag, newRoom.id.toString())
 
                         // Determine if it's an ongoing room
-                        val isOngoing = client?.database()?.query(filter)?.isEmpty() ?: false
+                        val isOngoing =
+                            client?.database()?.query(filter)?.toVec()?.isNotEmpty() ?: false
 
                         // Append room to map
                         roomsMap[newRoom.id] =
