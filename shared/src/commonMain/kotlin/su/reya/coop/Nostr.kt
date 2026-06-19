@@ -296,7 +296,11 @@ class Nostr {
 
                             if (event.kind().asStd()?.equals(KindStandard.CONTACT_LIST) == true) {
                                 if (isSignedByUser(event = event)) {
-                                    onContactListUpdate(event.tags().publicKeys())
+                                    val pubkeys = event.tags().publicKeys()
+                                    // Get mutual contacts
+                                    getMutualContacts(pubkeys)
+                                    // Emit contact list update
+                                    onContactListUpdate(pubkeys)
                                 }
                             }
 
@@ -313,6 +317,7 @@ class Nostr {
                                 // Logic to notify UI after processing
                                 // Cancel previous tracker if it exists
                                 eoseTrackerJob?.cancel()
+
                                 // Start a new tracker
                                 eoseTrackerJob = launch {
                                     delay(10000.milliseconds) // Wait for 10 seconds
@@ -360,6 +365,27 @@ class Nostr {
         }
     }
 
+    private suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
+        try {
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
+            val filter = Filter().kind(kind).authors(pubkeys).limit(200u)
+            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
+
+            client?.subscribe(
+                target = ReqTarget.manual(target),
+                id = "mutual-contacts",
+                closeOn = opts,
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to fetch mutual contacts: ${e.message}", e)
+        }
+    }
+
     private suspend fun getCachedRumor(giftId: EventId): UnsignedEvent? {
         try {
             val filter = Filter().identifier(giftId.toHex())
@@ -373,15 +399,11 @@ class Nostr {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         try {
-            // Construct the room id
-            val roomId = rumor.roomId()
-
             // Construct reference tags
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
                 Tag.publicKey(rumor.author()),
-                Tag.event(rumor.id()!!),
-                Tag.custom("r", listOf(roomId.toString())),
+                Tag.custom("r", listOf(rumor.roomId().toString())),
                 Tag.custom("k", listOf("14"))
             )
 
@@ -722,8 +744,8 @@ class Nostr {
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
-            // Get all events sent by the user
-            val filter = Filter().kind(kind).pubkey(userPubkey).customTags(kTag, listOf("14", "dm"))
+            // Get all DM events
+            val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm"))
             val events = client?.database()?.query(filter)
 
             // Collect rooms
@@ -739,12 +761,13 @@ class Nostr {
 
                     // Check if the room already exists
                     if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
-                        val kind = Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE)
-                        val pubkeys = newRoom.members.toList()
-                        val filter = Filter().kind(kind).author(userPubkey).pubkeys(pubkeys)
+                        val rTag = SingleLetterTag.lowercase(Alphabet.R)
+                        val filter = Filter().kind(kind).pubkey(userPubkey)
+                            .customTag(rTag, newRoom.id.toString())
 
                         // Determine if it's an ongoing room
-                        val isOngoing = client?.database()?.query(filter)?.isEmpty() ?: false
+                        val isOngoing =
+                            client?.database()?.query(filter)?.toVec()?.isNotEmpty() ?: false
 
                         // Append room to map
                         roomsMap[newRoom.id] =
@@ -945,6 +968,63 @@ class Nostr {
             return results
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search nostr: ${e.message}", e)
+        }
+    }
+
+    suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
+        try {
+            val filter = Filter().author(pubkey).limit(3u)
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
+
+            val events = client?.fetchEvents(
+                target = ReqTarget.manual(target),
+                timeout = Duration.parse("3s")
+            )
+
+            return events?.first()?.createdAt()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get latest activity: ${e.message}", e)
+        }
+    }
+
+    suspend fun verifyContact(pubkey: PublicKey): Boolean {
+        try {
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+            
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
+            val filter = Filter().kind(kind).author(currentUser).limit(1u)
+
+            val events = client?.database()?.query(filter)
+            val pubkeys = events?.first()?.tags()?.publicKeys() ?: listOf()
+
+            return pubkeys.contains(pubkey)
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
+        }
+    }
+
+    suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
+        try {
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+
+            val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
+            val filter = Filter().kind(kind).pubkey(pubkey).limit(1u)
+
+            val events = client?.database()?.query(filter)
+            val contacts = mutableSetOf<PublicKey>()
+
+            events?.toVec()?.filter { it.author() != currentUser }?.forEach { event ->
+                contacts.add(event.author())
+            }
+
+            return contacts.toSet()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
         }
     }
 }

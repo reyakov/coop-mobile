@@ -35,6 +35,7 @@ import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Tag
+import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.storage.SecretStorage
@@ -819,6 +820,33 @@ class NostrViewModel(
             showError("Error: ${e.message}")
         }
         return emptyList()
+    }
+    
+    suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
+        return try {
+            nostr.verifyActivity(pubkey)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun verifyContact(pubkey: PublicKey): Boolean {
+        return try {
+            nostr.verifyContact(pubkey)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
+        return try {
+            nostr.mutualContacts(pubkey)
+        } catch (e: Exception) {
+            showError("Error: ${e.message}")
+            setOf()
+        }
     }
 }
 

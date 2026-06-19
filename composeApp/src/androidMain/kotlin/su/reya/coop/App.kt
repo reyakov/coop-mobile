@@ -178,7 +178,7 @@ fun App(viewModel: NostrViewModel) {
                         NewIdentityScreen()
                     }
                     entry<Screen.Chat> { key ->
-                        ChatScreen(id = key.id)
+                        ChatScreen(id = key.id, screening = key.screening)
                     }
                     entry<Screen.NewChat> {
                         NewChatScreen()

@@ -8,7 +8,7 @@ import su.reya.coop.NostrViewModel
 import su.reya.coop.Room
 import su.reya.coop.short
 
-fun Room.displayNameFlow(viewModel: NostrViewModel): Flow<String> {
+fun Room.nameFlow(viewModel: NostrViewModel): Flow<String> {
     // Return early if there's a custom subject/room name
     subject?.takeIf { it.isNotBlank() }?.let { return flowOf(it) }
 

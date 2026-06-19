@@ -27,7 +27,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_chat
@@ -55,26 +55,27 @@ import su.reya.coop.short
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ProfileScreen(pubkey: String) {
-    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
-
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val viewModel = LocalNostrViewModel.current
-
     val scope = rememberCoroutineScope()
+
+    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
+
     val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
+    val metadata by metadataFlow.collectAsStateWithLifecycle()
 
     val profile = metadata?.asRecord()
     val displayName = profile?.displayName ?: profile?.name ?: "No name"
     val nip05 = profile?.nip05 ?: pubkey.short()
     val picture = profile?.picture
+
     val details = remember(profile) {
         listOf(
             "Username:" to (profile?.name ?: "None"),
             "Website:" to (profile?.website ?: "None"),
-            "Lightning Address:" to (profile?.lud16 ?: "None"),
+            "₿ Lightning Address:" to (profile?.lud16 ?: "None"),
         )
     }
 
@@ -83,7 +84,7 @@ fun ProfileScreen(pubkey: String) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { },
+                title = { /* empty */ },
                 navigationIcon = {
                     IconButton(onClick = { navigator.goBack() }) {
                         Icon(
