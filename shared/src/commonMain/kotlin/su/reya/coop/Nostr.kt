@@ -992,8 +992,11 @@ class Nostr {
 
     suspend fun verifyContact(pubkey: PublicKey): Boolean {
         try {
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+            
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
-            val filter = Filter().kind(kind).author(pubkey).limit(1u)
+            val filter = Filter().kind(kind).author(currentUser).limit(1u)
 
             val events = client?.database()?.query(filter)
             val pubkeys = events?.first()?.tags()?.publicKeys() ?: listOf()

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -31,7 +32,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
+import coop.composeapp.generated.resources.ic_cancel
+import coop.composeapp.generated.resources.ic_check_circle
 import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -72,10 +74,13 @@ import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
+import su.reya.coop.humanReadable
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
+import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.shared.nameFlow
 import su.reya.coop.shared.pictureFlow
+import su.reya.coop.short
 
 @Composable
 fun ChatScreen(id: Long, screening: Boolean = false) {
@@ -275,11 +280,13 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                     when (requireScreening) {
                         true -> {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                FilledTonalButton(
-                                    onClick = { navigator.navigate(Screen.Home) },
+                                Button(
+                                    onClick = { navigator.goBack() },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
@@ -287,7 +294,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                         style = MaterialTheme.typography.titleMedium,
                                     )
                                 }
-                                Button(
+                                FilledTonalButton(
                                     onClick = { requireScreening = false },
                                     modifier = Modifier.weight(1f)
                                 ) {
@@ -316,6 +323,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ScreenerCard(room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
@@ -334,7 +342,7 @@ fun ScreenerCard(room: Room) {
     val displayName = profile?.displayName ?: profile?.name ?: "No name"
     val picture = profile?.picture
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(pubkey) {
         scope.launch {
             // Check contact
             viewModel.verifyContact(pubkey).let { isContact = it }
@@ -345,55 +353,95 @@ fun ScreenerCard(room: Room) {
         }
     }
 
-    OutlinedCard(
-        modifier = Modifier.padding(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Avatar(
                 picture = picture,
                 description = "Profile picture",
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(120.dp),
                 shape = MaterialShapes.Cookie12Sided.toShape(),
             )
-            Text(
-                text = displayName,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleMediumEmphasized,
-            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = displayName,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                        fontFamily = getExpressiveFontFamily()
+                    ),
+                )
+                Text(
+                    text = pubkey.short(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         }
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Icon(
+                    painter = painterResource(
+                        if (isContact) Res.drawable.ic_check_circle else Res.drawable.ic_cancel
+                    ),
+                    contentDescription = "Warning",
+                    tint = if (isContact) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
                 Text(
                     text = if (isContact) "Contact" else "Not a contact",
+                    style = MaterialTheme.typography.labelMediumEmphasized
                 )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Icon(
+                    painter = painterResource(
+                        if (mutualContacts.isNotEmpty()) Res.drawable.ic_check_circle else Res.drawable.ic_cancel
+                    ),
+                    contentDescription = "Warning",
+                    tint = if (mutualContacts.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
                 Text(
                     text = if (mutualContacts.isEmpty()) "No contacts in common" else "${mutualContacts.size} contacts in common",
+                    style = MaterialTheme.typography.labelMediumEmphasized
                 )
             }
-            lastActivity?.toHumanDatetime()?.let {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "Last activity: $it"
-                    )
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_check_circle),
+                    contentDescription = "Warning",
+                    tint = if (lastActivity != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+                Text(
+                    text = if (lastActivity == null) "Don't have any public activities" else "Last activity at ${lastActivity?.humanReadable()}",
+                    style = MaterialTheme.typography.labelMediumEmphasized
+                )
             }
         }
     }
