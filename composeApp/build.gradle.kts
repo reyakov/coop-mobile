@@ -24,7 +24,7 @@ kotlin {
             implementation(libs.jetbrains.navigation3.ui)
             implementation(libs.jetbrains.lifecycle.viewmodelNavigation3)
             implementation(libs.androidx.core.splashscreen)
-            implementation("su.reya:nostr-sdk-kmp:0.3")
+            implementation("su.reya:nostr-sdk-kmp:0.3.1")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
             implementation("io.github.kalinjul.easyqrscan:scanner:0.7.0")
@@ -69,7 +69,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "0.1.9"
+        versionName = "0.2.0"
     }
     packaging {
         resources {
