@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════════
+# SOURCE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+
+repository: https://git.reya.su/reya/coop-mobile
+release_source: https://git.reya.su/reya/coop-mobile/releases/latest/coop-release.apk
+
+# ═══════════════════════════════════════════════════════════════════
+# APP METADATA
+# ═══════════════════════════════════════════════════════════════════
+
+name: Coop
+summary: Chat and Co-op Privately
+license: GPLv3
+website: https://reya.su/coop
+
+description: |
+  My App is a powerful tool that helps you accomplish your goals.
+  
+  Features:
+  - Feature one
+  - Feature two
+
+tags:
+  - messaging
+  - nostr
+
+# ═══════════════════════════════════════════════════════════════════
+# MEDIA
+# ═══════════════════════════════════════════════════════════════════
+
+icon: ./assets/icon.png
+
+images:
+  - ./assets/screenshots/screen1.png
+  - ./assets/screenshots/screen2.png
+  - ./assets/screenshots/screen3.png
+  - ./assets/screenshots/screen4.png
+
+# ═══════════════════════════════════════════════════════════════════
+# RELEASE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+
+release_notes: ./CHANGELOG.md
+
+# ═══════════════════════════════════════════════════════════════════
+# NOSTR-SPECIFIC
+# ═══════════════════════════════════════════════════════════════════
+
+supported_nips:
+  - "01"
+  - "17"
+  - "46"
+  - "55"
+  - "59"
+
+min_allowed_version_code: 100
+
+# ═══════════════════════════════════════════════════════════════════
+# METADATA SOURCES
+# ═══════════════════════════════════════════════════════════════════
+
+metadata_sources:
+  - playstore
