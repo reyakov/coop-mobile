@@ -1,6 +1,4 @@
-### v0.2.0 (Stable)
-
-**Date:** 2026-06-20
+### [2026-06-20] v0.2.0 (Stable)
 
 **What's Changed:**
 
@@ -11,9 +9,7 @@
 
 ---
 
-### v0.1.9 (Pre-Release)
-
-**Date:** 2026-06-12
+### [2026-06-12] v0.1.9 (Pre-Release)
 
 **What's Changed:**
 
@@ -22,9 +18,7 @@
 
 ---
 
-### v0.1.8 (Pre-Release)
-
-**Date:** 2026-06-09
+### [2026-06-09] v0.1.8 (Pre-Release)
 
 **What's Changed:**
 
@@ -32,9 +26,7 @@
 
 ---
 
-### v0.1.7 (Pre-Release)
-
-**Date:** 2026-06-07
+### [2026-06-07] v0.1.7 (Pre-Release)
 
 **What's Changed:**
 
@@ -44,9 +36,7 @@
 
 ---
 
-### v0.1.6 (Pre-Release)
-
-**Date:** 2026-06-04
+### [2026-06-04] v0.1.6 (Pre-Release)
 
 **What's Changed:**
 
@@ -56,9 +46,7 @@
 
 ---
 
-### v0.1.5 (Pre-Release)
-
-**Date:** 2026-06-03
+### [2026-06-03] v0.1.5 (Pre-Release)
 
 **What's Changed:**
 
@@ -68,9 +56,7 @@
 
 ---
 
-### v0.1.4 (Pre-Release)
-
-**Date:** 2026-06-01
+### [2026-06-01] v0.1.4 (Pre-Release)
 
 **What's Changed:**
 
@@ -80,9 +66,7 @@
 
 ---
 
-### v0.1.3 (Pre-Release)
-
-**Date:** 2026-05-29
+### [2026-05-29] v0.1.3 (Pre-Release)
 
 **What's Changed:**
 
@@ -94,9 +78,7 @@
 
 ---
 
-### v0.1.2 (Pre-Release)
-
-**Date:** 2026-05-24
+### [2026-05-24] v0.1.2 (Pre-Release)
 
 **What's Changed:**
 
@@ -104,9 +86,7 @@
 
 ---
 
-### v0.1.1 (Pre-Release)
-
-**Date:** 2026-05-23
+### [2026-05-23] v0.1.1 (Pre-Release)
 
 **What's Changed:**
 

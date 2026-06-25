@@ -2,8 +2,9 @@
 # SOURCE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
 
-repository: https://git.reya.su/reya/coop-mobile
-release_source: https://git.reya.su/reya/coop-mobile/releases/download/latest/coop-release.apk
+release_source:
+  url: https://git.reya.su/reya/coop-mobile
+  type: gitea
 
 # ═══════════════════════════════════════════════════════════════════
 # APP METADATA
@@ -15,14 +16,17 @@ license: GPLv3
 website: https://reya.su/coop
 
 description: |
-  My App is a powerful tool that helps you accomplish your goals.
-  
-  Features:
-  - Feature one
-  - Feature two
+  Coop is a simple, cozy chat app built for Nostr. It’s designed for folks who want to stay connected without sacrificing their privacy or control over their data.
+
+  **Features**:
+  - Private & Secure: Enjoy end-to-end encrypted messaging that keeps your private chats truly private.
+  - Friendly Socializing: Connect with friends across the open Nostr network in a clean, easy-to-use interface.
+  - No Identity Required: Get started without a phone number. Stay anonymous, use a pseudonym, or even your real name.
 
 tags:
   - messaging
+  - privacy
+  - material3
   - nostr
 
 # ═══════════════════════════════════════════════════════════════════
