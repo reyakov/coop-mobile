@@ -2,6 +2,7 @@
 # SOURCE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════
 
+repository: https://git.reya.su/reya/coop-mobile
 release_source:
   url: https://git.reya.su/reya/coop-mobile
   type: gitea
