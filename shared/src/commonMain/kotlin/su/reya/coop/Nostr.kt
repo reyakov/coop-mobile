@@ -188,6 +188,14 @@ class Nostr {
         }
     }
 
+    suspend fun prune() {
+        try {
+            client?.database()?.wipe()
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to prune database: ${e.message}", e)
+        }
+    }
+
     suspend fun setSigner(new: AsyncNostrSigner) {
         try {
             signer.switch(new)
@@ -994,7 +1002,7 @@ class Nostr {
         try {
             val currentUser =
                 signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
-            
+
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
             val filter = Filter().kind(kind).author(currentUser).limit(1u)
 

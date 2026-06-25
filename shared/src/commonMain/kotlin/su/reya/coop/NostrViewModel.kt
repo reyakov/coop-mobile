@@ -325,8 +325,11 @@ class NostrViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            secretStore.clear("user_signer")
+            // Reset the nostr state and wipe database
             nostr.signer.switch(Keys.generate())
+            nostr.prune()
+            // Clear credential
+            secretStore.clear("user_signer")
             _signerRequired.value = true
         }
     }
@@ -821,7 +824,7 @@ class NostrViewModel(
         }
         return emptyList()
     }
-    
+
     suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
         return try {
             nostr.verifyActivity(pubkey)
