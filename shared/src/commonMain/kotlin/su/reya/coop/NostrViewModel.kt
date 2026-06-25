@@ -325,13 +325,32 @@ class NostrViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            // Reset the nostr state and wipe database
-            nostr.signer.switch(Keys.generate())
-            nostr.prune()
-            // Clear credential
-            secretStore.clear("user_signer")
-            _signerRequired.value = true
+            try {
+                _isBusy.value = true
+                // Reset the nostr signer and prune the database
+                nostr.signer.switch(Keys.generate())
+                nostr.prune()
+            } catch (e: Exception) {
+                showError("Logout encountered an error: ${e.message}")
+            } finally {
+                // Clear credentials from persistent storage
+                secretStore.clear("user_signer")
+
+                // Reset all UI states
+                resetInternalState()
+
+                _isBusy.value = false
+                _signerRequired.value = true
+            }
         }
+    }
+
+    private fun resetInternalState() {
+        _chatRooms.value = emptySet()
+        _contactList.value = emptySet()
+        _isPartialProcessedGiftWrap.value = false
+        _isRelayListEmpty.value = false
+        _isNotificationBannerDismissed.value = false
     }
 
     fun dismissNotificationBanner() {
