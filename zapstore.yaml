@@ -3,7 +3,7 @@
 # ═══════════════════════════════════════════════════════════════════
 
 repository: https://git.reya.su/reya/coop-mobile
-release_source: https://git.reya.su/reya/coop-mobile/releases/latest/coop-release.apk
+release_source: https://git.reya.su/reya/coop-mobile/releases/download/latest/coop-release.apk
 
 # ═══════════════════════════════════════════════════════════════════
 # APP METADATA
