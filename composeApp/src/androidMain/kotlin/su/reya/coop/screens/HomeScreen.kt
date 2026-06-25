@@ -781,7 +781,7 @@ fun BottomMenuList(
         }
         Spacer(modifier = Modifier.size(16.dp))
         FilledTonalButton(
-            onClick = { viewModel.logout() },
+            onClick = { onDismiss { viewModel.logout() } },
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
