@@ -13,10 +13,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -79,8 +82,13 @@ class NostrViewModel(
     val errorEvents = _errorEvents.receiveAsFlow()
 
     private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
+    
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
+
     private val seenPublicKeys = mutableSetOf<PublicKey>()
+
+    val isSyncing = nostr.messageSyncState.map { it.isSyncing }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         // Skip the splash screen if a user is already logged in
@@ -108,7 +116,6 @@ class NostrViewModel(
         viewModelScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 coroutineScope {
-                    launch { refreshChatRooms() }
                     launch { runObserver() }
                     launch { runMetadataBatching() }
                 }
@@ -148,6 +155,21 @@ class NostrViewModel(
     }
 
     private suspend fun runObserver() = coroutineScope {
+        // Observe message sync progress
+        launch {
+            nostr.messageSyncState.collect { state ->
+                // When at least some messages are processed, allow UI to show the list
+                if (state.processedCount > 0) {
+                    _isPartialProcessedGiftWrap.value = true
+                }
+
+                // Refresh UI every 10 messages OR when sync is fully done
+                if (state.processedCount % 10 == 0 || !state.isSyncing) {
+                    refreshChatRooms()
+                }
+            }
+        }
+
         // Observe new messages
         launch {
             nostr.newEvents.collect { event ->
@@ -179,14 +201,6 @@ class NostrViewModel(
         launch {
             nostr.metadataUpdates.collect { (pubkey, metadata) ->
                 updateMetadata(pubkey, metadata)
-            }
-        }
-
-        // Observes subscription close
-        launch {
-            nostr.subscriptionClosed.collect {
-                getChatRooms()
-                _isPartialProcessedGiftWrap.value = true
             }
         }
     }
