@@ -109,14 +109,13 @@ fun NewChatScreen() {
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             // Verify the content
-            runCatching { PublicKey.parse(result) }
-                .onSuccess { pubkey ->
-                    selectedReceivers.add(pubkey)
-                }
-                .onFailure { e ->
-                    println("Failed to parse QR: ${e.message}")
-                }
-
+            runCatching {
+                PublicKey.parse(result)
+            }.onSuccess { pubkey ->
+                selectedReceivers.add(pubkey)
+            }.onFailure { e ->
+                snackbarHostState.showSnackbar("Invalid address: ${e.message}")
+            }
             // Clear the nav state
             qrScanResult.clear()
         }

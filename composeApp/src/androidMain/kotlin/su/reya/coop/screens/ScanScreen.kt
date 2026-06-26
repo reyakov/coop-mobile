@@ -98,12 +98,12 @@ fun ScanScreen() {
                     .border(2.dp, Color.White, RoundedCornerShape(12.dp))
             )
             Text(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 64.dp),
                 text = "Scan a Nostr address",
                 style = MaterialTheme.typography.titleSmallEmphasized,
                 color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 64.dp)
             )
         }
     }

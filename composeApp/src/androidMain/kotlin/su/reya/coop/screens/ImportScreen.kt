@@ -94,17 +94,18 @@ fun ImportScreen() {
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             runCatching {
-                if (result.startsWith("nsec")) {
+                if (result.startsWith("nsec1")) {
                     Keys.parse(result)
                 } else if (result.startsWith("bunker://")) {
                     NostrConnectUri.parse(result)
                 } else {
-                    throw IllegalArgumentException("Invalid secret: $result")
+                    throw IllegalArgumentException("Unsupported secret format")
                 }
+            }.onSuccess {
+                secret = result
+            }.onFailure { e ->
+                snackbarHostState.showSnackbar("Invalid secret: ${e.message}")
             }
-                .onSuccess { it -> secret = result }
-                .onFailure { e -> println("Failed to parse QR: ${e.message}") }
-
             // Clear the nav state
             qrScanResult.clear()
         }
