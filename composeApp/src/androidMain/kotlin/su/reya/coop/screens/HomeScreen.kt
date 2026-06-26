@@ -127,7 +127,8 @@ fun HomeScreen() {
     val userProfile by currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
     val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
-    val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsState(initial = false)
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
     val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
@@ -185,10 +186,18 @@ fun HomeScreen() {
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
                 title = {
-                    Text(
-                        text = "Coop",
-                        style = MaterialTheme.typography.titleMediumEmphasized
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Coop",
+                            style = MaterialTheme.typography.titleMediumEmphasized
+                        )
+                        if (isSyncing) {
+                            LoadingIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
                 },
                 actions = {
                     // QR Scanner

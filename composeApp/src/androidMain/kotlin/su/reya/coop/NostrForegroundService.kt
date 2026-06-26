@@ -65,8 +65,10 @@ class NostrForegroundService : Service() {
                 } catch (e: Exception) {
                     throw IllegalStateException("Failed to initialize Nostr Client", e)
                 }
+                
                 // Connect to bootstrap relays
                 nostr.connectBootstrapRelays()
+
                 // Handle notifications
                 nostr.handleNotifications(
                     onMetadataUpdate = { pubkey, metadata ->
@@ -74,9 +76,6 @@ class NostrForegroundService : Service() {
                     },
                     onContactListUpdate = { contacts ->
                         serviceScope.launch { nostr.emitContactListUpdate(contacts) }
-                    },
-                    onSubscriptionClose = {
-                        serviceScope.launch { nostr.emitSubscriptionClosed() }
                     },
                     onNewMessage = { event ->
                         serviceScope.launch {

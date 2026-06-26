@@ -4,12 +4,15 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import rust.nostr.sdk.AckPolicy
@@ -56,7 +59,6 @@ import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 
 object NostrManager {
     val instance = Nostr()
@@ -95,18 +97,20 @@ class Nostr {
     private val _contactListUpdates = MutableSharedFlow<List<PublicKey>>(extraBufferCapacity = 100)
     val contactListUpdates = _contactListUpdates.asSharedFlow()
 
-    private val _subscriptionClosed = MutableSharedFlow<Unit>(extraBufferCapacity = 10)
-    val subscriptionClosed = _subscriptionClosed.asSharedFlow()
+    private val _messageSyncState = MutableStateFlow(MessageSyncState())
+    val messageSyncState = _messageSyncState.asStateFlow()
 
-    suspend fun emitNewEvent(event: UnsignedEvent) = _newEvents.emit(event)
+    suspend fun emitNewEvent(event: UnsignedEvent) {
+        _newEvents.emit(event)
+    }
 
-    suspend fun emitSubscriptionClosed() = _subscriptionClosed.emit(Unit)
-
-    suspend fun emitMetadataUpdate(pubkey: PublicKey, metadata: Metadata) =
+    suspend fun emitMetadataUpdate(pubkey: PublicKey, metadata: Metadata) {
         _metadataUpdates.emit(pubkey to metadata)
+    }
 
-    suspend fun emitContactListUpdate(contacts: List<PublicKey>) =
+    suspend fun emitContactListUpdate(contacts: List<PublicKey>) {
         _contactListUpdates.emit(contacts)
+    }
 
     suspend fun init(
         dbPath: String,
@@ -266,17 +270,39 @@ class Nostr {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     suspend fun handleNotifications(
         onMetadataUpdate: (PublicKey, Metadata) -> Unit,
         onContactListUpdate: (List<PublicKey>) -> Unit,
         onNewMessage: (UnsignedEvent) -> Unit,
-        onSubscriptionClose: () -> Unit,
     ) = supervisorScope {
         val now = Timestamp.now()
         val processedEvent = mutableSetOf<EventId>()
         val notifications = client?.notifications() ?: return@supervisorScope
 
-        var eoseTrackerJob: Job? = null
+        val giftWrapQueue = Channel<Event>(Channel.UNLIMITED)
+        var processedCount = 0
+        var eoseReceived = false
+
+        launch(Dispatchers.Default) {
+            for (event in giftWrapQueue) {
+                val rumor = extractRumor(event) ?: continue
+                processedCount++
+
+                // Trigger new message notification
+                if (rumor.createdAt().asSecs() >= now.asSecs()) {
+                    onNewMessage(rumor)
+                }
+
+                // Update sync state
+                _messageSyncState.update {
+                    it.copy(
+                        processedCount = processedCount,
+                        isSyncing = !eoseReceived || !giftWrapQueue.isEmpty
+                    )
+                }
+            }
+        }
 
         while (true) {
             val notification = notifications.next() ?: continue
@@ -293,59 +319,47 @@ class Nostr {
                             if (processedEvent.contains(event.id())) continue
                             processedEvent.add(event.id())
 
-                            if (event.kind().asStd()?.equals(KindStandard.METADATA) == true) {
-                                try {
-                                    val metadata = Metadata.fromJson(event.content())
-                                    onMetadataUpdate(event.author(), metadata)
-                                } catch (e: Exception) {
-                                    println("Failed to parse metadata: $e")
-                                }
-                            }
-
-                            if (event.kind().asStd()?.equals(KindStandard.CONTACT_LIST) == true) {
-                                if (isSignedByUser(event = event)) {
-                                    val pubkeys = event.tags().publicKeys()
-                                    // Get mutual contacts
-                                    getMutualContacts(pubkeys)
-                                    // Emit contact list update
-                                    onContactListUpdate(pubkeys)
-                                }
-                            }
-
-                            if (event.kind().asStd()?.equals(KindStandard.INBOX_RELAYS) == true) {
-                                // Get all gift wrap events for the current user
-                                if (isSignedByUser(event = event)) {
-                                    getUserMessages(msgRelayList = event)
-                                }
-                            }
-
-                            if (event.kind().asStd()?.equals(KindStandard.GIFT_WRAP) == true) {
-                                val rumor = extractRumor(event)
-
-                                // Logic to notify UI after processing
-                                // Cancel previous tracker if it exists
-                                eoseTrackerJob?.cancel()
-
-                                // Start a new tracker
-                                eoseTrackerJob = launch {
-                                    delay(10000.milliseconds) // Wait for 10 seconds
-                                    onSubscriptionClose()
-                                }
-
-                                // Handle new message
-                                rumor?.createdAt()?.asSecs()?.let {
-                                    if (it >= now.asSecs()) {
-                                        onNewMessage(rumor)
+                            when (event.kind().asStd()) {
+                                KindStandard.METADATA -> {
+                                    try {
+                                        val metadata = Metadata.fromJson(event.content())
+                                        onMetadataUpdate(event.author(), metadata)
+                                    } catch (e: Exception) {
+                                        println("Failed to parse metadata: $e")
                                     }
                                 }
+
+                                KindStandard.CONTACT_LIST -> {
+                                    if (isSignedByUser(event = event)) {
+                                        val pubkeys = event.tags().publicKeys()
+                                        // Get mutual contacts
+                                        getMutualContacts(pubkeys)
+                                        // Emit contact list update
+                                        onContactListUpdate(pubkeys)
+                                    }
+                                }
+
+                                KindStandard.INBOX_RELAYS -> {
+                                    // Get all gift wrap events for the current user
+                                    if (isSignedByUser(event = event)) {
+                                        getUserMessages(msgRelayList = event)
+                                    }
+                                }
+
+                                KindStandard.GIFT_WRAP -> {
+                                    giftWrapQueue.send(event)
+                                }
+
+                                else -> {}
                             }
                         }
 
                         is RelayMessageEnum.EndOfStoredEvents -> {
-                            val subscriptionId = message.subscriptionId
-
-                            if (subscriptionId == "gift-wraps") {
-                                onSubscriptionClose()
+                            if (message.subscriptionId == "gift-wraps") {
+                                eoseReceived = true
+                                if (giftWrapQueue.isEmpty) {
+                                    _messageSyncState.update { it.copy(isSyncing = false) }
+                                }
                             }
                         }
 
@@ -1036,3 +1050,8 @@ class Nostr {
         }
     }
 }
+
+data class MessageSyncState(
+    val processedCount: Int = 0,
+    val isSyncing: Boolean = false
+)
