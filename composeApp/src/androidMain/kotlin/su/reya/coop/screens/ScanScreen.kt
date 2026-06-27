@@ -5,16 +5,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,10 +43,10 @@ fun ScanScreen() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Scan QR",
+                        text = "Scan a Nostr Address",
                         style = MaterialTheme.typography.titleMediumEmphasized
                     )
                 },
@@ -96,14 +95,6 @@ fun ScanScreen() {
                     .size(250.dp)
                     .align(Alignment.Center)
                     .border(2.dp, Color.White, RoundedCornerShape(12.dp))
-            )
-            Text(
-                text = "Scan a Nostr address",
-                style = MaterialTheme.typography.titleSmallEmphasized,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 64.dp)
             )
         }
     }
