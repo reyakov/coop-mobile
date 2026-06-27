@@ -57,7 +57,6 @@ import rust.nostr.sdk.extractRelayList
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 
 object NostrManager {
@@ -114,7 +113,7 @@ class Nostr {
 
     suspend fun init(
         dbPath: String,
-        logLevel: LogLevel = LogLevel.WARN
+        logLevel: LogLevel = LogLevel.INFO
     ) {
         try {
             if (isInitialized.value) return
@@ -286,12 +285,14 @@ class Nostr {
 
         launch(Dispatchers.Default) {
             for (event in giftWrapQueue) {
-                val rumor = extractRumor(event) ?: continue
+                val rumor = extractRumor(event)
                 processedCount++
 
                 // Trigger new message notification
-                if (rumor.createdAt().asSecs() >= now.asSecs()) {
-                    onNewMessage(rumor)
+                if (rumor != null) {
+                    if (rumor.createdAt().asSecs() >= now.asSecs()) {
+                        onNewMessage(rumor)
+                    }
                 }
 
                 // Update sync state
@@ -485,8 +486,6 @@ class Nostr {
             setCachedRumor(event.id(), unsignedEvent)
 
             return unsignedEvent
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Throwable) {
             println("Failed to unwrap gift ${event.id().toHex()}: ${e.message}")
             return null
