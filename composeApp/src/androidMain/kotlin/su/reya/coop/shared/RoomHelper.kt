@@ -18,8 +18,8 @@ fun Room.nameFlow(viewModel: NostrViewModel): Flow<String> {
     return combine(displayMembers.map { viewModel.getMetadata(it) }) { metadataArray ->
         val names = metadataArray.mapIndexed { i, metadata ->
             val profile = metadata?.asRecord()
-            profile?.name?.takeIf { it.isNotBlank() }
-                ?: profile?.displayName?.takeIf { it.isNotBlank() }
+            profile?.displayName?.takeIf { it.isNotBlank() }
+                ?: profile?.name?.takeIf { it.isNotBlank() }
                 ?: displayMembers[i].short()
         }
 
