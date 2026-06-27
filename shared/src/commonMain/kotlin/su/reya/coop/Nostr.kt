@@ -473,7 +473,7 @@ class Nostr {
 
             // Decrypt the rumor
             val rumor = signer.nip44DecryptAsync(sealEvent.author(), sealEvent.content())
-            val unsignedEvent = UnsignedEvent.fromJson(rumor)
+            val unsignedEvent = UnsignedEvent.fromJson(rumor).ensureId()
 
             // Ensure the rumor author matches the seal
             if (unsignedEvent.author() != sealEvent.author()) {
@@ -813,7 +813,7 @@ class Nostr {
             // Merge the events
             return events
                 ?.toVec()
-                ?.map { UnsignedEvent.fromJson(it.content()) }
+                ?.map { UnsignedEvent.fromJson(it.content()).ensureId() }
                 // Filter out events without public keys (receivers)
                 ?.filter { it.tags().publicKeys().isNotEmpty() }
                 ?.sortedByDescending { it.createdAt().asSecs() } ?: emptyList()

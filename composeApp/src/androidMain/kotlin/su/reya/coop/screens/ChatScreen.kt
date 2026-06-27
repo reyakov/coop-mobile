@@ -234,9 +234,10 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                             ) {
                                 groupedMessages.forEach { (dateHeader, messagesInGroup) ->
                                     items(
-                                        messagesInGroup,
-                                        key = { it.id()?.toBech32()!! }) { event ->
-                                        ChatMessage(event)
+                                        items = messagesInGroup,
+                                        key = { it.id()?.toBech32() ?: it.hashCode() }
+                                    ) {
+                                        ChatMessage(it)
                                     }
                                     item {
                                         DateSeparator(dateHeader)
