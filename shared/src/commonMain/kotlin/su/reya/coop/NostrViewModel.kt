@@ -436,8 +436,9 @@ class NostrViewModel(
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
+            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
             // Update the metadata state after successfully published
-            updateMetadata(nostr.signer.currentUser!!, newMetadata)
+            updateMetadata(currentUser, newMetadata)
             // Update local state
             _isBusy.value = false
         } catch (e: Exception) {
@@ -581,7 +582,8 @@ class NostrViewModel(
 
     suspend fun currentUserRelayList(): Map<RelayUrl, RelayMetadata?> {
         try {
-            return nostr.getRelayList(nostr.signer.currentUser!!)
+            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+            return nostr.getRelayList(currentUser)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyMap()
@@ -626,7 +628,8 @@ class NostrViewModel(
 
     suspend fun currentUserMsgRelayList(): List<RelayUrl> {
         try {
-            return nostr.getMsgRelays(nostr.signer.currentUser!!)
+            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+            return nostr.getMsgRelays(currentUser)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyList()
@@ -710,7 +713,7 @@ class NostrViewModel(
             if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
             if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
 
-            val currentUser = nostr.signer.currentUser!!
+            val currentUser = nostr.signer.currentUser ?: throw Exception("User not found")
 
             // Construct the rumor event
             val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), "")

@@ -670,6 +670,8 @@ class Nostr {
 
     suspend fun setMsgRelays(urls: List<RelayUrl>) {
         try {
+
+
             val event = EventBuilder.nip17RelayList(urls).finalizeAsync(signer)
 
             client?.sendEvent(
@@ -678,8 +680,12 @@ class Nostr {
                 ackPolicy = AckPolicy.none(),
             )
 
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+
             val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
-            val filter = Filter().kind(kind).author(signer.currentUser!!).limit(1u)
+            val filter = Filter().kind(kind).author(currentUser).limit(1u)
+
             val target = ReqTarget.auto(listOf(filter))
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
@@ -833,9 +839,8 @@ class Nostr {
                 )
 
                 stream?.next()?.let { res ->
-                    if (res.event != null) {
-                        connectMsgRelays(res.event!!)
-                    }
+                    val event = res.event ?: return@let
+                    connectMsgRelays(event)
                 }
             }
         } catch (e: Exception) {
@@ -919,7 +924,10 @@ class Nostr {
                 if (output != null) {
                     // Keep track of sent events
                     sentEvents[output.id] = emptyList()
-                    if (rumor.id() != null) rumorMap[rumor.id()!!] = output.id
+
+                    // Keep track of rumor IDs
+                    val id = rumor.id() ?: throw IllegalStateException("Rumor ID is null")
+                    rumorMap[id] = output.id
 
                     // Collect failed outputs
                     output.failed.forEach { (relayUrl, reason) ->
@@ -979,9 +987,8 @@ class Nostr {
 
             // Keep searching until the stream is closed or timeout
             stream?.next()?.let { event ->
-                if (event.event != null) {
-                    results.add(event.event!!.author())
-                }
+                val event = event.event ?: return@let
+                results.add(event.author())
             }
 
             return results

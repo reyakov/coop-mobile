@@ -59,6 +59,7 @@ import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
 import coop.composeapp.generated.resources.ic_send
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
@@ -103,8 +104,13 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         return
     }
 
-    val displayName by remember(room) { room!!.nameFlow(viewModel) }.collectAsStateWithLifecycle("Loading...")
-    val picture by remember(room) { room!!.pictureFlow(viewModel) }.collectAsStateWithLifecycle(null)
+    val displayName by remember(room) {
+        room?.nameFlow(viewModel) ?: flowOf("Loading...")
+    }.collectAsStateWithLifecycle("Loading...")
+
+    val picture by remember(room) {
+        room?.pictureFlow(viewModel) ?: flowOf(null)
+    }.collectAsStateWithLifecycle(null)
 
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -161,7 +167,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable {
-                            room!!.members.firstOrNull()?.let { pubkey ->
+                            room?.members?.firstOrNull()?.let { pubkey ->
                                 navigator.navigate(Screen.Profile(pubkey.toBech32()))
                             }
                         }

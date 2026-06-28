@@ -741,7 +741,7 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
         supportingContent = {
             if (!room.lastMessage.isNullOrBlank()) {
                 Text(
-                    text = room.lastMessage!!,
+                    text = room.lastMessage ?: "",
                     style = MaterialTheme.typography.bodyMedium,
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
