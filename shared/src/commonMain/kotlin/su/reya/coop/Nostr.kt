@@ -113,7 +113,7 @@ class Nostr {
 
     suspend fun init(
         dbPath: String,
-        logLevel: LogLevel = LogLevel.INFO
+        logLevel: LogLevel = LogLevel.DEBUG
     ) {
         try {
             if (isInitialized.value) return
@@ -391,7 +391,7 @@ class Nostr {
     private suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
         try {
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
-            val filter = Filter().kind(kind).authors(pubkeys).limit(200u)
+            val filter = Filter().kind(kind).authors(pubkeys).limit(pubkeys.size.toULong())
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             val target = mutableMapOf<RelayUrl, List<Filter>>()

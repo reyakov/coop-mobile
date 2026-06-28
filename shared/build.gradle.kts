@@ -33,7 +33,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
             implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
-            implementation("su.reya:nostr-sdk-kmp:0.3.1")
+            implementation("su.reya:nostr-sdk-kmp:0.3.2")
             implementation("com.squareup.okio:okio:3.16.2")
         }
         androidMain.dependencies {
