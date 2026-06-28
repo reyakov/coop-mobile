@@ -82,7 +82,7 @@ class NostrViewModel(
     val errorEvents = _errorEvents.receiveAsFlow()
 
     private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
-    
+
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
 
     private val seenPublicKeys = mutableSetOf<PublicKey>()
@@ -213,16 +213,20 @@ class NostrViewModel(
         val timeout = 500L // 500ms timeout for batching
 
         while (true) {
+            // Get the first pubkey
             val firstKey = metadataRequestChannel.receive()
             batch.add(firstKey)
+
+            // Get current time
             val lastFlushTime = Clock.System.now().toEpochMilliseconds()
 
             while (batch.isNotEmpty()) {
+                // Get the next pubkey
                 val nextKey = withTimeoutOrNull(timeout.milliseconds) {
                     metadataRequestChannel.receive()
                 }
 
-                // Only add the key if it's not null
+                // Only add the pubkey if it's not null
                 if (nextKey != null) batch.add(nextKey)
 
                 // Get current time

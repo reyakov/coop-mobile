@@ -64,7 +64,8 @@ object NostrManager {
 
     val BOOTSTRAP_RELAYS = listOf(
         "wss://relay.primal.net",
-        "wss://purplepag.es"
+        "wss://relay.ditto.pub",
+        "wss://user.kindpag.es",
     )
 
     val INDEXER_RELAY = listOf(
@@ -113,7 +114,7 @@ class Nostr {
 
     suspend fun init(
         dbPath: String,
-        logLevel: LogLevel = LogLevel.DEBUG
+        logLevel: LogLevel = LogLevel.WARN
     ) {
         try {
             if (isInitialized.value) return
@@ -646,7 +647,7 @@ class Nostr {
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
         try {
-            val limit = keys.size.toULong() * 4u
+            val limit = keys.size.toULong() * 2u
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             // Construct a filter for metadata events
@@ -655,16 +656,13 @@ class Nostr {
                 .authors(keys)
                 .limit(limit)
 
-            // Construct a target that includes all filters
-            val target =
-                ReqTarget.manual(
-                    mapOf(
-                        RelayUrl.parse("wss://purplepag.es") to listOf(filter),
-                        RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
-                    )
-                )
+            // Construct request target
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
 
-            client?.subscribe(target = target, closeOn = opts)
+            client?.subscribe(target = ReqTarget.manual(target), closeOn = opts)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
         }
