@@ -57,7 +57,6 @@ import rust.nostr.sdk.extractRelayList
 import rust.nostr.sdk.initLogger
 import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 
 object NostrManager {
@@ -65,7 +64,8 @@ object NostrManager {
 
     val BOOTSTRAP_RELAYS = listOf(
         "wss://relay.primal.net",
-        "wss://purplepag.es"
+        "wss://relay.ditto.pub",
+        "wss://user.kindpag.es",
     )
 
     val INDEXER_RELAY = listOf(
@@ -286,12 +286,14 @@ class Nostr {
 
         launch(Dispatchers.Default) {
             for (event in giftWrapQueue) {
-                val rumor = extractRumor(event) ?: continue
+                val rumor = extractRumor(event)
                 processedCount++
 
                 // Trigger new message notification
-                if (rumor.createdAt().asSecs() >= now.asSecs()) {
-                    onNewMessage(rumor)
+                if (rumor != null) {
+                    if (rumor.createdAt().asSecs() >= now.asSecs()) {
+                        onNewMessage(rumor)
+                    }
                 }
 
                 // Update sync state
@@ -390,7 +392,7 @@ class Nostr {
     private suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
         try {
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
-            val filter = Filter().kind(kind).authors(pubkeys).limit(200u)
+            val filter = Filter().kind(kind).authors(pubkeys).limit(pubkeys.size.toULong())
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             val target = mutableMapOf<RelayUrl, List<Filter>>()
@@ -485,8 +487,6 @@ class Nostr {
             setCachedRumor(event.id(), unsignedEvent)
 
             return unsignedEvent
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Throwable) {
             println("Failed to unwrap gift ${event.id().toHex()}: ${e.message}")
             return null
@@ -647,7 +647,7 @@ class Nostr {
 
     suspend fun fetchMetadataBatch(keys: List<PublicKey>) {
         try {
-            val limit = keys.size.toULong() * 4u
+            val limit = keys.size.toULong() * 2u
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             // Construct a filter for metadata events
@@ -656,16 +656,13 @@ class Nostr {
                 .authors(keys)
                 .limit(limit)
 
-            // Construct a target that includes all filters
-            val target =
-                ReqTarget.manual(
-                    mapOf(
-                        RelayUrl.parse("wss://purplepag.es") to listOf(filter),
-                        RelayUrl.parse("wss://relay.primal.net") to listOf(filter),
-                    )
-                )
+            // Construct request target
+            val target = mutableMapOf<RelayUrl, List<Filter>>()
+            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+                target[RelayUrl.parse(relay)] = listOf(filter)
+            }
 
-            client?.subscribe(target = target, closeOn = opts)
+            client?.subscribe(target = ReqTarget.manual(target), closeOn = opts)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
         }
