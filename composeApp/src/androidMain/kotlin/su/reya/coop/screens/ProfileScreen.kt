@@ -44,8 +44,9 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -58,12 +59,13 @@ fun ProfileScreen(pubkey: String) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val viewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
     val scope = rememberCoroutineScope()
 
     val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
 
-    val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
+    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsStateWithLifecycle()
 
     val profile = metadata?.asRecord()
@@ -159,7 +161,7 @@ fun ProfileScreen(pubkey: String) {
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            val roomId = viewModel.createChatRoom(listOf(pubkey))
+                                            val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                                             navigator.navigate(Screen.Chat(roomId))
                                         } catch (e: Exception) {
                                             e.message?.let { snackbarHostState.showSnackbar(it) }

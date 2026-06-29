@@ -91,8 +91,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAccountViewModel
+import su.reya.coop.LocalAppViewModel
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalRelayViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -113,7 +117,11 @@ fun HomeScreen() {
     val qrScanResult = LocalScanResult.current
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
-    val viewModel = LocalNostrViewModel.current
+    val appViewModel = LocalAppViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
+    val chatViewModel = LocalChatViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
 
 
     val scope = rememberCoroutineScope()
@@ -121,15 +129,15 @@ fun HomeScreen() {
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    val currentUser = viewModel.currentUser() ?: return
-    val currentUserProfile = viewModel.getMetadata(currentUser)
+    val currentUser = accountViewModel.nostr.signer.currentUser ?: return
+    val currentUserProfile = profileViewModel.getMetadata(currentUser)
 
     val userProfile by currentUserProfile.collectAsStateWithLifecycle()
-    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
-    val isRelayListEmpty by viewModel.isRelayListEmpty.collectAsStateWithLifecycle()
-    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
-    val isPartialProcessedGiftWrap by viewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
-    val isBannerDismissed by viewModel.isNotificationBannerDismissed.collectAsState()
+    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
+    val isRelayListEmpty by relayViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
+    val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
+    val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
+    val isBannerDismissed by appViewModel.isNotificationBannerDismissed.collectAsState()
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -157,7 +165,7 @@ fun HomeScreen() {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.getChatRooms()
+        chatViewModel.getChatRooms()
     }
 
     LaunchedEffect(qrScanResult.content) {
@@ -165,7 +173,7 @@ fun HomeScreen() {
             runCatching { PublicKey.parse(result) }
                 .onSuccess { pubkey ->
                     try {
-                        val roomId = viewModel.createChatRoom(listOf(pubkey))
+                        val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                         navigator.navigate(Screen.Chat(roomId))
                     } catch (e: Exception) {
                         e.message?.let { snackbarHostState.showSnackbar(it) }
@@ -281,7 +289,7 @@ fun HomeScreen() {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = { viewModel.dismissNotificationBanner() },
+                                    onClick = { appViewModel.dismissNotificationBanner() },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(text = "Maybe later")
@@ -322,7 +330,7 @@ fun HomeScreen() {
                         onRefresh = {
                             scope.launch {
                                 isRefreshing = true
-                                viewModel.refreshChatRooms()
+                                chatViewModel.refreshChatRooms()
                                 isRefreshing = false
                             }
                         },
@@ -392,7 +400,7 @@ fun HomeScreen() {
             onDismissRequest = { showBottomSheet = false },
             sheetState = sheetState,
         ) {
-            val pubkey = viewModel.currentUser()
+            val pubkey = accountViewModel.nostr.signer.currentUser
             val shortPubkey = pubkey?.short() ?: "Not available"
 
             val userName =
@@ -479,7 +487,7 @@ fun HomeScreen() {
     // Show the relay setup dialog if the msg relay list is empty
     if (isRelayListEmpty) {
         ModalBottomSheet(
-            onDismissRequest = { viewModel.dismissRelayWarning() },
+            onDismissRequest = { relayViewModel.dismissRelayWarning() },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ) {
@@ -586,7 +594,7 @@ fun HomeScreen() {
                                 scope.launch {
                                     isBusy = true
                                     try {
-                                        viewModel.refetchMsgRelays(currentUser)
+                                        relayViewModel.refetchMsgRelays(currentUser)
                                     } catch (e: Exception) {
                                         snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
                                     }
@@ -606,7 +614,7 @@ fun HomeScreen() {
                             enabled = !isBusy,
                             onClick = {
                                 scope.launch {
-                                    viewModel.useDefaultMsgRelayList()
+                                    relayViewModel.useDefaultMsgRelayList()
                                     sheetState.hide()
                                 }
                             },
@@ -629,18 +637,18 @@ fun HomeScreen() {
 @Composable
 fun NewRequests(requests: List<Room>) {
     val navigator = LocalNavigator.current
-    val viewModel = LocalNostrViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
 
     val total = requests.size
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
     val firstName by remember(firstRoom) {
-        firstRoom?.nameFlow(viewModel) ?: flowOf("")
+        firstRoom?.nameFlow(profileViewModel) ?: flowOf("")
     }.collectAsStateWithLifecycle("Loading...")
 
     val secondName by remember(secondRoom) {
-        secondRoom?.nameFlow(viewModel) ?: flowOf("")
+        secondRoom?.nameFlow(profileViewModel) ?: flowOf("")
     }.collectAsStateWithLifecycle("")
 
     val supportingText = when {
@@ -712,9 +720,9 @@ fun NewRequests(requests: List<Room>) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
-    val viewModel = LocalNostrViewModel.current
-    val displayName by remember(room) { room.nameFlow(viewModel) }.collectAsStateWithLifecycle("Loading...")
-    val picture by remember(room) { room.pictureFlow(viewModel) }.collectAsStateWithLifecycle(null)
+    val profileViewModel = LocalProfileViewModel.current
+    val displayName by remember(room) { room.nameFlow(profileViewModel) }.collectAsStateWithLifecycle("Loading...")
+    val picture by remember(room) { room.pictureFlow(profileViewModel) }.collectAsStateWithLifecycle(null)
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
@@ -760,7 +768,7 @@ fun BottomMenuList(
     onDismiss: (suspend () -> Unit) -> Unit
 ) {
     val navigator = LocalNavigator.current
-    val viewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
@@ -790,7 +798,7 @@ fun BottomMenuList(
         }
         Spacer(modifier = Modifier.size(16.dp))
         FilledTonalButton(
-            onClick = { onDismiss { viewModel.logout() } },
+            onClick = { onDismiss { accountViewModel.logout() } },
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError

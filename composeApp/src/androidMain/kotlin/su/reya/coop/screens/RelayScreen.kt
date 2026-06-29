@@ -66,7 +66,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalRelayViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -74,7 +74,7 @@ import su.reya.coop.LocalSnackbarHostState
 fun RelayScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val viewModel = LocalNostrViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
 
     val scope = rememberCoroutineScope()
     val msgRelayList = remember { mutableStateListOf<RelayUrl>() }
@@ -96,8 +96,8 @@ fun RelayScreen() {
     var relayToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        relayList.putAll(viewModel.currentUserRelayList())
-        msgRelayList.addAll(viewModel.currentUserMsgRelayList())
+        relayList.putAll(relayViewModel.currentUserRelayList())
+        msgRelayList.addAll(relayViewModel.currentUserMsgRelayList())
     }
 
     Scaffold(
@@ -321,11 +321,11 @@ fun RelayScreen() {
                                 return@launch
                             }
                             try {
-                                viewModel.removeMsgRelay(relayToDelete!!)
+                                relayViewModel.removeMsgRelay(relayToDelete!!)
                                 msgRelayList.removeIf { it.toString() == relayToDelete }
                                 relayToDelete = null
                             } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Failed to remove relay")
+                                snackbarHostState.showSnackbar("Failed to remove relay: ${e.message}")
                             }
                         }
                     }
@@ -349,7 +349,7 @@ fun AddRelayDialog(
     onMsgRelayAdded: (newRelay: String) -> Unit,
     onRelayAdded: (newRelay: String, metadata: RelayMetadata?) -> Unit,
 ) {
-    val viewModel = LocalNostrViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
@@ -401,17 +401,17 @@ fun AddRelayDialog(
                                 if (!isError) {
                                     when (selected) {
                                         "Messaging" -> {
-                                            viewModel.addMsgRelay(relayAddress)
+                                            relayViewModel.addMsgRelay(relayAddress)
                                             onMsgRelayAdded(relayAddress)
                                         }
 
                                         "Inbox" -> {
-                                            viewModel.addInboxRelay(relayAddress)
+                                            relayViewModel.addInboxRelay(relayAddress)
                                             onRelayAdded(relayAddress, RelayMetadata.WRITE)
                                         }
 
                                         "Outbox" -> {
-                                            viewModel.addOutboxRelay(relayAddress)
+                                            relayViewModel.addOutboxRelay(relayAddress)
                                             onRelayAdded(relayAddress, RelayMetadata.READ)
                                         }
                                     }

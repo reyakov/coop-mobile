@@ -47,9 +47,30 @@ import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
 import su.reya.coop.screens.UpdateProfileScreen
+import su.reya.coop.viewmodels.AccountViewModel
+import su.reya.coop.viewmodels.AppViewModel
+import su.reya.coop.viewmodels.ChatViewModel
+import su.reya.coop.viewmodels.ProfileViewModel
+import su.reya.coop.viewmodels.RelayViewModel
 
-val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
-    error("No NostrViewModel provided")
+val LocalAppViewModel = staticCompositionLocalOf<AppViewModel> {
+    error("No AppViewModel provided")
+}
+
+val LocalAccountViewModel = staticCompositionLocalOf<AccountViewModel> {
+    error("No AccountViewModel provided")
+}
+
+val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
+    error("No ChatViewModel provided")
+}
+
+val LocalProfileViewModel = staticCompositionLocalOf<ProfileViewModel> {
+    error("No ProfileViewModel provided")
+}
+
+val LocalRelayViewModel = staticCompositionLocalOf<RelayViewModel> {
+    error("No RelayViewModel provided")
 }
 
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
@@ -66,14 +87,21 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun App(viewModel: NostrViewModel) {
+fun App(
+    appViewModel: AppViewModel,
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel,
+    profileViewModel: ProfileViewModel,
+    relayViewModel: RelayViewModel,
+) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val backStack = rememberNavBackStack(Screen.Home)
     val navigator = remember(backStack) { Navigator(backStack) }
     val qrScanResult = remember { QrScanResult() }
 
-    val signerRequired by viewModel.signerRequired.collectAsStateWithLifecycle()
+    // Get the signer required state
+    val signerRequired by accountViewModel.signerRequired.collectAsStateWithLifecycle()
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -100,7 +128,7 @@ fun App(viewModel: NostrViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.errorEvents.collect { message ->
+        appViewModel.errorEvents.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
@@ -143,7 +171,11 @@ fun App(viewModel: NostrViewModel) {
         motionScheme = MotionScheme.expressive(),
     ) {
         CompositionLocalProvider(
-            LocalNostrViewModel provides viewModel,
+            LocalAppViewModel provides appViewModel,
+            LocalAccountViewModel provides accountViewModel,
+            LocalChatViewModel provides chatViewModel,
+            LocalProfileViewModel provides profileViewModel,
+            LocalRelayViewModel provides relayViewModel,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,

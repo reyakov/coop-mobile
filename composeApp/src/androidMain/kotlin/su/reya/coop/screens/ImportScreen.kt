@@ -58,8 +58,10 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAccountViewModel
+import su.reya.coop.LocalAppViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -74,17 +76,19 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val viewModel = LocalNostrViewModel.current
+    val appViewModel = LocalAppViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
 
     val scope = rememberCoroutineScope()
 
-    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle(false)
+    val isBusy by appViewModel.isBusy.collectAsStateWithLifecycle(false)
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
 
     // Get metadata when pubkey changes
     val metadata by remember(pubkey) {
-        pubkey?.let(viewModel::getMetadata) ?: flowOf(null)
+        pubkey?.let(profileViewModel::getMetadata) ?: flowOf(null)
     }.collectAsStateWithLifecycle(null)
 
     val profile = metadata?.asRecord()
@@ -246,10 +250,10 @@ fun ImportScreen() {
                             onClick = {
                                 scope.launch {
                                     if (pubkey == null) {
-                                        viewModel.verifyIdentity(secret).let { pubkey = it }
+                                        accountViewModel.verifyIdentity(secret).let { pubkey = it }
                                     } else {
                                         // Import the identity
-                                        viewModel.importIdentity(secret)
+                                        accountViewModel.importIdentity(secret)
                                         // Navigate to the home screen
                                         navigator.navigate(Screen.Home)
                                     }
