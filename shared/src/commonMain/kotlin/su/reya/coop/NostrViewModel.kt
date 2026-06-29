@@ -41,6 +41,7 @@ import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
+import su.reya.coop.nostr.Nostr
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -87,7 +88,7 @@ class NostrViewModel(
 
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
-    val isSyncing = nostr.messageSyncState.map { it.isSyncing }
+    val isSyncing = nostr.messages.messageSyncState.map { it.isSyncing }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
@@ -157,7 +158,7 @@ class NostrViewModel(
     private suspend fun runObserver() = coroutineScope {
         // Observe message sync progress
         launch {
-            nostr.messageSyncState.collect { state ->
+            nostr.messages.messageSyncState.collect { state ->
                 // When at least some messages are processed, allow UI to show the list
                 if (state.processedCount > 0) {
                     _isPartialProcessedGiftWrap.value = true
@@ -192,14 +193,14 @@ class NostrViewModel(
 
         // Observe contact list updates
         launch {
-            nostr.contactListUpdates.collect { contacts ->
+            nostr.profiles.contactListUpdates.collect { contacts ->
                 _contactList.value = contacts.toSet()
             }
         }
 
         // Observe metadata updates
         launch {
-            nostr.metadataUpdates.collect { (pubkey, metadata) ->
+            nostr.profiles.metadataUpdates.collect { (pubkey, metadata) ->
                 updateMetadata(pubkey, metadata)
             }
         }
@@ -237,7 +238,7 @@ class NostrViewModel(
                     val keysToRequest = batch.toList()
                     batch.clear()
 
-                    nostr.fetchMetadataBatch(keysToRequest)
+                    nostr.profiles.fetchMetadataBatch(keysToRequest)
                 }
             }
         }
@@ -248,7 +249,7 @@ class NostrViewModel(
             // Wait until the client is ready
             nostr.waitUntilInitialized()
 
-            val results = nostr.getAllCacheMetadata()
+            val results = nostr.profiles.getAllCacheMetadata()
             results.forEach { (pubkey, metadata) ->
                 // Update the metadata state
                 updateMetadata(pubkey, metadata)
@@ -293,20 +294,20 @@ class NostrViewModel(
 
                 if (pubkey != null) {
                     // Get chat rooms
-                    val rooms = nostr.getChatRooms() ?: emptySet()
+                    val rooms = nostr.messages.getChatRooms() ?: emptySet()
                     if (rooms.isNotEmpty()) {
                         mergeChatRooms(rooms)
                         _isPartialProcessedGiftWrap.value = true
                     }
 
                     // Get all metadata for the current user
-                    nostr.getUserMetadata()
+                    nostr.profiles.getUserMetadata()
 
                     // Small delay to ensure all relays are connected
                     delay(2.seconds)
 
                     // Check if the relay list is empty
-                    val relays = nostr.getMsgRelays(pubkey)
+                    val relays = nostr.relays.getMsgRelays(pubkey)
                     if (relays.isEmpty()) _isRelayListEmpty.value = true
 
                     break
@@ -435,7 +436,7 @@ class NostrViewModel(
         _isBusy.value = true
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
-            val newMetadata = nostr.updateProfile(name, bio, avatarUrl)
+            val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
             // Update the metadata state after successfully published
             updateMetadata(currentUser, newMetadata)
@@ -460,7 +461,7 @@ class NostrViewModel(
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             // Create identity
-            nostr.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
+            nostr.profiles.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
             // Persist the secret in the secret storage
             secretStore.set("user_signer", secret)
             // Update local states
@@ -567,14 +568,14 @@ class NostrViewModel(
     }
 
     suspend fun refetchMsgRelays(pubkey: PublicKey) {
-        val relays = nostr.fetchMsgRelays(pubkey)
+        val relays = nostr.relays.fetchMsgRelays(pubkey)
         if (relays.isNotEmpty()) dismissRelayWarning()
     }
 
     suspend fun useDefaultMsgRelayList() {
         try {
-            val defaultRelays = nostr.getDefaultMsgRelayList()
-            nostr.setMsgRelays(defaultRelays)
+            val defaultRelays = nostr.relays.getDefaultMsgRelayList()
+            nostr.relays.setMsgRelays(defaultRelays)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -583,7 +584,7 @@ class NostrViewModel(
     suspend fun currentUserRelayList(): Map<RelayUrl, RelayMetadata?> {
         try {
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-            return nostr.getRelayList(currentUser)
+            return nostr.relays.getRelayList(currentUser)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyMap()
@@ -596,7 +597,7 @@ class NostrViewModel(
             val relays = currentUserRelayList().toMutableMap()
             relays[relayUrl] = RelayMetadata.WRITE
 
-            nostr.setRelaylist(relays)
+            nostr.relays.setRelaylist(relays)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -608,7 +609,7 @@ class NostrViewModel(
             val relays = currentUserRelayList().toMutableMap()
             relays[relayUrl] = RelayMetadata.READ
 
-            nostr.setRelaylist(relays)
+            nostr.relays.setRelaylist(relays)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -620,7 +621,7 @@ class NostrViewModel(
             val relays = currentUserRelayList().toMutableMap()
             relays.remove(relayUrl)
 
-            nostr.setRelaylist(relays)
+            nostr.relays.setRelaylist(relays)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -629,7 +630,7 @@ class NostrViewModel(
     suspend fun currentUserMsgRelayList(): List<RelayUrl> {
         try {
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-            return nostr.getMsgRelays(currentUser)
+            return nostr.relays.getMsgRelays(currentUser)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             return emptyList()
@@ -642,7 +643,7 @@ class NostrViewModel(
             val relays = currentUserMsgRelayList().toMutableSet()
             relays.add(relayUrl)
 
-            nostr.setMsgRelays(relays.toList())
+            nostr.relays.setMsgRelays(relays.toList())
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -654,7 +655,7 @@ class NostrViewModel(
             val relays = currentUserMsgRelayList().toMutableSet()
             relays.remove(relayUrl)
 
-            nostr.setMsgRelays(relays.toList())
+            nostr.relays.setMsgRelays(relays.toList())
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -666,7 +667,7 @@ class NostrViewModel(
         try {
             val updated = contactList.value + publicKey
             // Publish new event
-            nostr.setContactList(updated.toList())
+            nostr.profiles.setContactList(updated.toList())
             // Optimistic local update
             _contactList.update { it + publicKey }
         } catch (e: Exception) {
@@ -677,7 +678,7 @@ class NostrViewModel(
     suspend fun addContact(address: String): Boolean {
         val pubkey = try {
             if (address.contains("@")) {
-                nostr.searchByAddress(address)
+                nostr.profiles.searchByAddress(address)
             } else {
                 PublicKey.parse(address)
             }
@@ -699,7 +700,7 @@ class NostrViewModel(
             try {
                 val updated = contactList.value - publicKey
                 // Publish new event
-                nostr.setContactList(updated.toList())
+                nostr.profiles.setContactList(updated.toList())
                 // Optimistic local update
                 _contactList.update { it - publicKey }
             } catch (e: Exception) {
@@ -761,14 +762,14 @@ class NostrViewModel(
 
     fun getChatRooms() {
         viewModelScope.launch {
-            val rooms = nostr.getChatRooms() ?: emptySet()
+            val rooms = nostr.messages.getChatRooms() ?: emptySet()
             mergeChatRooms(rooms)
         }
     }
 
     suspend fun refreshChatRooms() {
         try {
-            val rooms = nostr.getChatRooms() ?: emptySet()
+            val rooms = nostr.messages.getChatRooms() ?: emptySet()
             mergeChatRooms(rooms)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
@@ -777,7 +778,7 @@ class NostrViewModel(
 
     suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
         try {
-            return nostr.getChatRoomMessages(roomId)
+            return nostr.messages.getChatRoomMessages(roomId)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -791,7 +792,7 @@ class NostrViewModel(
                 val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
                 val members = room.members
 
-                nostr.chatRoomConnect(members.toList())
+                nostr.messages.chatRoomConnect(members.toList())
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -805,7 +806,7 @@ class NostrViewModel(
         viewModelScope.launch {
             try {
                 val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
-                nostr.sendMessage(
+                nostr.messages.sendMessage(
                     to = room.members,
                     content = message,
                     subject = room.subject,
@@ -822,10 +823,10 @@ class NostrViewModel(
     }
 
     fun isMessageSent(id: EventId): Boolean {
-        val giftWrapId = nostr.rumorMap[id]
+        val giftWrapId = nostr.messages.rumorMap[id]
 
         if (giftWrapId != null) {
-            val isSent = nostr.sentEvents[giftWrapId]?.isNotEmpty() ?: false
+            val isSent = nostr.messages.sentEvents[giftWrapId]?.isNotEmpty() ?: false
             return isSent
         } else {
             return false
@@ -849,7 +850,7 @@ class NostrViewModel(
 
     suspend fun searchByAddress(query: String): PublicKey? {
         try {
-            return nostr.searchByAddress(query)
+            return nostr.profiles.searchByAddress(query)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -858,7 +859,7 @@ class NostrViewModel(
 
     suspend fun searchByNostr(query: String): List<PublicKey> {
         try {
-            return nostr.searchByNostr(query)
+            return nostr.profiles.searchByNostr(query)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -867,7 +868,7 @@ class NostrViewModel(
 
     suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
         return try {
-            nostr.verifyActivity(pubkey)
+            nostr.profiles.verifyActivity(pubkey)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             null
@@ -876,7 +877,7 @@ class NostrViewModel(
 
     suspend fun verifyContact(pubkey: PublicKey): Boolean {
         return try {
-            nostr.verifyContact(pubkey)
+            nostr.profiles.verifyContact(pubkey)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             false
@@ -885,7 +886,7 @@ class NostrViewModel(
 
     suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
         return try {
-            nostr.mutualContacts(pubkey)
+            nostr.profiles.mutualContacts(pubkey)
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             setOf()
