@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import su.reya.coop.nostr.NostrManager
+import su.reya.coop.nostr.roomId
 import java.io.File
 
 private const val GROUP_KEY_MESSAGES = "su.reya.coop.MESSAGES"

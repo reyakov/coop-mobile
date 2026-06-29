@@ -68,11 +68,11 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
-import su.reya.coop.Room
 import su.reya.coop.Screen
-import su.reya.coop.formatAsGroupHeader
-import su.reya.coop.humanReadable
-import su.reya.coop.roomId
+import su.reya.coop.nostr.Room
+import su.reya.coop.nostr.formatAsGroupHeader
+import su.reya.coop.nostr.humanReadable
+import su.reya.coop.nostr.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.shared.nameFlow

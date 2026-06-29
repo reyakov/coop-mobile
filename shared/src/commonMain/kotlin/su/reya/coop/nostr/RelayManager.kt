@@ -17,7 +17,6 @@ import rust.nostr.sdk.SendEventTarget
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.extractRelayList
 import rust.nostr.sdk.nip17ExtractRelayList
-import su.reya.coop.UniversalSigner
 import kotlin.time.Duration
 
 class RelayManager(private val nostr: Nostr) {

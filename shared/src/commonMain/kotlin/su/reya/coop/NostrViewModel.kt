@@ -41,7 +41,12 @@ import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.blossom.BlossomClient
+import su.reya.coop.nostr.ExternalSignerHandler
+import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
+import su.reya.coop.nostr.Room
+import su.reya.coop.nostr.SignerPermissions
+import su.reya.coop.nostr.roomId
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds

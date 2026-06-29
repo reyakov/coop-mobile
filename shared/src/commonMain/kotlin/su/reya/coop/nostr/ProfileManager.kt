@@ -26,7 +26,6 @@ import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.SendEventTarget
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Timestamp
-import su.reya.coop.UniversalSigner
 import kotlin.time.Duration
 
 class ProfileManager(private val nostr: Nostr) {

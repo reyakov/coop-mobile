@@ -29,7 +29,6 @@ import rust.nostr.sdk.SleepWhenIdle
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.initLogger
-import su.reya.coop.UniversalSigner
 import kotlin.time.Duration
 
 object NostrManager {

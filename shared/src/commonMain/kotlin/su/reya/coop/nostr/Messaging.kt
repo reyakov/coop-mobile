@@ -24,10 +24,6 @@ import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
-import su.reya.coop.Room
-import su.reya.coop.RoomKind
-import su.reya.coop.UniversalSigner
-import su.reya.coop.roomId
 import kotlin.time.Duration
 
 data class MessageSyncState(

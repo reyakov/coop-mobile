@@ -6,6 +6,8 @@ import android.content.Intent
 import androidx.core.net.toUri
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.nostr.ExternalSignerHandler
+import su.reya.coop.nostr.ExternalSignerResult
 
 class AndroidExternalSigner(
     private val context: Context,

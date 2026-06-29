@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.nostr
 
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Event

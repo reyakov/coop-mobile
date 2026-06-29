@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import su.reya.coop.NostrViewModel
-import su.reya.coop.Room
+import su.reya.coop.nostr.Room
 import su.reya.coop.short
 
 fun Room.nameFlow(viewModel: NostrViewModel): Flow<String> {

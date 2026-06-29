@@ -95,10 +95,10 @@ import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
-import su.reya.coop.Room
-import su.reya.coop.RoomKind
 import su.reya.coop.Screen
-import su.reya.coop.ago
+import su.reya.coop.nostr.Room
+import su.reya.coop.nostr.RoomKind
+import su.reya.coop.nostr.ago
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.shared.nameFlow
