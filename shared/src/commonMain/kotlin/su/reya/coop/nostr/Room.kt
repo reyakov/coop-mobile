@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.nostr
 
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone

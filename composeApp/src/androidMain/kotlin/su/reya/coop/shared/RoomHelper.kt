@@ -4,18 +4,22 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import su.reya.coop.NostrViewModel
-import su.reya.coop.Room
+import rust.nostr.sdk.PublicKey
+import su.reya.coop.nostr.Room
 import su.reya.coop.short
+import su.reya.coop.viewmodels.ProfileViewModel
 
-fun Room.nameFlow(viewModel: NostrViewModel): Flow<String> {
+fun Room.nameFlow(
+    profileViewModel: ProfileViewModel,
+    currentUser: PublicKey? = null
+): Flow<String> {
     // Return early if there's a custom subject/room name
     subject?.takeIf { it.isNotBlank() }?.let { return flowOf(it) }
 
     val displayMembers = if (isGroup()) members.take(2) else members.take(1)
     if (displayMembers.isEmpty()) return flowOf("Unknown")
 
-    return combine(displayMembers.map { viewModel.getMetadata(it) }) { metadataArray ->
+    return combine(displayMembers.map { profileViewModel.getMetadata(it) }) { metadataArray ->
         val names = metadataArray.mapIndexed { i, metadata ->
             val profile = metadata?.asRecord()
             profile?.displayName?.takeIf { it.isNotBlank() }
@@ -29,12 +33,12 @@ fun Room.nameFlow(viewModel: NostrViewModel): Flow<String> {
             if (extraCount > 0) "$combined, +$extraCount" else combined
         } else {
             val name = names.first()
-            if (displayMembers.first() == viewModel.currentUser()) "$name (you)" else name
+            if (displayMembers.first() == currentUser) "$name (you)" else name
         }
     }
 }
 
-fun Room.pictureFlow(viewModel: NostrViewModel): Flow<String?> {
+fun Room.pictureFlow(profileViewModel: ProfileViewModel): Flow<String?> {
     val firstMember = members.firstOrNull() ?: return flowOf(null)
-    return viewModel.getMetadata(firstMember).map { it?.asRecord()?.picture }
+    return profileViewModel.getMetadata(firstMember).map { it?.asRecord()?.picture }
 }

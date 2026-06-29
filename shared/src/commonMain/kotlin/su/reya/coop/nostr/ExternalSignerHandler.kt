@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.nostr
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

@@ -55,7 +55,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -66,9 +66,9 @@ import su.reya.coop.short
 fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val viewModel = LocalNostrViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
 
-    val contactList by viewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by profileViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -180,7 +180,7 @@ fun ContactListScreen() {
 @Composable
 fun AddContactDialog(onDismissRequest: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val viewModel = LocalNostrViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
@@ -225,7 +225,7 @@ fun AddContactDialog(onDismissRequest: () -> Unit) {
                     actions = {
                         IconButton(onClick = {
                             scope.launch {
-                                val success = viewModel.addContact(contact)
+                                val success = profileViewModel.addContact(contact)
                                 if (success) onDismissRequest()
                             }
                         }) {
@@ -283,8 +283,8 @@ fun ContactListItem(
     total: Int = 0,
     onClick: () -> Unit,
 ) {
-    val viewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
+    val profileViewModel = LocalProfileViewModel.current
+    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
 
     val profile = metadata?.asRecord()
@@ -293,7 +293,7 @@ fun ContactListItem(
 
     SegmentedListItem(
         onClick = onClick,
-        onLongClick = { viewModel.removeContact(pubkey) },
+        onLongClick = { profileViewModel.removeContact(pubkey) },
         shapes = ListItemDefaults.segmentedShapes(
             index = index,
             count = total

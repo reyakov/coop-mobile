@@ -1,24 +1,27 @@
 package su.reya.coop.screens
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import su.reya.coop.LocalAccountViewModel
+import su.reya.coop.LocalAppViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
 import su.reya.coop.shared.ProfileEditor
 
 @Composable
 fun UpdateProfileScreen() {
-    val viewModel = LocalNostrViewModel.current
+    val appViewModel = LocalAppViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
 
-    val currentUser = viewModel.currentUser() ?: return
-    val metadata by viewModel.getMetadata(currentUser).collectAsState(initial = null)
-    val isBusy by viewModel.isBusy.collectAsStateWithLifecycle(false)
+    val currentUser = accountViewModel.nostr.signer.currentUser ?: return
+    val metadata by profileViewModel.getMetadata(currentUser).collectAsStateWithLifecycle()
+    val isBusy by appViewModel.isBusy.collectAsStateWithLifecycle(false)
 
     val profile = metadata?.asRecord()
 
@@ -32,7 +35,7 @@ fun UpdateProfileScreen() {
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {
-                viewModel.updateProfile(name, bio, bytes, type)
+                profileViewModel.updateProfile(name, bio, bytes, type)
                 navigator.goBack()
             }
         }

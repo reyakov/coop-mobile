@@ -37,25 +37,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import kotlinx.coroutines.launch
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
-import su.reya.coop.RoomKind
 import su.reya.coop.Screen
+import su.reya.coop.nostr.RoomKind
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RequestListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val viewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     var isRefreshing by remember { mutableStateOf(false) }
-    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
+    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
     // Get all request rooms
     val requests = remember(chatRooms) {
@@ -103,7 +103,7 @@ fun RequestListScreen() {
                     onRefresh = {
                         scope.launch {
                             isRefreshing = true
-                            viewModel.refreshChatRooms()
+                            chatViewModel.refreshChatRooms()
                             isRefreshing = false
                         }
                     },

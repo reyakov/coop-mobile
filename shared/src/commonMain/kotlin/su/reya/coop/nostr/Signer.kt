@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.nostr
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

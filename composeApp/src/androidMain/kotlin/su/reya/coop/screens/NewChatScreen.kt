@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_arrow_next
@@ -54,8 +55,9 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -69,13 +71,15 @@ fun NewChatScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
-    val viewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
+    val profileViewModel = LocalProfileViewModel.current
 
-    val contactList by viewModel.contactList.collectAsState(initial = emptySet())
+    val contactList by profileViewModel.contactList.collectAsStateWithLifecycle()
+    var query by remember { mutableStateOf("") }
+
     val createGroup = remember { mutableStateOf(false) }
     val searchResults = remember { mutableStateListOf<PublicKey>() }
     val selectedReceivers = remember { mutableStateListOf<PublicKey>() }
-    var query by remember { mutableStateOf("") }
 
     LaunchedEffect(query) {
         if (query.length >= 3) {
@@ -92,12 +96,12 @@ fun NewChatScreen() {
                     selectedReceivers.add(pubkey)
                 }
             } else if (query.contains("@")) {
-                val pubkey = viewModel.searchByAddress(query)
+                val pubkey = profileViewModel.searchByAddress(query)
                 if (pubkey != null) {
                     selectedReceivers.add(pubkey)
                 }
             } else {
-                val results = viewModel.searchByNostr(query)
+                val results = profileViewModel.searchByNostr(query)
                 searchResults.clear()
                 searchResults.addAll(results)
             }
@@ -167,7 +171,7 @@ fun NewChatScreen() {
                 ) {
                     ExtendedFloatingActionButton(
                         onClick = {
-                            val roomId = viewModel.createChatRoom(selectedReceivers.toList())
+                            val roomId = chatViewModel.createChatRoom(selectedReceivers.toList())
                             navigator.navigate(Screen.Chat(roomId))
                         },
                         expanded = false,
@@ -258,7 +262,7 @@ fun NewChatScreen() {
                             items = searchResults,
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = viewModel.createChatRoom(listOf(pubkey))
+                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             },
                         )
@@ -269,7 +273,7 @@ fun NewChatScreen() {
                             items = contactList.toList(),
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = viewModel.createChatRoom(listOf(pubkey))
+                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             }
                         )
@@ -286,8 +290,8 @@ fun ReceiverChip(
     pubkey: PublicKey,
     onRemove: () -> Unit
 ) {
-    val viewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
+    val profileViewModel = LocalProfileViewModel.current
+    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
 
     val profile = metadata?.asRecord()
@@ -372,8 +376,8 @@ fun ContactListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val viewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { viewModel.getMetadata(pubkey) }
+    val profileViewModel = LocalProfileViewModel.current
+    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
 
     val profile = metadata?.asRecord()
