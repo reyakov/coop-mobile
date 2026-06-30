@@ -19,15 +19,15 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @Composable
 fun MyQrScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val accountViewModel = LocalAccountViewModel.current
+    val accountViewModel = LocalNostrViewModel.current
     val currentUser = accountViewModel.nostr.signer.currentUser ?: return
 
     Scaffold(

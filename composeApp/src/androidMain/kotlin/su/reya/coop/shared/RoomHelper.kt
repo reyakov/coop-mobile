@@ -7,10 +7,10 @@ import kotlinx.coroutines.flow.map
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.nostr.Room
 import su.reya.coop.short
-import su.reya.coop.viewmodels.ProfileViewModel
+import su.reya.coop.NostrViewModel
 
 fun Room.nameFlow(
-    profileViewModel: ProfileViewModel,
+    nostrViewModel: NostrViewModel,
     currentUser: PublicKey? = null
 ): Flow<String> {
     // Return early if there's a custom subject/room name
@@ -19,7 +19,7 @@ fun Room.nameFlow(
     val displayMembers = if (isGroup()) members.take(2) else members.take(1)
     if (displayMembers.isEmpty()) return flowOf("Unknown")
 
-    return combine(displayMembers.map { profileViewModel.getMetadata(it) }) { metadataArray ->
+    return combine(displayMembers.map { nostrViewModel.getMetadata(it) }) { metadataArray ->
         val names = metadataArray.mapIndexed { i, metadata ->
             val profile = metadata?.asRecord()
             profile?.displayName?.takeIf { it.isNotBlank() }
@@ -38,7 +38,8 @@ fun Room.nameFlow(
     }
 }
 
-fun Room.pictureFlow(profileViewModel: ProfileViewModel): Flow<String?> {
+fun Room.pictureFlow(nostrViewModel: NostrViewModel): Flow<String?> {
     val firstMember = members.firstOrNull() ?: return flowOf(null)
-    return profileViewModel.getMetadata(firstMember).map { it?.asRecord()?.picture }
+    return nostrViewModel.getMetadata(firstMember).map { it?.asRecord()?.picture }
 }
+

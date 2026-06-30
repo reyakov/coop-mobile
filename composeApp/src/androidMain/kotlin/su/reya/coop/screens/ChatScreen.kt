@@ -77,10 +77,8 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.nostr.Room
@@ -99,13 +97,12 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val chatViewModel = LocalChatViewModel.current
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     // Get chat room by ID
-    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
+    val chatRooms by nostrViewModel.chatRooms.collectAsStateWithLifecycle()
     val room by remember(id) { derivedStateOf { chatRooms.firstOrNull { it.id == id } } }
 
     // Show empty screen
@@ -125,11 +122,11 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
 
     val displayName by remember(room) {
-        room?.nameFlow(profileViewModel) ?: flowOf("Loading...")
+        room?.nameFlow(nostrViewModel) ?: flowOf("Loading...")
     }.collectAsStateWithLifecycle("Loading...")
 
     val picture by remember(room) {
-        room?.pictureFlow(profileViewModel) ?: flowOf(null)
+        room?.pictureFlow(nostrViewModel) ?: flowOf(null)
     }.collectAsStateWithLifecycle(null)
 
     var text by remember { mutableStateOf("") }
@@ -154,7 +151,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                 val type = context.contentResolver.getType(uri)
 
                 // Send message
-                chatViewModel.sendFileMessage(id, file, type)
+                nostrViewModel.sendFileMessage(id, file, type)
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar("Error: ${e.message}")
             }
@@ -167,7 +164,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     LaunchedEffect(id) {
         // Get messages
-        val initialMessages = chatViewModel.getChatRoomMessages(id)
+        val initialMessages = nostrViewModel.getChatRoomMessages(id)
         messages.clear()
         messages.addAll(initialMessages)
 
@@ -175,10 +172,10 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         loading = false
 
         // Get msg relays for each member
-        chatViewModel.chatRoomConnect(id)
+        nostrViewModel.chatRoomConnect(id)
 
         // Handle new messages
-        chatViewModel.newEvents.collect { event ->
+        nostrViewModel.newEvents.collect { event ->
             if (event.roomId() == id) {
                 if (event.id() !in messages.map { it.id() }) {
                     messages.add(0, event)
@@ -357,7 +354,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 value = text,
                                 onValueChange = { text = it },
                                 onSend = {
-                                    chatViewModel.sendMessage(id, text)
+                                    nostrViewModel.sendMessage(id, text)
                                     text = ""
                                 },
                                 onUpload = {
@@ -377,14 +374,14 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 fun ScreenerCard(room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
 
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
     val scope = rememberCoroutineScope()
 
     var isContact by remember { mutableStateOf(false) }
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
     var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
 
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
+    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsStateWithLifecycle()
 
     val profile = metadata?.asRecord()
@@ -394,11 +391,11 @@ fun ScreenerCard(room: Room) {
     LaunchedEffect(pubkey) {
         scope.launch {
             // Check contact
-            profileViewModel.verifyContact(pubkey).let { isContact = it }
+            nostrViewModel.verifyContact(pubkey).let { isContact = it }
             // Get mutual contacts
-            profileViewModel.mutualContacts(pubkey).let { mutualContacts = it }
+            nostrViewModel.mutualContacts(pubkey).let { mutualContacts = it }
             // Get the last activity
-            profileViewModel.verifyActivity(pubkey)?.let { lastActivity = it }
+            nostrViewModel.verifyActivity(pubkey)?.let { lastActivity = it }
         }
     }
 
@@ -516,9 +513,8 @@ fun DateSeparator(date: String) {
 fun ChatMessage(
     rumor: UnsignedEvent
 ) {
-    val accountViewModel = LocalAccountViewModel.current
-    val chatViewModel = LocalChatViewModel.current
-    val currentUser = accountViewModel.nostr.signer.currentUser
+    val nostrViewModel = LocalNostrViewModel.current
+    val currentUser = nostrViewModel.nostr.signer.currentUser
     val isMine = rumor.author() == currentUser
 
     val bubbleShape = if (isMine) {
@@ -552,7 +548,7 @@ fun ChatMessage(
                         onClick = {
                             val id = rumor.id()
                             if (id != null) {
-                                val sent = chatViewModel.isMessageSent(id)
+                                val sent = nostrViewModel.isMessageSent(id)
                                 println("Sent: $sent")
                             }
                         }

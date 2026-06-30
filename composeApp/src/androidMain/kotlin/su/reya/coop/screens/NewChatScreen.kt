@@ -55,9 +55,8 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -71,10 +70,9 @@ fun NewChatScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
-    val chatViewModel = LocalChatViewModel.current
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
 
-    val contactList by profileViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
 
     val createGroup = remember { mutableStateOf(false) }
@@ -96,12 +94,12 @@ fun NewChatScreen() {
                     selectedReceivers.add(pubkey)
                 }
             } else if (query.contains("@")) {
-                val pubkey = profileViewModel.searchByAddress(query)
+                val pubkey = nostrViewModel.searchByAddress(query)
                 if (pubkey != null) {
                     selectedReceivers.add(pubkey)
                 }
             } else {
-                val results = profileViewModel.searchByNostr(query)
+                val results = nostrViewModel.searchByNostr(query)
                 searchResults.clear()
                 searchResults.addAll(results)
             }
@@ -171,7 +169,7 @@ fun NewChatScreen() {
                 ) {
                     ExtendedFloatingActionButton(
                         onClick = {
-                            val roomId = chatViewModel.createChatRoom(selectedReceivers.toList())
+                            val roomId = nostrViewModel.createChatRoom(selectedReceivers.toList())
                             navigator.navigate(Screen.Chat(roomId))
                         },
                         expanded = false,
@@ -262,7 +260,7 @@ fun NewChatScreen() {
                             items = searchResults,
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
+                                val roomId = nostrViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             },
                         )
@@ -273,7 +271,7 @@ fun NewChatScreen() {
                             items = contactList.toList(),
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
+                                val roomId = nostrViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             }
                         )
@@ -290,8 +288,8 @@ fun ReceiverChip(
     pubkey: PublicKey,
     onRemove: () -> Unit
 ) {
-    val profileViewModel = LocalProfileViewModel.current
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
+    val nostrViewModel = LocalNostrViewModel.current
+    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
 
     val profile = metadata?.asRecord()
@@ -376,8 +374,8 @@ fun ContactListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val profileViewModel = LocalProfileViewModel.current
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
+    val nostrViewModel = LocalNostrViewModel.current
+    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
     val metadata by metadataFlow.collectAsState(initial = null)
 
     val profile = metadata?.asRecord()
