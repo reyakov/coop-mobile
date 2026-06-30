@@ -2,6 +2,9 @@ package su.reya.coop.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.storage.SecretStorage
 
@@ -51,6 +56,29 @@ class AppViewModel(
             secretStore.set("notification_banner_dismissed", "true")
             _isNotificationBannerDismissed.value = true
         }
+    }
+
+    suspend fun blossomUpload(file: ByteArray, contentType: String? = "image/jpeg"): String? {
+        val blossom = BlossomClient(
+            url = "https://blossom.band",
+            client = HttpClient {
+                install(ContentNegotiation) {
+                    json(Json {
+                        ignoreUnknownKeys = true
+                        prettyPrint = true
+                        isLenient = true
+                    })
+                }
+            }
+        )
+
+        val descriptor = blossom.upload(
+            file = file,
+            contentType = contentType,
+            signer = nostr.signer.get()
+        )
+
+        return descriptor?.url
     }
 
     override fun onCleared() {

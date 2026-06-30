@@ -149,7 +149,11 @@ class ChatViewModel(
         }
     }
 
-    fun sendMessage(roomId: Long, message: String, replies: List<EventId> = emptyList()) {
+    fun sendMessage(
+        roomId: Long,
+        message: String,
+        replies: List<EventId> = emptyList()
+    ) {
         if (message.isEmpty()) {
             appViewModel.showError("Message cannot be empty")
             return
@@ -167,6 +171,23 @@ class ChatViewModel(
                         viewModelScope.launch { _newEvents.emit(event) }
                     },
                 )
+            } catch (e: Exception) {
+                appViewModel.showError("Error: ${e.message}")
+            }
+        }
+    }
+
+    fun sendFileMessage(
+        roomId: Long,
+        file: ByteArray?,
+        contentType: String? = "image/jpeg",
+        replies: List<EventId> = emptyList()
+    ) {
+        if (file == null) return
+        viewModelScope.launch {
+            try {
+                val uri = appViewModel.blossomUpload(file, contentType) ?: return@launch
+                sendMessage(roomId, uri, replies)
             } catch (e: Exception) {
                 appViewModel.showError("Error: ${e.message}")
             }

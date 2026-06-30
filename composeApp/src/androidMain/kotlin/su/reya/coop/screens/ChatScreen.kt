@@ -1,5 +1,8 @@
 package su.reya.coop.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,9 +67,12 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
+import coop.composeapp.generated.resources.ic_plus
 import coop.composeapp.generated.resources.ic_send
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
@@ -89,11 +96,13 @@ import su.reya.coop.short
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(id: Long, screening: Boolean = false) {
+    val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
     val profileViewModel = LocalProfileViewModel.current
+    val scope = rememberCoroutineScope()
 
     // Get chat room by ID
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
@@ -128,12 +137,27 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
     var requireScreening by remember { mutableStateOf(screening) }
+    var upload by remember { mutableStateOf<Uri?>(null) }
 
     val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
 
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
+    }
+
+    val sendFile = { uri: Uri ->
+        scope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+            val type = context.contentResolver.getType(uri)
+            chatViewModel.sendFileMessage(id, bytes, type)
+        }
+    }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { sendFile(it) }
     }
 
     LaunchedEffect(id) {
@@ -333,6 +357,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 onSend = {
                                     chatViewModel.sendMessage(id, text)
                                     text = ""
+                                },
+                                onUpload = {
+                                    launcher.launch("image/*")
                                 }
                             )
                         }
@@ -543,22 +570,31 @@ fun ChatMessage(
 fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onUpload: () -> Unit
 ) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         TextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text("Message") },
+            modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(28.dp),
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent
             ),
-            modifier = Modifier.weight(1f)
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Message") },
+            leadingIcon = {
+                IconButton(onClick = onUpload) {
+                    Icon(
+                        painter = painterResource(Res.drawable.ic_plus),
+                        contentDescription = "Upload",
+                    )
+                }
+            },
         )
         Spacer(modifier = Modifier.size(8.dp))
         FilledTonalIconButton(
