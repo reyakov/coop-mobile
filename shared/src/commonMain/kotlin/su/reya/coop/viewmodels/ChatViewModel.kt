@@ -177,20 +177,21 @@ class ChatViewModel(
         }
     }
 
-    fun sendFileMessage(
+    suspend fun sendFileMessage(
         roomId: Long,
         file: ByteArray?,
         contentType: String? = "image/jpeg",
         replies: List<EventId> = emptyList()
     ) {
         if (file == null) return
-        viewModelScope.launch {
-            try {
-                val uri = appViewModel.blossomUpload(file, contentType) ?: return@launch
-                sendMessage(roomId, uri, replies)
-            } catch (e: Exception) {
-                appViewModel.showError("Error: ${e.message}")
-            }
+        
+        try {
+            val uri = appViewModel.blossomUpload(file, contentType)
+                ?: throw IllegalArgumentException("Failed to upload file")
+
+            sendMessage(roomId, uri, replies)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Error: ${e.message}")
         }
     }
 

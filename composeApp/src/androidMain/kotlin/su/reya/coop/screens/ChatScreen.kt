@@ -64,10 +64,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_add_circle
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
-import coop.composeapp.generated.resources.ic_plus
 import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
@@ -99,10 +99,10 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
     val profileViewModel = LocalProfileViewModel.current
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     // Get chat room by ID
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
@@ -123,10 +123,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         return
     }
 
-    val currentUser = accountViewModel.nostr.signer.currentUser
 
-    val displayName by remember(room, currentUser) {
-        room?.nameFlow(profileViewModel, currentUser) ?: flowOf("Loading...")
+    val displayName by remember(room) {
+        room?.nameFlow(profileViewModel) ?: flowOf("Loading...")
     }.collectAsStateWithLifecycle("Loading...")
 
     val picture by remember(room) {
@@ -137,22 +136,28 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
     var requireScreening by remember { mutableStateOf(screening) }
-    var upload by remember { mutableStateOf<Uri?>(null) }
 
-    val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
-
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
 
     val sendFile = { uri: Uri ->
         scope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            try {
+                // Read file
+                val file = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+
+                // Parse the file content type
+                val type = context.contentResolver.getType(uri)
+
+                // Send message
+                chatViewModel.sendFileMessage(id, file, type)
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar("Error: ${e.message}")
             }
-            val type = context.contentResolver.getType(uri)
-            chatViewModel.sendFileMessage(id, bytes, type)
         }
     }
 
@@ -161,9 +166,6 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     }
 
     LaunchedEffect(id) {
-        // Start loading spinner
-        loading = true
-
         // Get messages
         val initialMessages = chatViewModel.getChatRoomMessages(id)
         messages.clear()
@@ -590,7 +592,7 @@ fun ChatInput(
             leadingIcon = {
                 IconButton(onClick = onUpload) {
                     Icon(
-                        painter = painterResource(Res.drawable.ic_plus),
+                        painter = painterResource(Res.drawable.ic_add_circle),
                         contentDescription = "Upload",
                     )
                 }
