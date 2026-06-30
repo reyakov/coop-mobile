@@ -1,5 +1,8 @@
 package su.reya.coop.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,10 +10,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -29,6 +36,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,17 +58,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
+import coop.composeapp.generated.resources.ic_add_circle
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
 import coop.composeapp.generated.resources.ic_send
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
@@ -81,13 +93,16 @@ import su.reya.coop.shared.nameFlow
 import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(id: Long, screening: Boolean = false) {
+    val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
     val profileViewModel = LocalProfileViewModel.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     // Get chat room by ID
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
@@ -108,10 +123,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         return
     }
 
-    val currentUser = accountViewModel.nostr.signer.currentUser
 
-    val displayName by remember(room, currentUser) {
-        room?.nameFlow(profileViewModel, currentUser) ?: flowOf("Loading...")
+    val displayName by remember(room) {
+        room?.nameFlow(profileViewModel) ?: flowOf("Loading...")
     }.collectAsStateWithLifecycle("Loading...")
 
     val picture by remember(room) {
@@ -123,17 +137,35 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     var newOtherMessages by remember { mutableIntStateOf(0) }
     var requireScreening by remember { mutableStateOf(screening) }
 
-    val listState = rememberLazyListState()
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
-
     val groupedMessages = remember(messages.toList()) {
         messages.groupBy { it.createdAt().formatAsGroupHeader() }
     }
 
-    LaunchedEffect(id) {
-        // Start loading spinner
-        loading = true
+    val sendFile = { uri: Uri ->
+        scope.launch {
+            try {
+                // Read file
+                val file = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
 
+                // Parse the file content type
+                val type = context.contentResolver.getType(uri)
+
+                // Send message
+                chatViewModel.sendFileMessage(id, file, type)
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar("Error: ${e.message}")
+            }
+        }
+    }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { sendFile(it) }
+    }
+
+    LaunchedEffect(id) {
         // Get messages
         val initialMessages = chatViewModel.getChatRoomMessages(id)
         messages.clear()
@@ -165,6 +197,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     }
 
     Scaffold(
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -291,12 +324,14 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Button(
                                     onClick = { navigator.goBack() },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .size(ButtonDefaults.MediumContainerHeight)
                                 ) {
                                     Text(
                                         text = "Reject",
@@ -305,7 +340,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 }
                                 FilledTonalButton(
                                     onClick = { requireScreening = false },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .size(ButtonDefaults.MediumContainerHeight)
                                 ) {
                                     Text(
                                         text = "Accept",
@@ -322,6 +359,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 onSend = {
                                     chatViewModel.sendMessage(id, text)
                                     text = ""
+                                },
+                                onUpload = {
+                                    launcher.launch("image/*")
                                 }
                             )
                         }
@@ -532,38 +572,45 @@ fun ChatMessage(
 fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onUpload: () -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text("Message") },
-                shape = RoundedCornerShape(28.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.weight(1f)
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        TextField(
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(28.dp),
+            colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Message") },
+            leadingIcon = {
+                IconButton(onClick = onUpload) {
+                    Icon(
+                        painter = painterResource(Res.drawable.ic_add_circle),
+                        contentDescription = "Upload",
+                    )
+                }
+            },
+        )
+        Spacer(modifier = Modifier.size(8.dp))
+        FilledTonalIconButton(
+            onClick = onSend,
+            modifier = Modifier.size(56.dp),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.size(8.dp))
-            FilledTonalIconButton(
-                onClick = onSend,
-                modifier = Modifier.size(56.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_send),
-                    contentDescription = "Send"
-                )
-            }
+        ) {
+            Icon(
+                painter = painterResource(Res.drawable.ic_send),
+                contentDescription = "Send"
+            )
         }
     }
 }

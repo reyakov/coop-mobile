@@ -2,9 +2,6 @@ package su.reya.coop.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,11 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
 import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
-import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.nostr.Nostr
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -110,45 +105,18 @@ class ProfileViewModel(
         }
     }
 
-    suspend fun blossomUpload(file: ByteArray, contentType: String?): String? {
-        try {
-            val blossom = BlossomClient(
-                url = "https://blossom.band",
-                client = HttpClient {
-                    install(ContentNegotiation) {
-                        json(Json {
-                            ignoreUnknownKeys = true
-                            prettyPrint = true
-                            isLenient = true
-                        })
-                    }
-                }
-            )
-
-            val descriptor = blossom.upload(
-                file = file,
-                contentType = contentType,
-                signer = nostr.signer.get()
-            )
-
-            return descriptor?.url
-        } catch (e: Exception) {
-            appViewModel.showError("Error: ${e.message}")
-            return null
-        }
-    }
-
     suspend fun updateProfile(
         name: String? = null,
         bio: String? = null,
         picture: ByteArray? = null,
-        contentType: String? = null
+        contentType: String? = "image/jpeg"
     ) {
         appViewModel.setBusy(true)
         try {
-            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
+            val avatarUrl = picture?.let { appViewModel.blossomUpload(it, contentType) }
             val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+
             updateMetadata(currentUser, newMetadata)
         } catch (e: Exception) {
             appViewModel.showError("Error: ${e.message}")

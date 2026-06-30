@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +54,6 @@ import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_plus
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +75,8 @@ fun ProfileEditor(
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
+
     var name by remember(initialName) { mutableStateOf(initialName) }
     var bio by remember(initialBio) { mutableStateOf(initialBio) }
     var picture by remember(initialPicture) { mutableStateOf(initialPicture) }
@@ -264,7 +266,6 @@ fun ProfileEditor(
                             .fillMaxWidth()
                             .size(ButtonDefaults.MediumContainerHeight),
                         onClick = {
-                            val scope = CoroutineScope(Dispatchers.Main)
                             scope.launch {
                                 val bytes = withContext(Dispatchers.IO) {
                                     (picture as? Uri)?.let {

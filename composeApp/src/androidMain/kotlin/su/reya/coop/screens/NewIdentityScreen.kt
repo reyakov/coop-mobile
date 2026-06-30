@@ -28,7 +28,7 @@ fun NewIdentityScreen() {
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {
-                accountViewModel.createIdentity(name, bio, bytes, type, profileViewModel)
+                accountViewModel.createIdentity(name, bio, bytes, type)
                 navigator.navigate(Screen.Home)
             }
         }

@@ -133,6 +133,7 @@ class AccountViewModel(
 
     suspend fun importIdentity(secret: String) {
         appViewModel.setBusy(true)
+
         try {
             val signer = createSigner(secret)
             nostr.setSigner(signer)
@@ -150,15 +151,14 @@ class AccountViewModel(
         bio: String?,
         picture: ByteArray?,
         contentType: String? = "image/jpeg",
-        profileViewModel: ProfileViewModel
     ) {
         appViewModel.setBusy(true)
-        
+
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
 
         try {
-            val avatarUrl = picture?.let { profileViewModel.blossomUpload(it, contentType) }
+            val avatarUrl = picture?.let { appViewModel.blossomUpload(it, contentType) }
             nostr.profiles.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
             // Set credentials in persistent storage
             secretStore.set("user_signer", secret)
