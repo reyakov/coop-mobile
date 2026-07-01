@@ -31,10 +31,10 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
             implementation("su.reya:nostr-sdk-kmp:0.3.2")
-            implementation("com.squareup.okio:okio:3.16.2")
+            implementation("com.squareup.okio:okio:3.17.0")
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)

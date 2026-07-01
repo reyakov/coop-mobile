@@ -835,7 +835,7 @@ class NostrViewModel(
         replies: List<EventId> = emptyList()
     ) {
         if (file == null) return
-        
+
         try {
             val uri = blossomUpload(file, contentType)
                 ?: throw IllegalArgumentException("Failed to upload file")
