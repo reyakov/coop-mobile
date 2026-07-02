@@ -87,7 +87,6 @@ import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
 import coop.composeapp.generated.resources.ic_request
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
@@ -95,15 +94,13 @@ import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Room
+import su.reya.coop.RoomKind
 import su.reya.coop.Screen
-import su.reya.coop.nostr.Room
-import su.reya.coop.nostr.RoomKind
-import su.reya.coop.nostr.ago
+import su.reya.coop.ago
+import su.reya.coop.rememberUiState
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.shared.nameFlow
-import su.reya.coop.shared.pictureFlow
-import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -120,11 +117,9 @@ fun HomeScreen() {
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    val currentUser = nostrViewModel.nostr.signer.currentUser ?: return
-    val currentUserProfile = nostrViewModel.getMetadata(currentUser)
-
-    val userProfile by currentUserProfile.collectAsStateWithLifecycle()
+    val userProfile by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by nostrViewModel.chatRooms.collectAsStateWithLifecycle()
+
     val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by nostrViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by nostrViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
@@ -209,8 +204,8 @@ fun HomeScreen() {
                     // User
                     IconButton(onClick = { showBottomSheet = true }) {
                         Avatar(
-                            picture = userProfile?.asRecord()?.picture,
-                            description = userProfile?.asRecord()?.displayName,
+                            picture = userProfile?.picture,
+                            description = userProfile?.name ?: "No name",
                             size = 32.dp,
                         )
                     }
@@ -391,14 +386,6 @@ fun HomeScreen() {
             onDismissRequest = { showBottomSheet = false },
             sheetState = sheetState,
         ) {
-            val pubkey = nostrViewModel.nostr.signer.currentUser
-            val shortPubkey = pubkey?.short() ?: "Not available"
-
-            val userName =
-                userProfile?.asRecord()?.displayName
-                    ?: userProfile?.asRecord()?.name
-                    ?: "No name"
-
             val dismissAndRun: (suspend () -> Unit) -> Unit = { action ->
                 scope.launch {
                     sheetState.hide()
@@ -423,8 +410,8 @@ fun HomeScreen() {
                         contentAlignment = Alignment.Center
                     ) {
                         Avatar(
-                            picture = userProfile?.asRecord()?.picture,
-                            description = userProfile?.asRecord()?.displayName,
+                            picture = userProfile?.picture,
+                            description = userProfile?.name ?: "No name",
                             shape = MaterialShapes.Cookie9Sided.toShape(),
                             modifier = Modifier.fillMaxSize()
                         )
@@ -434,7 +421,7 @@ fun HomeScreen() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = userName,
+                            text = userProfile?.name ?: "No name",
                             style = MaterialTheme.typography.titleLargeEmphasized,
                         )
                     }
@@ -445,16 +432,15 @@ fun HomeScreen() {
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
-                                    pubkey?.let {
+                                    userProfile?.publicKey?.let {
                                         val bech32 = it.toBech32()
-                                        val data =
-                                            ClipData.newPlainText(bech32, bech32)
+                                        val data = ClipData.newPlainText(bech32, bech32)
                                         clipboardManager.setClipEntry(ClipEntry(data))
                                     }
                                 }
                             },
                         ) {
-                            Text(text = shortPubkey)
+                            Text(text = userProfile?.shortPublicKey ?: "Unknown")
                         }
                         FilledIconButton(
                             onClick = {
@@ -585,7 +571,7 @@ fun HomeScreen() {
                                 scope.launch {
                                     isBusy = true
                                     try {
-                                        nostrViewModel.refetchMsgRelays(currentUser)
+                                        nostrViewModel.refetchMsgRelays()
                                     } catch (e: Exception) {
                                         snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
                                     }
@@ -634,28 +620,23 @@ fun NewRequests(requests: List<Room>) {
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstName by remember(firstRoom) {
-        firstRoom?.nameFlow(nostrViewModel) ?: flowOf("")
-    }.collectAsStateWithLifecycle("Loading...")
-
-    val secondName by remember(secondRoom) {
-        secondRoom?.nameFlow(nostrViewModel) ?: flowOf("")
-    }.collectAsStateWithLifecycle("")
+    val firstRoomState by (firstRoom as Room).rememberUiState(nostrViewModel)
+    val secondRoomState by (secondRoom as Room).rememberUiState(nostrViewModel)
 
     val supportingText = when {
-        total == 1 && firstRoom != null -> {
+        total == 1 -> {
             val message = firstRoom.lastMessage ?: ""
-            "$firstName: $message"
+            "${firstRoomState.name}: $message"
         }
 
         total == 2 -> {
-            "$firstName and $secondName"
+            "${firstRoomState.name} and ${secondRoomState.name}"
         }
 
         total > 2 -> {
             val othersCount = total - 2
             val othersText = if (othersCount == 1) "1 other" else "$othersCount others"
-            "$firstName, $secondName and $othersText"
+            "${firstRoomState.name}, ${secondRoomState.name} and $othersText"
         }
 
         else -> ""
@@ -712,13 +693,12 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val nostrViewModel = LocalNostrViewModel.current
-    val displayName by remember(room) { room.nameFlow(nostrViewModel) }.collectAsStateWithLifecycle("Loading...")
-    val picture by remember(room) { room.pictureFlow(nostrViewModel) }.collectAsStateWithLifecycle(null)
+    val roomState by room.rememberUiState(nostrViewModel)
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
-            Avatar(picture = picture, description = displayName)
+            Avatar(picture = roomState.picture, description = roomState.picture)
         },
         headlineContent = {
             Row(
@@ -726,7 +706,7 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = displayName,
+                    text = roomState.name,
                     style = MaterialTheme.typography.titleMediumEmphasized,
                     modifier = Modifier.weight(1f)
                 )

@@ -15,11 +15,9 @@ fun UpdateProfileScreen() {
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
 
-    val currentUser = nostrViewModel.nostr.signer.currentUser ?: return
-    val metadata by nostrViewModel.getMetadata(currentUser).collectAsStateWithLifecycle()
     val isBusy by nostrViewModel.isBusy.collectAsStateWithLifecycle(false)
-
-    val profile = metadata?.asRecord()
+    val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
+    val profile = currentUser?.metadata?.asRecord()
 
     ProfileEditor(
         title = "Update profile",

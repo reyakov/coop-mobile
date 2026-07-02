@@ -284,12 +284,8 @@ fun ContactListItem(
     onClick: () -> Unit,
 ) {
     val nostrViewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     SegmentedListItem(
         onClick = onClick,
@@ -300,15 +296,15 @@ fun ContactListItem(
         ),
         leadingContent = {
             Avatar(
-                picture = picture,
-                description = displayName,
+                picture = profile?.picture,
+                description = profile?.name,
                 size = 36.dp
             )
         },
         supportingContent = { Text(text = pubkey.short()) },
         content = {
             Text(
-                text = displayName,
+                text = profile?.name ?: "No name",
                 style = MaterialTheme.typography.titleMediumEmphasized,
             )
         }

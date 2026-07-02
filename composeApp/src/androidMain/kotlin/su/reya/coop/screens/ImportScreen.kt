@@ -65,7 +65,6 @@ import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -82,14 +81,9 @@ fun ImportScreen() {
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
 
-    // Get metadata when pubkey changes
-    val metadata by remember(pubkey) {
+    val profile by remember(pubkey) {
         pubkey?.let(nostrViewModel::getMetadata) ?: flowOf(null)
     }.collectAsStateWithLifecycle(null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
-    val picture = profile?.picture
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
@@ -164,7 +158,7 @@ fun ImportScreen() {
                         contentAlignment = Alignment.Center
                     ) {
                         Avatar(
-                            picture = picture,
+                            picture = profile?.picture,
                             description = "Profile picture",
                             modifier = Modifier.fillMaxSize(),
                             shape = MaterialShapes.Cookie9Sided.toShape(),
@@ -172,7 +166,7 @@ fun ImportScreen() {
                     }
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(
-                        text = displayName,
+                        text = profile?.name ?: "",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleLargeEmphasized.copy(
                             fontFamily = getExpressiveFontFamily()

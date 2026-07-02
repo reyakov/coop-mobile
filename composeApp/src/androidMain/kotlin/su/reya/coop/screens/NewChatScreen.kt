@@ -289,12 +289,8 @@ fun ReceiverChip(
     onRemove: () -> Unit
 ) {
     val nostrViewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
         InputChip(
@@ -302,7 +298,7 @@ fun ReceiverChip(
             onClick = onRemove,
             label = {
                 Text(
-                    text = displayName,
+                    text = profile?.name ?: "No name",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     )
@@ -310,8 +306,8 @@ fun ReceiverChip(
             },
             avatar = {
                 Avatar(
-                    picture = picture,
-                    description = displayName,
+                    picture = profile?.picture,
+                    description = profile?.name ?: "No name",
                     size = 24.dp
                 )
             },
@@ -375,12 +371,8 @@ fun ContactListItem(
     onLongClick: () -> Unit
 ) {
     val nostrViewModel = LocalNostrViewModel.current
-    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     SegmentedListItem(
         selected = isSelected,
@@ -392,15 +384,15 @@ fun ContactListItem(
         ),
         leadingContent = {
             Avatar(
-                picture = picture,
-                description = displayName,
+                picture = profile?.picture,
+                description = profile?.name ?: "",
                 size = 36.dp
             )
         },
         supportingContent = { Text(text = pubkey.short()) },
         content = {
             Text(
-                text = displayName,
+                text = profile?.name ?: "",
                 style = MaterialTheme.typography.titleMediumEmphasized,
             )
         }

@@ -70,7 +70,6 @@ import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
 import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
@@ -80,15 +79,14 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Room
 import su.reya.coop.Screen
-import su.reya.coop.nostr.Room
-import su.reya.coop.nostr.formatAsGroupHeader
-import su.reya.coop.nostr.humanReadable
-import su.reya.coop.nostr.roomId
+import su.reya.coop.formatAsGroupHeader
+import su.reya.coop.humanReadable
+import su.reya.coop.rememberUiState
+import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.shared.nameFlow
-import su.reya.coop.shared.pictureFlow
 import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -100,6 +98,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val nostrViewModel = LocalNostrViewModel.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+
+    // Get current user
+    val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
 
     // Get chat room by ID
     val chatRooms by nostrViewModel.chatRooms.collectAsStateWithLifecycle()
@@ -120,15 +121,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         return
     }
 
-
-    val displayName by remember(room) {
-        room?.nameFlow(nostrViewModel) ?: flowOf("Loading...")
-    }.collectAsStateWithLifecycle("Loading...")
-
-    val picture by remember(room) {
-        room?.pictureFlow(nostrViewModel) ?: flowOf(null)
-    }.collectAsStateWithLifecycle(null)
-
+    val roomState by (room as Room).rememberUiState(nostrViewModel, currentUser?.publicKey)
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }
@@ -212,14 +205,14 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                             LoadingIndicator(modifier = Modifier.size(32.dp))
                         } else {
                             Avatar(
-                                picture = picture,
-                                description = displayName,
+                                picture = roomState.picture,
+                                description = roomState.name,
                                 size = 32.dp,
                             )
                         }
                         Spacer(modifier = Modifier.size(8.dp))
                         Text(
-                            text = displayName,
+                            text = roomState.name,
                             style = MaterialTheme.typography.titleMediumEmphasized,
                         )
                     }
@@ -279,7 +272,10 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                         items = messagesInGroup,
                                         key = { it.id()?.toBech32() ?: it.hashCode() }
                                     ) {
-                                        ChatMessage(it)
+                                        ChatMessage(
+                                            rumor = it,
+                                            isMine = currentUser?.publicKey == it.author()
+                                        )
                                     }
                                     item {
                                         DateSeparator(dateHeader)
@@ -381,12 +377,8 @@ fun ScreenerCard(room: Room) {
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
     var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
 
-    val metadataFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsStateWithLifecycle()
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.displayName ?: profile?.name ?: "No name"
-    val picture = profile?.picture
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
 
     LaunchedEffect(pubkey) {
         scope.launch {
@@ -412,7 +404,7 @@ fun ScreenerCard(room: Room) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Avatar(
-                picture = picture,
+                picture = profile?.picture,
                 description = "Profile picture",
                 modifier = Modifier.size(120.dp),
                 shape = MaterialShapes.Cookie12Sided.toShape(),
@@ -422,7 +414,7 @@ fun ScreenerCard(room: Room) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = displayName,
+                    text = profile?.name ?: "No name",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.titleLargeEmphasized.copy(
                         fontFamily = getExpressiveFontFamily()
@@ -511,12 +503,9 @@ fun DateSeparator(date: String) {
 
 @Composable
 fun ChatMessage(
-    rumor: UnsignedEvent
+    rumor: UnsignedEvent,
+    isMine: Boolean = false,
 ) {
-    val nostrViewModel = LocalNostrViewModel.current
-    val currentUser = nostrViewModel.nostr.signer.currentUser
-    val isMine = rumor.author() == currentUser
-
     val bubbleShape = if (isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
     } else {
@@ -542,17 +531,7 @@ fun ChatMessage(
                 color = containerColor,
                 contentColor = contentColor,
                 shape = bubbleShape,
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clickable(
-                        onClick = {
-                            val id = rumor.id()
-                            if (id != null) {
-                                val sent = nostrViewModel.isMessageSent(id)
-                                println("Sent: $sent")
-                            }
-                        }
-                    )
+                modifier = Modifier.widthIn(max = 280.dp)
             ) {
                 Text(
                     text = rumor.content(),

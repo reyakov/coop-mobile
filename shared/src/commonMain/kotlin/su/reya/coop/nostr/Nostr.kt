@@ -136,7 +136,7 @@ class Nostr {
 
     fun isSignedByUser(event: Event): Boolean {
         return try {
-            signer.currentUser == event.author()
+            signer.publicKeyFlow.value == event.author()
         } catch (e: Exception) {
             println("Failed to check if event is signed by user: ${e.message}")
             false

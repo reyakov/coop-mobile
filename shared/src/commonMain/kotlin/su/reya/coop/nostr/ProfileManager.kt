@@ -49,7 +49,8 @@ class ProfileManager(private val nostr: Nostr) {
 
     suspend fun getUserMetadata() {
         try {
-            val author = signer.currentUser ?: throw IllegalStateException("User not signed in")
+            val author =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
 
             // Get the latest metadata event
             val metadataFilter =
@@ -146,7 +147,8 @@ class ProfileManager(private val nostr: Nostr) {
         bio: String? = null,
         picture: String? = null
     ): Metadata {
-        val currentUser = signer.currentUser ?: throw IllegalStateException("User not signed in")
+        val currentUser =
+            signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
 
         try {
             val record = getLatestMetadata(currentUser)?.asRecord() ?: MetadataRecord()

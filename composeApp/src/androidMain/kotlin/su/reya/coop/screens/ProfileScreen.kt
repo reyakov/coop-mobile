@@ -63,19 +63,18 @@ fun ProfileScreen(pubkey: String) {
 
     val pubkeyObj = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
 
-    val metadataFlow = remember(pubkeyObj) { nostrViewModel.getMetadata(pubkeyObj) }
-    val metadata by metadataFlow.collectAsStateWithLifecycle()
+    val profileFlow = remember(pubkeyObj) { nostrViewModel.getMetadata(pubkeyObj) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
 
-    val profile = metadata?.asRecord()
-    val displayName = profile?.displayName ?: profile?.name ?: "No name"
-    val nip05 = profile?.nip05 ?: pubkeyObj.short()
-    val picture = profile?.picture
+    val metadata = profile?.metadata?.asRecord()
+    val nip05 = metadata?.nip05 ?: pubkeyObj.short()
+    val picture = metadata?.picture
 
     val details = remember(profile) {
         listOf(
-            "Username:" to (profile?.name ?: "None"),
-            "Website:" to (profile?.website ?: "None"),
-            "₿ Lightning Address:" to (profile?.lud16 ?: "None"),
+            "Username:" to (metadata?.name ?: "None"),
+            "Website:" to (metadata?.website ?: "None"),
+            "₿ Lightning Address:" to (metadata?.lud16 ?: "None"),
         )
     }
 
@@ -133,7 +132,7 @@ fun ProfileScreen(pubkey: String) {
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            text = displayName,
+                            text = profile?.name ?: "No name",
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.titleLargeEmphasized.copy(
                                 fontFamily = getExpressiveFontFamily()
@@ -159,7 +158,8 @@ fun ProfileScreen(pubkey: String) {
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            val roomId = nostrViewModel.createChatRoom(listOf(pubkeyObj))
+                                            val roomId =
+                                                nostrViewModel.createChatRoom(listOf(pubkeyObj))
                                             navigator.navigate(Screen.Chat(roomId))
                                         } catch (e: Exception) {
                                             e.message?.let { snackbarHostState.showSnackbar(it) }

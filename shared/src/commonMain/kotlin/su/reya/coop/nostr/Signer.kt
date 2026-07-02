@@ -1,5 +1,7 @@
 package su.reya.coop.nostr
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -16,9 +18,8 @@ class UniversalSigner(initialSigner: AsyncNostrSigner) : AsyncNostrSigner {
     @Volatile
     private var signer: AsyncNostrSigner = initialSigner
 
-    @Volatile
-    var currentUser: PublicKey? = null
-        private set
+    private val _publicKeyFlow = MutableStateFlow<PublicKey?>(null)
+    val publicKeyFlow = _publicKeyFlow.asStateFlow()
 
     /**
      * Get the current signer.
@@ -37,7 +38,7 @@ class UniversalSigner(initialSigner: AsyncNostrSigner) : AsyncNostrSigner {
             throw IllegalStateException("Failed to get public key from signer", e)
         }
         signer = newSigner
-        currentUser = pubkey
+        _publicKeyFlow.value = pubkey
     }
 
     override suspend fun getPublicKeyAsync(): PublicKey? {

@@ -1,5 +1,12 @@
-package su.reya.coop.nostr
+package su.reya.coop
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
@@ -75,9 +82,60 @@ data class Room(
         return this.copy(lastMessage = message)
     }
 
-    fun isGroup(): Boolean {
-        return members.size > 1
+    fun isGroup(): Boolean = members.size > 1
+}
+
+data class RoomUiState(
+    val name: String = "Loading...",
+    val picture: String? = null,
+    val isGroup: Boolean = false
+)
+
+fun Room.uiStateFlow(
+    nostrViewModel: NostrViewModel,
+    currentUser: PublicKey? = null
+): Flow<RoomUiState> {
+    val displayMembers = if (isGroup()) members.take(2) else members.take(1)
+
+    if (!subject.isNullOrBlank()) {
+        return flowOf(RoomUiState(name = subject, isGroup = isGroup()))
     }
+
+    return combine(displayMembers.map { nostrViewModel.getMetadata(it) }) { profiles ->
+        val names = profiles.mapIndexed { i, profile -> profile?.name ?: displayMembers[i].short() }
+
+        val name = when {
+            isGroup() -> {
+                val combined = names.joinToString(", ")
+                val extra = members.size - names.size
+                if (extra > 0) "$combined, +$extra" else combined
+            }
+
+            else -> {
+                val first = names.firstOrNull() ?: "Unknown"
+                if (displayMembers.firstOrNull() == currentUser) "$first (you)" else first
+            }
+        }
+
+        RoomUiState(
+            name = name,
+            picture = profiles.firstOrNull()?.picture,
+            isGroup = isGroup()
+        )
+    }
+}
+
+@Composable
+fun Room.rememberUiState(
+    viewModel: NostrViewModel,
+    currentUser: PublicKey? = null
+): State<RoomUiState> {
+    return remember(this, currentUser) {
+        uiStateFlow(
+            viewModel,
+            currentUser
+        )
+    }.collectAsStateWithLifecycle(RoomUiState())
 }
 
 fun UnsignedEvent.roomId(): Long {

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -17,6 +18,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -31,7 +34,6 @@ import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.Kind
 import rust.nostr.sdk.KindStandard
-import rust.nostr.sdk.Metadata
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
@@ -44,16 +46,14 @@ import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.nostr.ExternalSignerHandler
 import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
-import su.reya.coop.nostr.Room
 import su.reya.coop.nostr.SignerPermissions
-import su.reya.coop.nostr.roomId
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class NostrViewModel(
-    val nostr: Nostr,
+    private val nostr: Nostr,
     private val secretStore: SecretStorage,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : ViewModel() {
@@ -87,21 +87,25 @@ class NostrViewModel(
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
     val errorEvents = _errorEvents.receiveAsFlow()
 
-    private val _metadataStore = mutableMapOf<PublicKey, MutableStateFlow<Metadata?>>()
+    private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
 
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
 
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
-    val isSyncing = nostr.messages.messageSyncState.map { it.isSyncing }
+    val isSyncing = nostr.messages.messageSyncState
+        .map { it.isSyncing }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    init {
-        // Skip the splash screen if a user is already logged in
-        if (nostr.signer.currentUser != null) {
-            _signerRequired.value = false
-        }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val currentUserProfile = nostr.signer.publicKeyFlow
+        .flatMapLatest { pubkey ->
+            if (pubkey != null) getMetadata(pubkey) else flowOf(null)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    init {
         // Check if the notification banner has been dismissed
         checkNotificationBannerDismissedStatus()
 
@@ -183,11 +187,9 @@ class NostrViewModel(
                 val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
 
                 if (existingRoom == null) {
-                    val currentUser = nostr.signer.currentUser
-                    if (currentUser != null) {
-                        val newRoom = Room.new(event, currentUser)
-                        _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
-                    }
+                    val currentUser = nostr.signer.getPublicKeyAsync() ?: return@collect
+                    val newRoom = Room.new(event, currentUser)
+                    _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
                 } else {
                     updateRoomList(roomId, event)
                 }
@@ -206,7 +208,7 @@ class NostrViewModel(
         // Observe metadata updates
         launch {
             nostr.profiles.metadataUpdates.collect { (pubkey, metadata) ->
-                updateMetadata(pubkey, metadata)
+                updateMetadata(pubkey, Profile(pubkey, metadata))
             }
         }
     }
@@ -257,7 +259,7 @@ class NostrViewModel(
             val results = nostr.profiles.getAllCacheMetadata()
             results.forEach { (pubkey, metadata) ->
                 // Update the metadata state
-                updateMetadata(pubkey, metadata)
+                updateMetadata(pubkey, Profile(pubkey, metadata))
                 // Update seenPublicKeys to avoid duplicate requests
                 seenPublicKeys.add(pubkey)
             }
@@ -295,9 +297,9 @@ class NostrViewModel(
     private fun observeSignerAndCheckRelays() {
         viewModelScope.launch {
             while (true) {
-                val pubkey = nostr.signer.currentUser
+                val currentUser = nostr.signer.getPublicKeyAsync()
 
-                if (pubkey != null) {
+                if (currentUser != null) {
                     // Get chat rooms
                     val rooms = nostr.messages.getChatRooms() ?: emptySet()
                     if (rooms.isNotEmpty()) {
@@ -312,7 +314,7 @@ class NostrViewModel(
                     delay(2.seconds)
 
                     // Check if the relay list is empty
-                    val relays = nostr.relays.getMsgRelays(pubkey)
+                    val relays = nostr.relays.getMsgRelays(currentUser)
                     if (relays.isEmpty()) _isRelayListEmpty.value = true
 
                     break
@@ -331,20 +333,15 @@ class NostrViewModel(
         }
     }
 
-    private fun updateMetadata(pubkey: PublicKey, metadata: Metadata) {
-        _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }.value = metadata
+    private fun updateMetadata(pubkey: PublicKey, profile: Profile) {
+        profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
     }
 
-    fun getMetadata(pubkey: PublicKey): StateFlow<Metadata?> {
-        val flow = _metadataStore.getOrPut(pubkey) { MutableStateFlow(null) }
-        if (flow.value == null) {
-            requestMetadata(pubkey)
-        }
+    fun getMetadata(pubkey: PublicKey): StateFlow<Profile?> {
+        val flow = profiles.getOrPut(pubkey) { MutableStateFlow(null) }
+        if (flow.value == null) requestMetadata(pubkey)
+
         return flow.asStateFlow()
-    }
-
-    fun currentUser(): PublicKey? {
-        return nostr.signer.currentUser
     }
 
     fun logout() {
@@ -445,7 +442,7 @@ class NostrViewModel(
             val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
             // Update the metadata state after successfully published
-            updateMetadata(currentUser, newMetadata)
+            updateMetadata(currentUser, Profile(currentUser, newMetadata))
             // Update local state
             _isBusy.value = false
         } catch (e: Exception) {
@@ -573,8 +570,10 @@ class NostrViewModel(
         return externalSignerHandler?.isAvailable() == true
     }
 
-    suspend fun refetchMsgRelays(pubkey: PublicKey) {
-        val relays = nostr.relays.fetchMsgRelays(pubkey)
+    suspend fun refetchMsgRelays() {
+        val currentUser = nostr.signer.getPublicKeyAsync() ?: return
+        val relays = nostr.relays.fetchMsgRelays(currentUser)
+
         if (relays.isNotEmpty()) dismissRelayWarning()
     }
 
@@ -717,10 +716,13 @@ class NostrViewModel(
 
     fun createChatRoom(to: List<PublicKey>): Long {
         try {
-            if (nostr.signer.currentUser == null) throw IllegalStateException("User not signed in")
-            if (to.isEmpty()) throw IllegalArgumentException("At least one recipient is required")
+            if (to.isEmpty()) {
+                throw IllegalArgumentException("At least one recipient is required")
+            }
 
-            val currentUser = nostr.signer.currentUser ?: throw Exception("User not found")
+            // Get current user
+            val currentUser = nostr.signer.publicKeyFlow.value
+                ?: throw IllegalStateException("User not signed in")
 
             // Construct the rumor event
             val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), "")
