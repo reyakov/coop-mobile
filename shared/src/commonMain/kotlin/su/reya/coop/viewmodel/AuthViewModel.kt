@@ -15,6 +15,7 @@ import su.reya.coop.nostr.ExternalSignerHandler
 import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.nostr.SignerPermissions
+import su.reya.coop.repository.MediaRepository
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Duration.Companion.seconds
 
@@ -29,6 +30,8 @@ class AuthViewModel(
     private val secretStore: SecretStorage,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : BaseViewModel() {
+    private val mediaRepository = MediaRepository()
+
     companion object {
         private const val KEY_USER_SIGNER = "user_signer"
         private const val KEY_APP_KEYS = "app_keys"
@@ -236,8 +239,9 @@ class AuthViewModel(
         val secret = keys.secretKey().toBech32()
 
         try {
-            val avatarUrl =
-                picture?.let { blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg") }
+            val avatarUrl = picture?.let {
+                mediaRepository.blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg")
+            }
 
             // Create identity
             nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)

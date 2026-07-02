@@ -2,7 +2,6 @@ package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -21,7 +20,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayMetadata
@@ -29,6 +27,7 @@ import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Timestamp
 import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
+import su.reya.coop.repository.MediaRepository
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -39,6 +38,8 @@ data class NostrAppState(
 )
 
 class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
+    private val mediaRepository = MediaRepository()
+
     private val alwaysRunTasks = flow {
         coroutineScope {
             val observerJob = launch { runObserver() }
@@ -90,17 +91,6 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
 
         // Get all local stored metadata
         getCacheMetadata()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-
-        // Disconnect to all bootstrap relays
-        viewModelScope.launch {
-            withContext(NonCancellable) {
-                nostr.disconnect()
-            }
-        }
     }
 
     private fun reconnect() {
@@ -248,7 +238,13 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         _appState.update { it.copy(isBusy = true) }
         try {
             val avatarUrl =
-                picture?.let { blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg") }
+                picture?.let {
+                    mediaRepository.blossomUpload(
+                        nostr.signer.get(),
+                        it,
+                        contentType ?: "image/jpeg"
+                    )
+                }
             val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
 

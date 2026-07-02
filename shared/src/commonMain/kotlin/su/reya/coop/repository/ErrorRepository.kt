@@ -1,9 +1,9 @@
-package su.reya.coop
+package su.reya.coop.repository
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
-object ErrorManager {
+object ErrorRepository {
     private val _errors = Channel<String>(Channel.BUFFERED)
     val errors = _errors.receiveAsFlow()
 
