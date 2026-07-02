@@ -7,13 +7,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.Screen
 import su.reya.coop.shared.ProfileEditor
 
 @Composable
 fun NewIdentityScreen() {
-    val nostrViewModel = LocalNostrViewModel.current
     val authViewModel = LocalAuthViewModel.current
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()

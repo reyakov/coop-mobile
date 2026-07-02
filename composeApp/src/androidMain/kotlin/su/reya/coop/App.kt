@@ -47,6 +47,9 @@ import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
 import su.reya.coop.screens.UpdateProfileScreen
+import su.reya.coop.viewmodel.AuthViewModel
+import su.reya.coop.viewmodel.ChatViewModel
+import su.reya.coop.viewmodel.NostrViewModel
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")

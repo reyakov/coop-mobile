@@ -39,7 +39,6 @@ import coop.composeapp.generated.resources.ic_arrow_back
 import kotlinx.coroutines.launch
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.RoomKind
 import su.reya.coop.Screen
@@ -49,7 +48,6 @@ import su.reya.coop.Screen
 fun RequestListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
 
     val scope = rememberCoroutineScope()

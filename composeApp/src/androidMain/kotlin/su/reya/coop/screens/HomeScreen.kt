@@ -60,7 +60,6 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -127,7 +126,7 @@ fun HomeScreen() {
     val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
-    
+
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     val isBannerDismissed = authState.isNotificationBannerDismissed
 
@@ -621,7 +620,6 @@ fun HomeScreen() {
 fun NewRequests(requests: List<Room>) {
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
-    val authViewModel = LocalAuthViewModel.current
 
     val total = requests.size
     val firstRoom = requests.getOrNull(0)
@@ -700,7 +698,6 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val nostrViewModel = LocalNostrViewModel.current
-    val authViewModel = LocalAuthViewModel.current
     val roomState by room.rememberUiState(nostrViewModel)
 
     ListItem(

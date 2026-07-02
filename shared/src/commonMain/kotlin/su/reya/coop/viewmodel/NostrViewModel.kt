@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,6 +27,7 @@ import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Timestamp
+import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds

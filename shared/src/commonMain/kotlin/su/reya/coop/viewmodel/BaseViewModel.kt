@@ -1,4 +1,4 @@
-package su.reya.coop
+package su.reya.coop.viewmodel
 
 import androidx.lifecycle.ViewModel
 import io.ktor.client.HttpClient
@@ -6,6 +6,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import rust.nostr.sdk.AsyncNostrSigner
+import su.reya.coop.ErrorManager
 import su.reya.coop.blossom.BlossomClient
 
 abstract class BaseViewModel : ViewModel() {

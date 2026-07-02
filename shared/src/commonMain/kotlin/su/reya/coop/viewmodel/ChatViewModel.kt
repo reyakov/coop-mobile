@@ -1,10 +1,9 @@
-package su.reya.coop
+package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
@@ -19,7 +18,9 @@ import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.Room
 import su.reya.coop.nostr.Nostr
+import su.reya.coop.roomId
 
 data class ChatState(
     val isSyncing: Boolean = false,

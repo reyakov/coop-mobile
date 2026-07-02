@@ -47,7 +47,6 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.getExpressiveFontFamily
@@ -58,13 +57,12 @@ fun OnboardingScreen() {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
     val authViewModel = LocalAuthViewModel.current
     val scope = rememberCoroutineScope()
 
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
-    
+
     val annotatedText = buildAnnotatedString {
         append("By using Coop, you agree to accept\nour ")
         // Push "Terms of Use" link

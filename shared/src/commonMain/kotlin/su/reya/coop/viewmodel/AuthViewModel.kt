@@ -1,21 +1,16 @@
-package su.reya.coop
+package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.blossom.BlossomClient
 import su.reya.coop.nostr.ExternalSignerHandler
 import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
@@ -241,47 +236,20 @@ class AuthViewModel(
         val secret = keys.secretKey().toBech32()
 
         try {
-            val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
+            val avatarUrl =
+                picture?.let { blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg") }
+
             // Create identity
             nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
+
             // Persist the secret in the secret storage
             secretStore.set(KEY_USER_SIGNER, secret)
+
             // Update local states
             _state.update { it.copy(isBusy = false, signerRequired = false) }
         } catch (e: Exception) {
             showError("Error: ${e.message}")
             _state.update { it.copy(isBusy = false) }
-        }
-    }
-
-    private suspend fun blossomUpload(
-        file: ByteArray,
-        contentType: String? = "image/jpeg"
-    ): String? {
-        try {
-            val blossom = BlossomClient(
-                url = "https://blossom.band",
-                client = HttpClient {
-                    install(ContentNegotiation) {
-                        json(Json {
-                            ignoreUnknownKeys = true
-                            prettyPrint = true
-                            isLenient = true
-                        })
-                    }
-                }
-            )
-
-            val descriptor = blossom.upload(
-                file = file,
-                contentType = contentType,
-                signer = nostr.signer.get()
-            )
-
-            return descriptor?.url
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            return null
         }
     }
 }

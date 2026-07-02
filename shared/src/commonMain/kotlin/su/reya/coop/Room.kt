@@ -15,6 +15,7 @@ import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.viewmodel.NostrViewModel
 import kotlin.time.Clock
 import kotlin.time.Instant
 
