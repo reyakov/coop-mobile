@@ -90,6 +90,7 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
@@ -111,6 +112,7 @@ fun HomeScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
@@ -123,7 +125,9 @@ fun HomeScreen() {
     val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by nostrViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by nostrViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
-    val isBannerDismissed by nostrViewModel.isNotificationBannerDismissed.collectAsState()
+    
+    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val isBannerDismissed = authState.isNotificationBannerDismissed
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -275,7 +279,7 @@ fun HomeScreen() {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = { nostrViewModel.dismissNotificationBanner() },
+                                    onClick = { authViewModel.dismissNotificationBanner() },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(text = "Maybe later")
@@ -615,6 +619,7 @@ fun HomeScreen() {
 fun NewRequests(requests: List<Room>) {
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
 
     val total = requests.size
     val firstRoom = requests.getOrNull(0)
@@ -693,6 +698,7 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
     val roomState by room.rememberUiState(nostrViewModel)
 
     ListItem(
@@ -740,6 +746,7 @@ fun BottomMenuList(
 ) {
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
@@ -769,7 +776,7 @@ fun BottomMenuList(
         }
         Spacer(modifier = Modifier.size(16.dp))
         FilledTonalButton(
-            onClick = { onDismiss { nostrViewModel.logout() } },
+            onClick = { onDismiss { authViewModel.logout(onLogout = nostrViewModel::resetInternalState) } },
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError

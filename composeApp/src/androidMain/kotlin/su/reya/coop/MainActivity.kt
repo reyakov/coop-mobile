@@ -27,11 +27,14 @@ class MainActivity : ComponentActivity() {
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
             private val secretStore = SecretStore(this@MainActivity)
             private val nostrViewModel =
-                NostrViewModel(NostrManager.instance, secretStore, androidSigner)
+                NostrViewModel(NostrManager.instance)
+            private val authViewModel =
+                AuthViewModel(NostrManager.instance, secretStore, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
                     modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
+                    modelClass.isAssignableFrom(AuthViewModel::class.java) -> authViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
                 } as T
             }
@@ -39,6 +42,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val nostrViewModel: NostrViewModel by viewModels { factory }
+    private val authViewModel: AuthViewModel by viewModels { factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -77,12 +81,13 @@ class MainActivity : ComponentActivity() {
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
-            nostrViewModel.signerRequired.value == null
+            authViewModel.state.value.signerRequired == null
         }
 
         setContent {
             App(
                 nostrViewModel = nostrViewModel,
+                authViewModel = authViewModel,
             )
         }
     }

@@ -52,6 +52,10 @@ val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
 }
 
+val LocalAuthViewModel = staticCompositionLocalOf<AuthViewModel> {
+    error("No AuthViewModel provided")
+}
+
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
 }
@@ -68,6 +72,7 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 @Composable
 fun App(
     nostrViewModel: NostrViewModel,
+    authViewModel: AuthViewModel,
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
@@ -76,7 +81,8 @@ fun App(
     val qrScanResult = remember { QrScanResult() }
 
     // Get the signer required state
-    val signerRequired by nostrViewModel.signerRequired.collectAsStateWithLifecycle()
+    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val signerRequired = authState.signerRequired
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -103,7 +109,7 @@ fun App(
     }
 
     LaunchedEffect(Unit) {
-        nostrViewModel.errorEvents.collect { message ->
+        ErrorManager.errors.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
@@ -147,6 +153,7 @@ fun App(
     ) {
         CompositionLocalProvider(
             LocalNostrViewModel provides nostrViewModel,
+            LocalAuthViewModel provides authViewModel,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,

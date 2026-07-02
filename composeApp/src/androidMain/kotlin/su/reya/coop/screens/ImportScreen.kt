@@ -58,6 +58,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
@@ -74,10 +75,12 @@ fun ImportScreen() {
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
 
     val scope = rememberCoroutineScope()
 
-    val isBusy by nostrViewModel.isBusy.collectAsStateWithLifecycle(false)
+    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val isBusy = authState.isBusy
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
 
@@ -240,10 +243,10 @@ fun ImportScreen() {
                             onClick = {
                                 scope.launch {
                                     if (pubkey == null) {
-                                        nostrViewModel.verifyIdentity(secret).let { pubkey = it }
+                                        authViewModel.verifyIdentity(secret).let { pubkey = it }
                                     } else {
                                         // Import the identity
-                                        nostrViewModel.importIdentity(secret)
+                                        authViewModel.importIdentity(secret)
                                         // Navigate to the home screen
                                         navigator.navigate(Screen.Home)
                                     }

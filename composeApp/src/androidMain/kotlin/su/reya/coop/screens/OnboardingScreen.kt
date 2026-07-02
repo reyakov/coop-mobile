@@ -45,6 +45,7 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -58,6 +59,7 @@ fun OnboardingScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
     val scope = rememberCoroutineScope()
 
     val logoPainter = painterResource(Res.drawable.coop)
@@ -158,9 +160,9 @@ fun OnboardingScreen() {
                             FilledTonalButton(
                                 onClick = {
                                     scope.launch {
-                                        if (nostrViewModel.isExternalSignerAvailable()) {
+                                        if (authViewModel.isExternalSignerAvailable()) {
                                             try {
-                                                nostrViewModel.connectExternalSigner()
+                                                authViewModel.connectExternalSigner()
                                                 navigator.navigate(Screen.Home)
                                             } catch (e: Exception) {
                                                 e.message?.let { snackbarHostState.showSnackbar(it) }
