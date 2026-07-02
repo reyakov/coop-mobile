@@ -134,8 +134,9 @@ class RelayManager(private val nostr: Nostr) {
             val kind = Kind.fromStd(KindStandard.INBOX_RELAYS)
             val filter = Filter().kind(kind).author(publicKey).limit(1u)
             val events = client?.database()?.query(filter)
+            val event = events?.first() ?: return emptyList()
 
-            return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
+            return nip17ExtractRelayList(event)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get msg relays: ${e.message}", e)
         }

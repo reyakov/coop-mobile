@@ -74,22 +74,13 @@ class ProfileManager(private val nostr: Nostr) {
         }
     }
 
-    suspend fun getMutualContacts(pubkeys: List<PublicKey>) {
+    suspend fun syncMutualContacts(pubkeys: List<PublicKey>) {
         try {
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
             val filter = Filter().kind(kind).authors(pubkeys).limit(pubkeys.size.toULong())
-            val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
+            val relays = NostrManager.BOOTSTRAP_RELAYS.map { RelayUrl.parse(it) }
 
-            val target = mutableMapOf<RelayUrl, List<Filter>>()
-            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
-                target[RelayUrl.parse(relay)] = listOf(filter)
-            }
-
-            client?.subscribe(
-                target = ReqTarget.manual(target),
-                id = "mutual-contacts",
-                closeOn = opts,
-            )
+            client?.sync(filter, relays)
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch mutual contacts: ${e.message}", e)
         }

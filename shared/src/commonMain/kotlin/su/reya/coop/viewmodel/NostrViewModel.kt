@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -159,8 +161,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
             // Wait until the client is ready
             nostr.waitUntilInitialized()
 
-            val results = nostr.profiles.getAllCacheMetadata()
-            results.forEach { (pubkey, metadata) ->
+            nostr.profiles.getAllCacheMetadata().forEach { (pubkey, metadata) ->
                 // Update the metadata state
                 updateMetadata(pubkey, Profile(pubkey, metadata))
                 // Update seenPublicKeys to avoid duplicate requests
@@ -171,25 +172,21 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
 
     private fun observeSignerAndCheckRelays() {
         viewModelScope.launch {
-            while (true) {
-                val currentUser = nostr.signer.getPublicKeyAsync()
+            // Wait until the client is ready
+            nostr.waitUntilInitialized()
 
-                if (currentUser != null) {
-                    // Get all metadata for the current user
-                    nostr.profiles.getUserMetadata()
+            // Wait until a signer is explicitly set (which updates publicKeyFlow)
+            val currentUser = nostr.signer.publicKeyFlow.filterNotNull().first()
 
-                    // Small delay to ensure all relays are connected
-                    delay(2.seconds)
+            // Get all metadata for the current user
+            nostr.profiles.getUserMetadata()
 
-                    // Check if the relay list is empty
-                    val relays = nostr.relays.getMsgRelays(currentUser)
-                    if (relays.isEmpty()) _appState.update { it.copy(isRelayListEmpty = true) }
+            // Small delay to ensure all relays are connected
+            delay(2.seconds)
 
-                    break
-                }
-
-                delay(500.milliseconds)
-            }
+            // Check if the relay list is empty
+            val relays = nostr.relays.getMsgRelays(currentUser)
+            if (relays.isEmpty()) _appState.update { it.copy(isRelayListEmpty = true) }
         }
     }
 
