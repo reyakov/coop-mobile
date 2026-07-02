@@ -10,16 +10,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.nostr.NostrManager
 import kotlin.system.exitProcess
@@ -31,14 +23,15 @@ class MainActivity : ComponentActivity() {
 
     private val factory by lazy {
         object : ViewModelProvider.Factory {
-            private val secretStore = SecretStore(this@MainActivity)
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
-            private val nostrVM = NostrViewModel(NostrManager.instance, secretStore, androidSigner)
+            private val secretStore = SecretStore(this@MainActivity)
+            private val nostrViewModel =
+                NostrViewModel(NostrManager.instance, secretStore, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
-                    modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrVM
+                    modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
                 } as T
             }
@@ -86,9 +79,6 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition {
             nostrViewModel.signerRequired.value == null
         }
-
-        // Bind the lifecycle of the ViewModels
-        nostrViewModel.bindLifecycle(ProcessLifecycleOwner.get().lifecycle)
 
         setContent {
             App(

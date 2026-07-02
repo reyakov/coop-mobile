@@ -1,14 +1,13 @@
 package su.reya.coop
 
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -18,13 +17,17 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -52,25 +55,52 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
+data class NostrAppState(
+    val isBusy: Boolean = false,
+    val isRelayListEmpty: Boolean = false,
+    val isSyncing: Boolean = false,
+    val isPartialProcessedGiftWrap: Boolean = false,
+    val isNotificationBannerDismissed: Boolean = false,
+    val signerRequired: Boolean? = null,
+)
+
 class NostrViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : ViewModel() {
-    private val _isNotificationBannerDismissed = MutableStateFlow(false)
-    val isNotificationBannerDismissed = _isNotificationBannerDismissed.asStateFlow()
+    companion object {
+        private const val KEY_USER_SIGNER = "user_signer"
+        private const val KEY_APP_KEYS = "app_keys"
+        private const val KEY_BANNER_DISMISSED = "notification_banner_dismissed"
+    }
 
-    private val _signerRequired = MutableStateFlow<Boolean?>(null)
-    val signerRequired = _signerRequired.asStateFlow()
+    private val backgroundWorkTrigger = flow {
+        coroutineScope {
+            val observerJob = launch { runObserver() }
+            val batchingJob = launch { runMetadataBatching() }
+            try {
+                emit(Unit)
+                awaitCancellation()
+            } finally {
+                observerJob.cancel()
+                batchingJob.cancel()
+            }
+        }
+    }
 
-    private val _isBusy = MutableStateFlow(false)
-    val isBusy = _isBusy.asStateFlow()
-
-    private val _isPartialProcessedGiftWrap = MutableStateFlow(false)
-    val isPartialProcessedGiftWrap = _isPartialProcessedGiftWrap.asStateFlow()
-
-    private val _isRelayListEmpty = MutableStateFlow(false)
-    val isRelayListEmpty = _isRelayListEmpty.asStateFlow()
+    private val _appState = MutableStateFlow(NostrAppState())
+    val appState: StateFlow<NostrAppState> = combine(
+        _appState,
+        nostr.messages.messageSyncState.map { it.isSyncing },
+        backgroundWorkTrigger
+    ) { state, isSyncing, _ ->
+        state.copy(isSyncing = isSyncing)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = NostrAppState()
+    )
 
     private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
     val chatRooms = _chatRooms.asStateFlow()
@@ -87,16 +117,23 @@ class NostrViewModel(
     private val _errorEvents = Channel<String>(Channel.BUFFERED)
     val errorEvents = _errorEvents.receiveAsFlow()
 
+    private val profilesMutex = Mutex()
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
-
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
-
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
-    val isSyncing = nostr.messages.messageSyncState
-        .map { it.isSyncing }
+    val isNotificationBannerDismissed = appState.map { it.isNotificationBannerDismissed }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
+    val signerRequired = appState.map { it.signerRequired }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val isBusy = appState.map { it.isBusy }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isPartialProcessedGiftWrap = appState.map { it.isPartialProcessedGiftWrap }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isRelayListEmpty = appState.map { it.isRelayListEmpty }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isSyncing = appState.map { it.isSyncing }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentUserProfile = nostr.signer.publicKeyFlow
@@ -122,17 +159,6 @@ class NostrViewModel(
         getCacheMetadata()
     }
 
-    fun bindLifecycle(lifecycle: Lifecycle) {
-        viewModelScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                coroutineScope {
-                    launch { runObserver() }
-                    launch { runMetadataBatching() }
-                }
-            }
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
 
@@ -152,8 +178,8 @@ class NostrViewModel(
 
     private fun checkNotificationBannerDismissedStatus() {
         viewModelScope.launch {
-            _isNotificationBannerDismissed.value =
-                secretStore.get("notification_banner_dismissed") == "true"
+            val dismissed = secretStore.get(KEY_BANNER_DISMISSED) == "true"
+            _appState.update { it.copy(isNotificationBannerDismissed = dismissed) }
         }
     }
 
@@ -170,7 +196,7 @@ class NostrViewModel(
             nostr.messages.messageSyncState.collect { state ->
                 // When at least some messages are processed, allow UI to show the list
                 if (state.processedCount > 0) {
-                    _isPartialProcessedGiftWrap.value = true
+                    _appState.update { it.copy(isPartialProcessedGiftWrap = true) }
                 }
 
                 // Refresh UI every 10 messages OR when sync is fully done
@@ -270,11 +296,11 @@ class NostrViewModel(
         viewModelScope.launch {
             try {
                 val secret = withTimeoutOrNull(3.seconds) {
-                    secretStore.get("user_signer")
+                    secretStore.get(KEY_USER_SIGNER)
                 }
 
                 if (secret == null) {
-                    _signerRequired.value = true
+                    _appState.update { it.copy(signerRequired = true) }
                     return@launch
                 }
 
@@ -282,14 +308,14 @@ class NostrViewModel(
                     val signer = createSigner(secret)
                     nostr.setSigner(signer)
                 }.onSuccess {
-                    _signerRequired.value = false
+                    _appState.update { it.copy(signerRequired = false) }
                 }.onFailure { e ->
                     showError("Login failed: ${e.message}")
-                    _signerRequired.value = true
+                    _appState.update { it.copy(signerRequired = true) }
                 }
             } catch (e: Exception) {
                 showError("Login failed: ${e.message}")
-                _signerRequired.value = true
+                _appState.update { it.copy(signerRequired = true) }
             }
         }
     }
@@ -304,7 +330,7 @@ class NostrViewModel(
                     val rooms = nostr.messages.getChatRooms() ?: emptySet()
                     if (rooms.isNotEmpty()) {
                         mergeChatRooms(rooms)
-                        _isPartialProcessedGiftWrap.value = true
+                        _appState.update { it.copy(isPartialProcessedGiftWrap = true) }
                     }
 
                     // Get all metadata for the current user
@@ -315,7 +341,7 @@ class NostrViewModel(
 
                     // Check if the relay list is empty
                     val relays = nostr.relays.getMsgRelays(currentUser)
-                    if (relays.isEmpty()) _isRelayListEmpty.value = true
+                    if (relays.isEmpty()) _appState.update { it.copy(isRelayListEmpty = true) }
 
                     break
                 }
@@ -334,7 +360,11 @@ class NostrViewModel(
     }
 
     private fun updateMetadata(pubkey: PublicKey, profile: Profile) {
-        profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
+        viewModelScope.launch {
+            profilesMutex.withLock {
+                profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
+            }
+        }
     }
 
     fun getMetadata(pubkey: PublicKey): StateFlow<Profile?> {
@@ -347,7 +377,7 @@ class NostrViewModel(
     fun logout() {
         viewModelScope.launch {
             try {
-                _isBusy.value = true
+                _appState.update { it.copy(isBusy = true) }
                 // Reset the nostr signer and prune the database
                 nostr.signer.switch(Keys.generate())
                 nostr.prune()
@@ -355,14 +385,13 @@ class NostrViewModel(
                 showError("Logout encountered an error: ${e.message}")
             } finally {
                 // Clear credentials from persistent storage
-                secretStore.clear("user_signer")
-                secretStore.clear("notification_banner_dismissed")
+                secretStore.clear(KEY_USER_SIGNER)
+                secretStore.clear(KEY_BANNER_DISMISSED)
 
                 // Reset all UI states
                 resetInternalState()
 
-                _isBusy.value = false
-                _signerRequired.value = true
+                _appState.update { it.copy(isBusy = false, signerRequired = true) }
             }
         }
     }
@@ -370,24 +399,28 @@ class NostrViewModel(
     private fun resetInternalState() {
         _chatRooms.value = emptySet()
         _contactList.value = emptySet()
-        _isPartialProcessedGiftWrap.value = false
-        _isRelayListEmpty.value = false
-        _isNotificationBannerDismissed.value = false
+        _appState.update {
+            it.copy(
+                isPartialProcessedGiftWrap = false,
+                isRelayListEmpty = false,
+                isNotificationBannerDismissed = false
+            )
+        }
     }
 
     fun dismissNotificationBanner() {
         viewModelScope.launch {
-            secretStore.set("notification_banner_dismissed", "true")
-            _isNotificationBannerDismissed.value = true
+            secretStore.set(KEY_BANNER_DISMISSED, "true")
+            _appState.update { it.copy(isNotificationBannerDismissed = true) }
         }
     }
 
     fun dismissRelayWarning() {
-        _isRelayListEmpty.value = false
+        _appState.update { it.copy(isRelayListEmpty = false) }
     }
 
     private suspend fun getOrInitAppKeys(): Keys {
-        val secret = secretStore.get("app_keys")
+        val secret = secretStore.get(KEY_APP_KEYS)
 
         // If app keys are already stored, use them
         if (secret != null) {
@@ -396,7 +429,7 @@ class NostrViewModel(
 
         // Generate new app keys and save to the secret storage
         val keys = Keys.generate()
-        secretStore.set("app_keys", keys.secretKey().toBech32())
+        secretStore.set(KEY_APP_KEYS, keys.secretKey().toBech32())
 
         return keys
     }
@@ -436,7 +469,7 @@ class NostrViewModel(
         picture: ByteArray? = null,
         contentType: String? = null
     ) {
-        _isBusy.value = true
+        _appState.update { it.copy(isBusy = true) }
         try {
             val avatarUrl = picture?.let { blossomUpload(it, contentType ?: "image/jpeg") }
             val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
@@ -444,7 +477,7 @@ class NostrViewModel(
             // Update the metadata state after successfully published
             updateMetadata(currentUser, Profile(currentUser, newMetadata))
             // Update local state
-            _isBusy.value = false
+            _appState.update { it.copy(isBusy = false) }
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -456,7 +489,7 @@ class NostrViewModel(
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        _isBusy.value = true
+        _appState.update { it.copy(isBusy = true) }
 
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
@@ -466,10 +499,9 @@ class NostrViewModel(
             // Create identity
             nostr.profiles.createIdentity(keys = keys, name = name, bio, picture = avatarUrl)
             // Persist the secret in the secret storage
-            secretStore.set("user_signer", secret)
+            secretStore.set(KEY_USER_SIGNER, secret)
             // Update local states
-            _isBusy.value = false
-            _signerRequired.value = false
+            _appState.update { it.copy(isBusy = false, signerRequired = false) }
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -517,16 +549,15 @@ class NostrViewModel(
     }
 
     suspend fun importIdentity(secret: String) {
-        _isBusy.value = true
+        _appState.update { it.copy(isBusy = true) }
         try {
             val signer = createSigner(secret)
             // Update signer
             nostr.setSigner(signer)
             // Persist the secret in the secret storage
-            secretStore.set("user_signer", secret)
+            secretStore.set(KEY_USER_SIGNER, secret)
             // Update local states
-            _signerRequired.value = false
-            _isBusy.value = false
+            _appState.update { it.copy(signerRequired = false, isBusy = false) }
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -534,7 +565,7 @@ class NostrViewModel(
 
     suspend fun connectExternalSigner() {
         val handler = externalSignerHandler ?: throw IllegalStateException("Signer not available")
-        _isBusy.value = true
+        _appState.update { it.copy(isBusy = true) }
         try {
             val permissions = SignerPermissions.toJson(
                 listOf(
@@ -557,10 +588,12 @@ class NostrViewModel(
             // Update signer
             nostr.setSigner(signer)
             // Store the signer in the secret storage
-            secretStore.set("user_signer", "nip55://${result.packageName}/${result.pubkey.toHex()}")
+            secretStore.set(
+                KEY_USER_SIGNER,
+                "nip55://${result.packageName}/${result.pubkey.toHex()}"
+            )
             // Update local states
-            _signerRequired.value = false
-            _isBusy.value = false
+            _appState.update { it.copy(signerRequired = false, isBusy = false) }
         } catch (e: Exception) {
             throw Exception("Notice: ${e.message}")
         }
