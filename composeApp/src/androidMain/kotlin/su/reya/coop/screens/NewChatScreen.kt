@@ -55,6 +55,7 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
@@ -71,6 +72,7 @@ fun NewChatScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
 
     val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
@@ -169,7 +171,7 @@ fun NewChatScreen() {
                 ) {
                     ExtendedFloatingActionButton(
                         onClick = {
-                            val roomId = nostrViewModel.createChatRoom(selectedReceivers.toList())
+                            val roomId = chatViewModel.createChatRoom(selectedReceivers.toList())
                             navigator.navigate(Screen.Chat(roomId))
                         },
                         expanded = false,
@@ -260,7 +262,7 @@ fun NewChatScreen() {
                             items = searchResults,
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = nostrViewModel.createChatRoom(listOf(pubkey))
+                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             },
                         )
@@ -271,7 +273,7 @@ fun NewChatScreen() {
                             items = contactList.toList(),
                             selectedReceivers = selectedReceivers,
                             onContactClick = { pubkey ->
-                                val roomId = nostrViewModel.createChatRoom(listOf(pubkey))
+                                val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                                 navigator.navigate(Screen.Chat(roomId))
                             }
                         )

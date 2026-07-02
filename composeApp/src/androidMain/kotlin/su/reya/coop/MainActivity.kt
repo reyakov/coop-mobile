@@ -28,12 +28,15 @@ class MainActivity : ComponentActivity() {
             private val secretStore = SecretStore(this@MainActivity)
             private val nostrViewModel =
                 NostrViewModel(NostrManager.instance)
+            private val chatViewModel =
+                ChatViewModel(NostrManager.instance)
             private val authViewModel =
                 AuthViewModel(NostrManager.instance, secretStore, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
                     modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
+                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
                     modelClass.isAssignableFrom(AuthViewModel::class.java) -> authViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
                 } as T
@@ -42,6 +45,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val nostrViewModel: NostrViewModel by viewModels { factory }
+    private val chatViewModel: ChatViewModel by viewModels { factory }
     private val authViewModel: AuthViewModel by viewModels { factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +91,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 nostrViewModel = nostrViewModel,
+                chatViewModel = chatViewModel,
                 authViewModel = authViewModel,
             )
         }

@@ -7,11 +7,9 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -25,16 +23,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import rust.nostr.sdk.EventBuilder
-import rust.nostr.sdk.EventId
-import rust.nostr.sdk.Kind
-import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
-import rust.nostr.sdk.Tag
 import rust.nostr.sdk.Timestamp
-import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.nostr.Nostr
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -43,12 +35,10 @@ import kotlin.time.Duration.Companion.seconds
 data class NostrAppState(
     val isBusy: Boolean = false,
     val isRelayListEmpty: Boolean = false,
-    val isSyncing: Boolean = false,
-    val isPartialProcessedGiftWrap: Boolean = false,
 )
 
 class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
-    private val backgroundWorkTrigger = flow {
+    private val alwaysRunTasks = flow {
         coroutineScope {
             val observerJob = launch { runObserver() }
             val batchingJob = launch { runMetadataBatching() }
@@ -63,29 +53,15 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     }
 
     private val _appState = MutableStateFlow(NostrAppState())
-    val appState: StateFlow<NostrAppState> = combine(
-        _appState,
-        nostr.messages.messageSyncState.map { it.isSyncing },
-        backgroundWorkTrigger
-    ) { state, isSyncing, _ ->
-        state.copy(isSyncing = isSyncing)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = NostrAppState()
-    )
-
-    private val _chatRooms = MutableStateFlow<Set<Room>>(emptySet())
-    val chatRooms = _chatRooms.asStateFlow()
+    val appState: StateFlow<NostrAppState> =
+        combine(_appState, alwaysRunTasks) { state, _ -> state }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = NostrAppState()
+        )
 
     private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
     val contactList = _contactList.asStateFlow()
-
-    private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
-    val newEvents = _newEvents.asSharedFlow()
-
-    private val _sentReports = MutableSharedFlow<Map<EventId, List<RelayUrl>>>()
-    val sentReport = _sentReports.asSharedFlow()
 
     private val profilesMutex = Mutex()
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
@@ -94,11 +70,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
 
     val isBusy = appState.map { it.isBusy }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val isPartialProcessedGiftWrap = appState.map { it.isPartialProcessedGiftWrap }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isRelayListEmpty = appState.map { it.isRelayListEmpty }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-    val isSyncing = appState.map { it.isSyncing }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -138,39 +110,6 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     }
 
     private suspend fun runObserver() = coroutineScope {
-        // Observe message sync progress
-        launch {
-            nostr.messages.messageSyncState.collect { state ->
-                // When at least some messages are processed, allow UI to show the list
-                if (state.processedCount > 0) {
-                    _appState.update { it.copy(isPartialProcessedGiftWrap = true) }
-                }
-
-                // Refresh UI every 10 messages OR when sync is fully done
-                if (state.processedCount % 10 == 0 || !state.isSyncing) {
-                    refreshChatRooms()
-                }
-            }
-        }
-
-        // Observe new messages
-        launch {
-            nostr.newEvents.collect { event ->
-                val roomId = event.roomId()
-                val existingRoom = _chatRooms.value.firstOrNull { it.id == roomId }
-
-                if (existingRoom == null) {
-                    val currentUser = nostr.signer.getPublicKeyAsync() ?: return@collect
-                    val newRoom = Room.new(event, currentUser)
-                    _chatRooms.update { (it + newRoom).sortedDescending().toSet() }
-                } else {
-                    updateRoomList(roomId, event)
-                }
-
-                _newEvents.emit(event)
-            }
-        }
-
         // Observe contact list updates
         launch {
             nostr.profiles.contactListUpdates.collect { contacts ->
@@ -245,13 +184,6 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
                 val currentUser = nostr.signer.getPublicKeyAsync()
 
                 if (currentUser != null) {
-                    // Get chat rooms
-                    val rooms = nostr.messages.getChatRooms() ?: emptySet()
-                    if (rooms.isNotEmpty()) {
-                        mergeChatRooms(rooms)
-                        _appState.update { it.copy(isPartialProcessedGiftWrap = true) }
-                    }
-
                     // Get all metadata for the current user
                     nostr.profiles.getUserMetadata()
 
@@ -294,11 +226,9 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     }
 
     fun resetInternalState() {
-        _chatRooms.value = emptySet()
         _contactList.value = emptySet()
         _appState.update {
             it.copy(
-                isPartialProcessedGiftWrap = false,
                 isRelayListEmpty = false,
             )
         }
@@ -472,164 +402,6 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
-        }
-    }
-
-    fun createChatRoom(to: List<PublicKey>): Long {
-        try {
-            if (to.isEmpty()) {
-                throw IllegalArgumentException("At least one recipient is required")
-            }
-
-            // Get current user
-            val currentUser = nostr.signer.publicKeyFlow.value
-                ?: throw IllegalStateException("User not signed in")
-
-            // Construct the rumor event
-            val rumor = EventBuilder(Kind.fromStd(KindStandard.PRIVATE_DIRECT_MESSAGE), "")
-                .tags(to.map { Tag.publicKey(it) })
-                .finalizeUnsigned(currentUser)
-
-            // Check if the room already exists
-            val id = rumor.roomId()
-            val existingRoom = _chatRooms.value.firstOrNull { it.id == id }
-
-            // If the room already exists, return its ID
-            if (existingRoom != null) {
-                return existingRoom.id
-            }
-
-            // Create a room from the rumor event
-            val room = Room.new(rumor, currentUser)
-
-            // Update the chat rooms state
-            _chatRooms.update { currentRooms ->
-                (currentRooms + room).sortedDescending().toSet()
-            }
-
-            return room.id
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Failed to create room: ${e.message}")
-        }
-    }
-
-    fun getChatRoom(id: Long): Room? {
-        return chatRooms.value.firstOrNull { it.id == id }
-    }
-
-    private fun mergeChatRooms(rooms: Set<Room>) {
-        _chatRooms.update { currentRooms ->
-            val merged = currentRooms.associateBy { it.id }.toMutableMap()
-            // Add or update rooms from the database
-            rooms.forEach { room ->
-                merged[room.id] = room
-            }
-            // Return as a sorted set to maintain UI consistency
-            merged.values.sortedDescending().toSet()
-        }
-    }
-
-    fun getChatRooms() {
-        viewModelScope.launch {
-            val rooms = nostr.messages.getChatRooms() ?: emptySet()
-            mergeChatRooms(rooms)
-        }
-    }
-
-    suspend fun refreshChatRooms() {
-        try {
-            val rooms = nostr.messages.getChatRooms() ?: emptySet()
-            mergeChatRooms(rooms)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
-        try {
-            return nostr.messages.getChatRoomMessages(roomId)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-
-        return emptyList()
-    }
-
-    fun chatRoomConnect(roomId: Long) {
-        viewModelScope.launch {
-            try {
-                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
-                val members = room.members
-
-                nostr.messages.chatRoomConnect(members.toList())
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
-            }
-        }
-    }
-
-    fun sendMessage(roomId: Long, message: String, replies: List<EventId> = emptyList()) {
-        if (message.isEmpty()) {
-            showError("Message cannot be empty")
-        }
-        viewModelScope.launch {
-            try {
-                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
-                nostr.messages.sendMessage(
-                    to = room.members,
-                    content = message,
-                    subject = room.subject,
-                    replies = replies,
-                    onRumorCreated = { event ->
-                        updateRoomList(roomId, event)
-                        viewModelScope.launch { _newEvents.emit(event) }
-                    },
-                )
-            } catch (e: Exception) {
-                showError("Error: ${e.message}")
-            }
-        }
-    }
-
-    suspend fun sendFileMessage(
-        roomId: Long,
-        file: ByteArray?,
-        contentType: String? = "image/jpeg",
-        replies: List<EventId> = emptyList()
-    ) {
-        if (file == null) return
-
-        try {
-            val uri = blossomUpload(nostr.signer.get(), file, contentType)
-            if (uri != null) sendMessage(roomId, uri, replies)
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Error: ${e.message}")
-        }
-    }
-
-    fun isMessageSent(id: EventId): Boolean {
-        val giftWrapId = nostr.messages.rumorMap[id]
-
-        if (giftWrapId != null) {
-            val isSent = nostr.messages.sentEvents[giftWrapId]?.isNotEmpty() ?: false
-            return isSent
-        } else {
-            return false
-        }
-    }
-
-    private fun updateRoomList(roomId: Long, newMessage: UnsignedEvent) {
-        _chatRooms.update { currentRooms ->
-            currentRooms.map { room ->
-                if (room.id == roomId) {
-                    room.copy(
-                        lastMessage = newMessage.content(),
-                        createdAt = newMessage.createdAt()
-                    )
-                } else {
-                    room
-                }
-            }.sortedDescending().toSet()
         }
     }
 

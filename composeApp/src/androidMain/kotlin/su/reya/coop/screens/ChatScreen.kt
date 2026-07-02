@@ -76,6 +76,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -96,6 +97,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
@@ -103,7 +105,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
 
     // Get chat room by ID
-    val chatRooms by nostrViewModel.chatRooms.collectAsStateWithLifecycle()
+    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
     val room by remember(id) { derivedStateOf { chatRooms.firstOrNull { it.id == id } } }
 
     // Show empty screen
@@ -144,7 +146,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                 val type = context.contentResolver.getType(uri)
 
                 // Send message
-                nostrViewModel.sendFileMessage(id, file, type)
+                chatViewModel.sendFileMessage(id, file, type)
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar("Error: ${e.message}")
             }
@@ -157,7 +159,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     LaunchedEffect(id) {
         // Get messages
-        val initialMessages = nostrViewModel.getChatRoomMessages(id)
+        val initialMessages = chatViewModel.getChatRoomMessages(id)
         messages.clear()
         messages.addAll(initialMessages)
 
@@ -165,10 +167,10 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         loading = false
 
         // Get msg relays for each member
-        nostrViewModel.chatRoomConnect(id)
+        chatViewModel.chatRoomConnect(id)
 
         // Handle new messages
-        nostrViewModel.newEvents.collect { event ->
+        chatViewModel.newEvents.collect { event ->
             if (event.roomId() == id) {
                 if (event.id() !in messages.map { it.id() }) {
                     messages.add(0, event)
@@ -350,7 +352,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 value = text,
                                 onValueChange = { text = it },
                                 onSend = {
-                                    nostrViewModel.sendMessage(id, text)
+                                    chatViewModel.sendMessage(id, text)
                                     text = ""
                                 },
                                 onUpload = {

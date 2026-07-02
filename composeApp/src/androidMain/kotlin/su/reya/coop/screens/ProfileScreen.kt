@@ -44,6 +44,7 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -55,19 +56,20 @@ import su.reya.coop.short
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ProfileScreen(pubkey: String) {
+    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
+
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
     val scope = rememberCoroutineScope()
 
-    val pubkeyObj = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
-
-    val profileFlow = remember(pubkeyObj) { nostrViewModel.getMetadata(pubkeyObj) }
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle()
 
     val metadata = profile?.metadata?.asRecord()
-    val nip05 = metadata?.nip05 ?: pubkeyObj.short()
+    val nip05 = metadata?.nip05 ?: pubkey.short()
     val picture = metadata?.picture
 
     val details = remember(profile) {
@@ -159,7 +161,7 @@ fun ProfileScreen(pubkey: String) {
                                     scope.launch {
                                         try {
                                             val roomId =
-                                                nostrViewModel.createChatRoom(listOf(pubkeyObj))
+                                                chatViewModel.createChatRoom(listOf(pubkey))
                                             navigator.navigate(Screen.Chat(roomId))
                                         } catch (e: Exception) {
                                             e.message?.let { snackbarHostState.showSnackbar(it) }
@@ -189,7 +191,7 @@ fun ProfileScreen(pubkey: String) {
                                 onClick = {
                                     val sendIntent = Intent().apply {
                                         action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, pubkeyObj.toBech32())
+                                        putExtra(Intent.EXTRA_TEXT, pubkey.toBech32())
                                         type = "text/plain"
                                     }
                                     val shareIntent = Intent.createChooser(sendIntent, null)

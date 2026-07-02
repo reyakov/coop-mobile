@@ -52,6 +52,10 @@ val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
 }
 
+val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
+    error("No ChatViewModel provided")
+}
+
 val LocalAuthViewModel = staticCompositionLocalOf<AuthViewModel> {
     error("No AuthViewModel provided")
 }
@@ -72,6 +76,7 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 @Composable
 fun App(
     nostrViewModel: NostrViewModel,
+    chatViewModel: ChatViewModel,
     authViewModel: AuthViewModel,
 ) {
     val context = LocalContext.current
@@ -153,6 +158,7 @@ fun App(
     ) {
         CompositionLocalProvider(
             LocalNostrViewModel provides nostrViewModel,
+            LocalChatViewModel provides chatViewModel,
             LocalAuthViewModel provides authViewModel,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,

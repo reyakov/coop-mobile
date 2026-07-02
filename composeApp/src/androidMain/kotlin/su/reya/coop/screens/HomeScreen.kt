@@ -91,6 +91,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
@@ -112,6 +113,7 @@ fun HomeScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
     val authViewModel = LocalAuthViewModel.current
 
     val scope = rememberCoroutineScope()
@@ -120,11 +122,11 @@ fun HomeScreen() {
     val pullToRefreshState = rememberPullToRefreshState()
 
     val userProfile by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
-    val chatRooms by nostrViewModel.chatRooms.collectAsStateWithLifecycle()
+    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
     val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
-    val isSyncing by nostrViewModel.isSyncing.collectAsStateWithLifecycle()
-    val isPartialProcessedGiftWrap by nostrViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
+    val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
+    val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
     
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     val isBannerDismissed = authState.isNotificationBannerDismissed
@@ -155,7 +157,7 @@ fun HomeScreen() {
     }
 
     LaunchedEffect(Unit) {
-        nostrViewModel.getChatRooms()
+        chatViewModel.refreshChatRooms()
     }
 
     LaunchedEffect(qrScanResult.content) {
@@ -163,7 +165,7 @@ fun HomeScreen() {
             runCatching { PublicKey.parse(result) }
                 .onSuccess { pubkey ->
                     try {
-                        val roomId = nostrViewModel.createChatRoom(listOf(pubkey))
+                        val roomId = chatViewModel.createChatRoom(listOf(pubkey))
                         navigator.navigate(Screen.Chat(roomId))
                     } catch (e: Exception) {
                         e.message?.let { snackbarHostState.showSnackbar(it) }
@@ -320,7 +322,7 @@ fun HomeScreen() {
                         onRefresh = {
                             scope.launch {
                                 isRefreshing = true
-                                nostrViewModel.refreshChatRooms()
+                                chatViewModel.refreshChatRooms()
                                 isRefreshing = false
                             }
                         },
@@ -746,6 +748,7 @@ fun BottomMenuList(
 ) {
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
     val authViewModel = LocalAuthViewModel.current
 
     val defaultMenuList = listOf(
@@ -776,7 +779,14 @@ fun BottomMenuList(
         }
         Spacer(modifier = Modifier.size(16.dp))
         FilledTonalButton(
-            onClick = { onDismiss { authViewModel.logout(onLogout = nostrViewModel::resetInternalState) } },
+            onClick = {
+                onDismiss {
+                    authViewModel.logout(onLogout = {
+                        nostrViewModel.resetInternalState()
+                        chatViewModel.resetInternalState()
+                    })
+                }
+            },
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
