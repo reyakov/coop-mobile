@@ -1,6 +1,9 @@
 package su.reya.coop.screens
 
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -66,6 +69,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_add_circle
 import coop.composeapp.generated.resources.ic_arrow_back
+import coop.composeapp.generated.resources.ic_audio
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
 import coop.composeapp.generated.resources.ic_send
@@ -153,9 +157,19 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
         }
     }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { sendFile(it) }
-    }
+    val fileLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let { sendFile(it) }
+        }
+
+    val sttLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val data = result.data
+                val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                if (!results.isNullOrEmpty()) text = results[0]
+            }
+        }
 
     LaunchedEffect(id) {
         // Get messages
@@ -356,7 +370,24 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                     text = ""
                                 },
                                 onUpload = {
-                                    launcher.launch("image/*")
+                                    fileLauncher.launch("image/*")
+                                },
+                                onMicClick = {
+                                    val intent =
+                                        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                            putExtra(
+                                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                                            )
+                                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now...")
+                                        }
+                                    try {
+                                        sttLauncher.launch(intent)
+                                    } catch (e: Exception) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Speech recognition not available")
+                                        }
+                                    }
                                 }
                             )
                         }
@@ -550,7 +581,8 @@ fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
-    onUpload: () -> Unit
+    onUpload: () -> Unit,
+    onMicClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -576,18 +608,34 @@ fun ChatInput(
             },
         )
         Spacer(modifier = Modifier.size(8.dp))
-        FilledTonalIconButton(
-            onClick = onSend,
-            modifier = Modifier.size(56.dp),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        ) {
-            Icon(
-                painter = painterResource(Res.drawable.ic_send),
-                contentDescription = "Send"
-            )
+        if (value.isNotEmpty()) {
+            FilledTonalIconButton(
+                onClick = onSend,
+                modifier = Modifier.size(56.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_send),
+                    contentDescription = "Send"
+                )
+            }
+        } else {
+            FilledTonalIconButton(
+                onClick = onMicClick,
+                modifier = Modifier.size(56.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
+                Icon(
+                    painter = painterResource(Res.drawable.ic_audio),
+                    contentDescription = "Speech to Text"
+                )
+            }
         }
     }
 }
