@@ -344,11 +344,11 @@ fun ContactListItem(
                 size = 36.dp
             )
         },
-        supportingContent = { Text(text = pubkey.short()) },
+        supportingContent = { Text(pubkey.short()) },
         content = {
             Text(
                 text = profile?.name ?: "No name",
-                style = MaterialTheme.typography.titleMediumEmphasized,
+                style = MaterialTheme.typography.titleMedium,
             )
         }
     )
