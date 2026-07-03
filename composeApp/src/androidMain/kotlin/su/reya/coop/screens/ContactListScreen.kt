@@ -3,11 +3,15 @@ package su.reya.coop.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -20,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -54,6 +59,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
@@ -67,9 +73,11 @@ fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val chatViewModel = LocalChatViewModel.current
 
     val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
+    var contactToDelete by remember { mutableStateOf<PublicKey?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -128,43 +136,54 @@ fun ContactListScreen() {
             }
         },
         content = { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .padding(innerPadding),
-                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-            ) {
-                if (contactList.isNotEmpty()) {
-                    contactList.forEachIndexed { index, pubkey ->
+            if (contactList.isNotEmpty()) {
+                val contacts = remember(contactList) { contactList.toList() }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = innerPadding.calculateTopPadding()),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                ) {
+                    itemsIndexed(contacts) { index, pubkey ->
                         ContactListItem(
                             pubkey = pubkey,
                             index = index,
-                            total = contactList.size,
-                            onClick = {})
+                            total = contacts.size,
+                            onClick = {
+                                val room = chatViewModel.createChatRoom(listOf(pubkey))
+                                navigator.navigate(Screen.Chat(room))
+                            },
+                            onLongClick = {
+                                contactToDelete = pubkey
+                            }
+                        )
                     }
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = "No contacts yet",
-                                style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Your contacts will appear here",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
+                        Text(
+                            text = "No contacts yet",
+                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Your contacts will appear here",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
             }
@@ -173,6 +192,29 @@ fun ContactListScreen() {
 
     if (openAddContactDialog) {
         AddContactDialog(onDismissRequest = { openAddContactDialog = false })
+    }
+
+    if (contactToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { contactToDelete = null },
+            title = { Text("Delete Contact") },
+            text = { Text("Are you sure you want to remove this contact?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        contactToDelete?.let { nostrViewModel.removeContact(it) }
+                        contactToDelete = null
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { contactToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -282,6 +324,7 @@ fun ContactListItem(
     index: Int,
     total: Int = 0,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val nostrViewModel = LocalNostrViewModel.current
     val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
@@ -289,7 +332,7 @@ fun ContactListItem(
 
     SegmentedListItem(
         onClick = onClick,
-        onLongClick = { nostrViewModel.removeContact(pubkey) },
+        onLongClick = onLongClick,
         shapes = ListItemDefaults.segmentedShapes(
             index = index,
             count = total
@@ -301,11 +344,11 @@ fun ContactListItem(
                 size = 36.dp
             )
         },
-        supportingContent = { Text(text = pubkey.short()) },
+        supportingContent = { Text(pubkey.short()) },
         content = {
             Text(
                 text = profile?.name ?: "No name",
-                style = MaterialTheme.typography.titleMediumEmphasized,
+                style = MaterialTheme.typography.titleMedium,
             )
         }
     )

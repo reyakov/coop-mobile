@@ -52,7 +52,7 @@ class MessageManager(private val nostr: Nostr) {
         try {
             val author =
                 signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
-            
+
             val relays = nip17ExtractRelayList(msgRelayList)
 
             // Ensure relay connections
@@ -130,7 +130,7 @@ class MessageManager(private val nostr: Nostr) {
             val filter = Filter().identifier(giftId.toHex())
             val event = client?.database()?.query(filter)?.first()
 
-            return event?.content()?.let { UnsignedEvent.fromJson(it) }
+            return event?.content()?.let { UnsignedEvent.fromJson(it).ensureId() }
         } catch (e: Throwable) {
             throw IllegalStateException("Failed to get cached rumor: ${e.message}", e)
         }
