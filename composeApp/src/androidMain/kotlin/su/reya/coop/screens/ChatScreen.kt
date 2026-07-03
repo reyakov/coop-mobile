@@ -6,6 +6,12 @@ import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -608,33 +614,35 @@ fun ChatInput(
             },
         )
         Spacer(modifier = Modifier.size(8.dp))
-        if (value.isNotEmpty()) {
-            FilledTonalIconButton(
-                onClick = onSend,
-                modifier = Modifier.size(56.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_send),
-                    contentDescription = "Send"
-                )
-            }
-        } else {
-            FilledTonalIconButton(
-                onClick = onMicClick,
-                modifier = Modifier.size(56.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_audio),
-                    contentDescription = "Speech to Text"
-                )
+        AnimatedContent(
+            targetState = value.isNotEmpty(),
+            transitionSpec = { (scaleIn() + fadeIn()) togetherWith (scaleOut() + fadeOut()) },
+            label = "send_mic_transition"
+        ) { isNotEmpty ->
+            if (isNotEmpty) {
+                IconButton(
+                    onClick = onSend,
+                    modifier = Modifier.size(56.dp),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(Res.drawable.ic_send),
+                        contentDescription = "Send"
+                    )
+                }
+            } else {
+                FilledTonalIconButton(
+                    onClick = onMicClick,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(Res.drawable.ic_audio),
+                        contentDescription = "Speech to Text"
+                    )
+                }
             }
         }
     }
