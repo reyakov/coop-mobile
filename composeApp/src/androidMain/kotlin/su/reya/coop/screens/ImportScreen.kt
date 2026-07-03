@@ -58,16 +58,14 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalAppViewModel
+import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -76,24 +74,19 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val appViewModel = LocalAppViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
+    val authViewModel = LocalAuthViewModel.current
 
     val scope = rememberCoroutineScope()
 
-    val isBusy by appViewModel.isBusy.collectAsStateWithLifecycle(false)
+    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val isBusy = authState.isBusy
     var secret by remember { mutableStateOf("") }
     var pubkey by remember { mutableStateOf<PublicKey?>(null) }
 
-    // Get metadata when pubkey changes
-    val metadata by remember(pubkey) {
-        pubkey?.let(profileViewModel::getMetadata) ?: flowOf(null)
+    val profile by remember(pubkey) {
+        pubkey?.let(nostrViewModel::getMetadata) ?: flowOf(null)
     }.collectAsStateWithLifecycle(null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.displayName ?: profile?.name ?: pubkey?.short() ?: "Unknown"
-    val picture = profile?.picture
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
@@ -168,7 +161,7 @@ fun ImportScreen() {
                         contentAlignment = Alignment.Center
                     ) {
                         Avatar(
-                            picture = picture,
+                            picture = profile?.picture,
                             description = "Profile picture",
                             modifier = Modifier.fillMaxSize(),
                             shape = MaterialShapes.Cookie9Sided.toShape(),
@@ -176,7 +169,7 @@ fun ImportScreen() {
                     }
                     Spacer(modifier = Modifier.size(8.dp))
                     Text(
-                        text = displayName,
+                        text = profile?.name ?: "",
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleLargeEmphasized.copy(
                             fontFamily = getExpressiveFontFamily()
@@ -250,10 +243,10 @@ fun ImportScreen() {
                             onClick = {
                                 scope.launch {
                                     if (pubkey == null) {
-                                        accountViewModel.verifyIdentity(secret).let { pubkey = it }
+                                        authViewModel.verifyIdentity(secret).let { pubkey = it }
                                     } else {
                                         // Import the identity
-                                        accountViewModel.importIdentity(secret)
+                                        authViewModel.importIdentity(secret)
                                         // Navigate to the home screen
                                         navigator.navigate(Screen.Home)
                                     }

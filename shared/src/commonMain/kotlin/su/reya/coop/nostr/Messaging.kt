@@ -24,6 +24,9 @@ import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.nip17ExtractRelayList
 import rust.nostr.sdk.nip59MakeGiftWrapAsync
+import su.reya.coop.Room
+import su.reya.coop.RoomKind
+import su.reya.coop.roomId
 import kotlin.time.Duration
 
 data class MessageSyncState(
@@ -47,7 +50,9 @@ class MessageManager(private val nostr: Nostr) {
 
     suspend fun getUserMessages(msgRelayList: Event) {
         try {
-            val author = signer.currentUser ?: throw IllegalStateException("User not signed in")
+            val author =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+            
             val relays = nip17ExtractRelayList(msgRelayList)
 
             // Ensure relay connections

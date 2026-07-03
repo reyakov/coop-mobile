@@ -46,7 +46,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -56,28 +56,27 @@ import su.reya.coop.short
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ProfileScreen(pubkey: String) {
+    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
+
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
+    val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val profileViewModel = LocalProfileViewModel.current
     val scope = rememberCoroutineScope()
 
-    val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
 
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsStateWithLifecycle()
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.displayName ?: profile?.name ?: "No name"
-    val nip05 = profile?.nip05 ?: pubkey.short()
-    val picture = profile?.picture
+    val metadata = profile?.metadata?.asRecord()
+    val nip05 = metadata?.nip05 ?: pubkey.short()
+    val picture = metadata?.picture
 
     val details = remember(profile) {
         listOf(
-            "Username:" to (profile?.name ?: "None"),
-            "Website:" to (profile?.website ?: "None"),
-            "₿ Lightning Address:" to (profile?.lud16 ?: "None"),
+            "Username:" to (metadata?.name ?: "None"),
+            "Website:" to (metadata?.website ?: "None"),
+            "₿ Lightning Address:" to (metadata?.lud16 ?: "None"),
         )
     }
 
@@ -135,7 +134,7 @@ fun ProfileScreen(pubkey: String) {
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            text = displayName,
+                            text = profile?.name ?: "No name",
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.titleLargeEmphasized.copy(
                                 fontFamily = getExpressiveFontFamily()
@@ -161,7 +160,8 @@ fun ProfileScreen(pubkey: String) {
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            val roomId = chatViewModel.createChatRoom(listOf(pubkey))
+                                            val roomId =
+                                                chatViewModel.createChatRoom(listOf(pubkey))
                                             navigator.navigate(Screen.Chat(roomId))
                                         } catch (e: Exception) {
                                             e.message?.let { snackbarHostState.showSnackbar(it) }

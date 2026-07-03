@@ -45,7 +45,7 @@ import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAccountViewModel
+import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -57,12 +57,12 @@ fun OnboardingScreen() {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val accountViewModel = LocalAccountViewModel.current
+    val authViewModel = LocalAuthViewModel.current
     val scope = rememberCoroutineScope()
 
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
-    
+
     val annotatedText = buildAnnotatedString {
         append("By using Coop, you agree to accept\nour ")
         // Push "Terms of Use" link
@@ -158,9 +158,9 @@ fun OnboardingScreen() {
                             FilledTonalButton(
                                 onClick = {
                                     scope.launch {
-                                        if (accountViewModel.isExternalSignerAvailable()) {
+                                        if (authViewModel.isExternalSignerAvailable()) {
                                             try {
-                                                accountViewModel.connectExternalSigner()
+                                                authViewModel.connectExternalSigner()
                                                 navigator.navigate(Screen.Home)
                                             } catch (e: Exception) {
                                                 e.message?.let { snackbarHostState.showSnackbar(it) }

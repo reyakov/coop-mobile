@@ -40,8 +40,8 @@ import kotlinx.coroutines.launch
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.RoomKind
 import su.reya.coop.Screen
-import su.reya.coop.nostr.RoomKind
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable

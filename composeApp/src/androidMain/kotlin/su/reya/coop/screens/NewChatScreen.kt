@@ -57,7 +57,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -71,10 +71,10 @@ fun NewChatScreen() {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
+    val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val profileViewModel = LocalProfileViewModel.current
 
-    val contactList by profileViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
 
     val createGroup = remember { mutableStateOf(false) }
@@ -96,12 +96,12 @@ fun NewChatScreen() {
                     selectedReceivers.add(pubkey)
                 }
             } else if (query.contains("@")) {
-                val pubkey = profileViewModel.searchByAddress(query)
+                val pubkey = nostrViewModel.searchByAddress(query)
                 if (pubkey != null) {
                     selectedReceivers.add(pubkey)
                 }
             } else {
-                val results = profileViewModel.searchByNostr(query)
+                val results = nostrViewModel.searchByNostr(query)
                 searchResults.clear()
                 searchResults.addAll(results)
             }
@@ -290,13 +290,9 @@ fun ReceiverChip(
     pubkey: PublicKey,
     onRemove: () -> Unit
 ) {
-    val profileViewModel = LocalProfileViewModel.current
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val nostrViewModel = LocalNostrViewModel.current
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
         InputChip(
@@ -304,7 +300,7 @@ fun ReceiverChip(
             onClick = onRemove,
             label = {
                 Text(
-                    text = displayName,
+                    text = profile?.name ?: "No name",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     )
@@ -312,8 +308,8 @@ fun ReceiverChip(
             },
             avatar = {
                 Avatar(
-                    picture = picture,
-                    description = displayName,
+                    picture = profile?.picture,
+                    description = profile?.name ?: "No name",
                     size = 24.dp
                 )
             },
@@ -376,13 +372,9 @@ fun ContactListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val profileViewModel = LocalProfileViewModel.current
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val nostrViewModel = LocalNostrViewModel.current
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     SegmentedListItem(
         selected = isSelected,
@@ -394,15 +386,15 @@ fun ContactListItem(
         ),
         leadingContent = {
             Avatar(
-                picture = picture,
-                description = displayName,
+                picture = profile?.picture,
+                description = profile?.name ?: "",
                 size = 36.dp
             )
         },
         supportingContent = { Text(text = pubkey.short()) },
         content = {
             Text(
-                text = displayName,
+                text = profile?.name ?: "",
                 style = MaterialTheme.typography.titleMediumEmphasized,
             )
         }

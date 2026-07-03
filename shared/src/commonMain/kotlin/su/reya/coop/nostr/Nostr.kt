@@ -79,6 +79,8 @@ class Nostr {
             // Initialize configurations for nostr client
             val lmdb = NostrDatabase.lmdb(dbPath)
             val gossip = NostrGossip.inMemory()
+
+            // Initialize the authenticator
             val authenticator = SignerAuthenticator(signer)
             val idleTimeout = Duration.parse("5m")
 
@@ -136,7 +138,7 @@ class Nostr {
 
     fun isSignedByUser(event: Event): Boolean {
         return try {
-            signer.currentUser == event.author()
+            signer.publicKeyFlow.value == event.author()
         } catch (e: Exception) {
             println("Failed to check if event is signed by user: ${e.message}")
             false
@@ -208,7 +210,7 @@ class Nostr {
                                     if (isSignedByUser(event = event)) {
                                         val pubkeys = event.tags().publicKeys()
                                         // Get mutual contacts
-                                        profiles.getMutualContacts(pubkeys)
+                                        profiles.syncMutualContacts(pubkeys)
                                         // Emit contact list update
                                         onContactListUpdate(pubkeys)
                                     }

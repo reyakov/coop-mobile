@@ -55,7 +55,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileViewModel
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -66,9 +66,9 @@ import su.reya.coop.short
 fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
 
-    val contactList by profileViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -180,7 +180,7 @@ fun ContactListScreen() {
 @Composable
 fun AddContactDialog(onDismissRequest: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val profileViewModel = LocalProfileViewModel.current
+    val nostrViewModel = LocalNostrViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
@@ -225,7 +225,7 @@ fun AddContactDialog(onDismissRequest: () -> Unit) {
                     actions = {
                         IconButton(onClick = {
                             scope.launch {
-                                val success = profileViewModel.addContact(contact)
+                                val success = nostrViewModel.addContact(contact)
                                 if (success) onDismissRequest()
                             }
                         }) {
@@ -283,32 +283,28 @@ fun ContactListItem(
     total: Int = 0,
     onClick: () -> Unit,
 ) {
-    val profileViewModel = LocalProfileViewModel.current
-    val metadataFlow = remember(pubkey) { profileViewModel.getMetadata(pubkey) }
-    val metadata by metadataFlow.collectAsState(initial = null)
-
-    val profile = metadata?.asRecord()
-    val displayName = profile?.name ?: profile?.displayName ?: pubkey.short()
-    val picture = profile?.picture
+    val nostrViewModel = LocalNostrViewModel.current
+    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profile by profileFlow.collectAsState(initial = null)
 
     SegmentedListItem(
         onClick = onClick,
-        onLongClick = { profileViewModel.removeContact(pubkey) },
+        onLongClick = { nostrViewModel.removeContact(pubkey) },
         shapes = ListItemDefaults.segmentedShapes(
             index = index,
             count = total
         ),
         leadingContent = {
             Avatar(
-                picture = picture,
-                description = displayName,
+                picture = profile?.picture,
+                description = profile?.name,
                 size = 36.dp
             )
         },
         supportingContent = { Text(text = pubkey.short()) },
         content = {
             Text(
-                text = displayName,
+                text = profile?.name ?: "No name",
                 style = MaterialTheme.typography.titleMediumEmphasized,
             )
         }

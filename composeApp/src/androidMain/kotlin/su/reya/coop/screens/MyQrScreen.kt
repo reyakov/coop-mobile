@@ -13,22 +13,24 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
+import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @Composable
 fun MyQrScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val accountViewModel = LocalAccountViewModel.current
-    val currentUser = accountViewModel.nostr.signer.currentUser ?: return
+    val nostrViewModel = LocalNostrViewModel.current
+    val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -59,7 +61,7 @@ fun MyQrScreen() {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Image(
-                    painter = rememberQrCodePainter(currentUser.toBech32()),
+                    painter = rememberQrCodePainter(currentUser?.publicKey?.toBech32() ?: ""),
                     contentDescription = "My QR"
                 )
             }
