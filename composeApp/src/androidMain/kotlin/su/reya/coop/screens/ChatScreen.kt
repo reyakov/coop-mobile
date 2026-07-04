@@ -7,12 +7,16 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,6 +101,7 @@ import su.reya.coop.Room
 import su.reya.coop.Screen
 import su.reya.coop.extractUrls
 import su.reya.coop.formatAsGroupHeader
+import su.reya.coop.formatAsTime
 import su.reya.coop.humanReadable
 import su.reya.coop.isImageUrl
 import su.reya.coop.rememberUiState
@@ -554,6 +559,9 @@ fun ChatMessage(
     val content = rumor.content()
     val images = remember(content) { content.extractUrls().filter { it.isImageUrl() } }
     val cleanedContent = remember(content) { content.removeImageUrls() }
+    val timestamp = remember(rumor) { rumor.createdAt().formatAsTime() }
+
+    var isMessageClicked by remember { mutableStateOf(false) }
 
     val bubbleShape = if (isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
@@ -574,6 +582,12 @@ fun ChatMessage(
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Column(
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                isMessageClicked = !isMessageClicked
+            },
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -606,6 +620,20 @@ fun ChatMessage(
                         contentScale = ContentScale.FillWidth
                     )
                 }
+            }
+            AnimatedVisibility(
+                visible = isMessageClicked,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Text(
+                    text = timestamp,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.align(
+                        if (isMine) Alignment.End else Alignment.Start
+                    )
+                )
             }
         }
     }
