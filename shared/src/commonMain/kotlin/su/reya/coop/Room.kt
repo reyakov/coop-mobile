@@ -153,21 +153,25 @@ fun UnsignedEvent.roomId(): Long {
     return sortedUniqueKeys.hashCode().toLong()
 }
 
-fun Timestamp.ago(): String {
-    val SECONDS_IN_MINUTE = 60L
-    val MINUTES_IN_HOUR = 60L
-    val HOURS_IN_DAY = 24L
-    val DAYS_IN_MONTH = 30L
+fun Timestamp.formatAsTime(): String {
+    val timeZone = TimeZone.currentSystemDefault()
+    val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
+    val inputDateTime = inputInstant.toLocalDateTime(timeZone)
+    val hour = inputDateTime.hour.toString().padStart(2, '0')
+    val minute = inputDateTime.minute.toString().padStart(2, '0')
+    return "$hour:$minute"
+}
 
+fun Timestamp.ago(): String {
     val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
     val now = Clock.System.now()
     val duration = now - inputInstant
 
     return when {
-        duration.inWholeSeconds < SECONDS_IN_MINUTE -> "Now"
-        duration.inWholeMinutes < MINUTES_IN_HOUR -> "${duration.inWholeMinutes}m"
-        duration.inWholeHours < HOURS_IN_DAY -> "${duration.inWholeHours}h"
-        duration.inWholeDays < DAYS_IN_MONTH -> "${duration.inWholeDays}d"
+        duration.inWholeSeconds < 60L -> "Now"
+        duration.inWholeMinutes < 60L -> "${duration.inWholeMinutes}m"
+        duration.inWholeHours < 24L -> "${duration.inWholeHours}h"
+        duration.inWholeDays < 30L -> "${duration.inWholeDays}d"
         else -> {
             val localDateTime = inputInstant.toLocalDateTime(TimeZone.currentSystemDefault())
             val month =

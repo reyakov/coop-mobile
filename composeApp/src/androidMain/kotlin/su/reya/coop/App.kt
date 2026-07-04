@@ -35,7 +35,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import su.reya.coop.repository.ErrorRepository
-import su.reya.coop.screens.ChatScreen
+import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen

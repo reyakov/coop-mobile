@@ -1,4 +1,4 @@
-package su.reya.coop.screens
+package su.reya.coop.screens.chat
 
 import android.app.Activity
 import android.content.Intent
@@ -6,12 +6,6 @@ import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +20,6 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -37,23 +30,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -66,25 +53,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
-import coop.composeapp.generated.resources.ic_add_circle
 import coop.composeapp.generated.resources.ic_arrow_back
-import coop.composeapp.generated.resources.ic_audio
-import coop.composeapp.generated.resources.ic_cancel
-import coop.composeapp.generated.resources.ic_check_circle
-import coop.composeapp.generated.resources.ic_send
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
-import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
@@ -93,12 +71,9 @@ import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
-import su.reya.coop.humanReadable
 import su.reya.coop.rememberUiState
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
-import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.short
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -140,9 +115,8 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     var requireScreening by remember { mutableStateOf(screening) }
 
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
-    val groupedMessages = remember(messages.toList()) {
-        messages.groupBy { it.createdAt().formatAsGroupHeader() }
-    }
+    val groupedMessages =
+        remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroupHeader() } } }
 
     val sendFile = { uri: Uri ->
         scope.launch {
@@ -279,6 +253,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                         room?.let { ScreenerCard(it) }
                     }
 
+                    val mineColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    val otherColor = MaterialTheme.colorScheme.onSurface
+
                     when (messages.isNotEmpty()) {
                         true -> {
                             LazyColumn(
@@ -289,15 +266,18 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 reverseLayout = true,
                                 state = listState,
                             ) {
-                                groupedMessages.forEach { (dateHeader, messagesInGroup) ->
+                                groupedMessages.value.forEach { (dateHeader, messagesInGroup) ->
                                     items(
                                         items = messagesInGroup,
-                                        key = { it.id()?.toBech32() ?: it.hashCode() }
-                                    ) {
-                                        ChatMessage(
-                                            rumor = it,
-                                            isMine = currentUser?.publicKey == it.author()
+                                        key = { it.id()?.toHex() ?: it.hashCode().toString() }
+                                    ) { event ->
+                                        val isMine = currentUser?.publicKey == event.author()
+                                        val uiModel = rememberMessageUiModel(
+                                            event = event,
+                                            currentUserPublicKey = currentUser?.publicKey,
+                                            contentColor = if (isMine) mineColor else otherColor
                                         )
+                                        ChatMessage(model = uiModel)
                                     }
                                     item {
                                         DateSeparator(dateHeader)
@@ -402,248 +382,4 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
             }
         }
     )
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun ScreenerCard(room: Room) {
-    val pubkey = room.members.firstOrNull() ?: return
-
-    val nostrViewModel = LocalNostrViewModel.current
-    val scope = rememberCoroutineScope()
-
-    var isContact by remember { mutableStateOf(false) }
-    var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
-    var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
-
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val profile by profileFlow.collectAsStateWithLifecycle()
-
-    LaunchedEffect(pubkey) {
-        scope.launch {
-            // Check contact
-            nostrViewModel.verifyContact(pubkey).let { isContact = it }
-            // Get mutual contacts
-            nostrViewModel.mutualContacts(pubkey).let { mutualContacts = it }
-            // Get the last activity
-            nostrViewModel.verifyActivity(pubkey)?.let { lastActivity = it }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(top = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Avatar(
-                picture = profile?.picture,
-                description = "Profile picture",
-                modifier = Modifier.size(120.dp),
-                shape = MaterialShapes.Cookie12Sided.toShape(),
-            )
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = profile?.name ?: "No name",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                        fontFamily = getExpressiveFontFamily()
-                    ),
-                )
-                Text(
-                    text = pubkey.short(),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-        }
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (isContact) Res.drawable.ic_check_circle else Res.drawable.ic_cancel
-                    ),
-                    contentDescription = "Warning",
-                    tint = if (isContact) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
-                Text(
-                    text = if (isContact) "Contact" else "Not a contact",
-                    style = MaterialTheme.typography.labelMediumEmphasized
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (mutualContacts.isNotEmpty()) Res.drawable.ic_check_circle else Res.drawable.ic_cancel
-                    ),
-                    contentDescription = "Warning",
-                    tint = if (mutualContacts.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
-                Text(
-                    text = if (mutualContacts.isEmpty()) "No contacts in common" else "${mutualContacts.size} contacts in common",
-                    style = MaterialTheme.typography.labelMediumEmphasized
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    painter = painterResource(Res.drawable.ic_check_circle),
-                    contentDescription = "Warning",
-                    tint = if (lastActivity != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                )
-                Text(
-                    text = if (lastActivity == null) "Don't have any public activities" else "Last activity at ${lastActivity?.humanReadable()}",
-                    style = MaterialTheme.typography.labelMediumEmphasized
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DateSeparator(date: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = date,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.outline
-        )
-    }
-}
-
-@Composable
-fun ChatMessage(
-    rumor: UnsignedEvent,
-    isMine: Boolean = false,
-) {
-    val bubbleShape = if (isMine) {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
-    }
-
-    val containerColor =
-        if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-
-    val contentColor =
-        if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
-        Column(
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
-        ) {
-            Surface(
-                color = containerColor,
-                contentColor = contentColor,
-                shape = bubbleShape,
-                modifier = Modifier.widthIn(max = 280.dp)
-            ) {
-                Text(
-                    text = rumor.content(),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ChatInput(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
-    onUpload: () -> Unit,
-    onMicClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        TextField(
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(28.dp),
-            colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text("Message") },
-            leadingIcon = {
-                IconButton(onClick = onUpload) {
-                    Icon(
-                        painter = painterResource(Res.drawable.ic_add_circle),
-                        contentDescription = "Upload",
-                    )
-                }
-            },
-        )
-        Spacer(modifier = Modifier.size(8.dp))
-        AnimatedContent(
-            targetState = value.isNotEmpty(),
-            transitionSpec = { (scaleIn() + fadeIn()) togetherWith (scaleOut() + fadeOut()) },
-            label = "send_mic_transition"
-        ) { isNotEmpty ->
-            if (isNotEmpty) {
-                IconButton(
-                    onClick = onSend,
-                    modifier = Modifier.size(56.dp),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                ) {
-                    Icon(
-                        painter = painterResource(Res.drawable.ic_send),
-                        contentDescription = "Send"
-                    )
-                }
-            } else {
-                FilledTonalIconButton(
-                    onClick = onMicClick,
-                    modifier = Modifier.size(56.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(Res.drawable.ic_audio),
-                        contentDescription = "Speech to Text"
-                    )
-                }
-            }
-        }
-    }
 }
