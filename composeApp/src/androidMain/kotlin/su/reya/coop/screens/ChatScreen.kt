@@ -74,8 +74,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -558,10 +563,7 @@ fun ChatMessage(
 ) {
     val content = rumor.content()
     val images = remember(content) { content.extractUrls().filter { it.isImageUrl() } }
-    val cleanedContent = remember(content) { content.removeImageUrls() }
     val timestamp = remember(rumor) { rumor.createdAt().formatAsTime() }
-
-    var isMessageClicked by remember { mutableStateOf(false) }
 
     val bubbleShape = if (isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
@@ -574,6 +576,36 @@ fun ChatMessage(
 
     val contentColor =
         if (!isMine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
+
+    val annotatedContent = remember(content, contentColor) {
+        buildAnnotatedString {
+            val cleanedContent = content.removeImageUrls()
+            val urlRegex = Regex("(https?://\\S+)", RegexOption.IGNORE_CASE)
+            var lastIndex = 0
+            urlRegex.findAll(cleanedContent).forEach { matchResult ->
+                append(cleanedContent.substring(lastIndex, matchResult.range.first))
+                val url = matchResult.value
+                pushLink(
+                    LinkAnnotation.Url(
+                        url = url,
+                        styles = TextLinkStyles(
+                            style = SpanStyle(
+                                color = contentColor,
+                                textDecoration = TextDecoration.Underline,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    )
+                )
+                append(url)
+                pop()
+                lastIndex = matchResult.range.last + 1
+            }
+            append(cleanedContent.substring(lastIndex))
+        }
+    }
+
+    var isMessageClicked by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -591,7 +623,7 @@ fun ChatMessage(
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (cleanedContent.isNotBlank()) {
+            if (annotatedContent.isNotBlank()) {
                 Surface(
                     color = containerColor,
                     contentColor = contentColor,
@@ -599,7 +631,7 @@ fun ChatMessage(
                     modifier = Modifier.widthIn(max = 280.dp)
                 ) {
                     Text(
-                        text = rumor.content(),
+                        text = annotatedContent,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyLarge
                     )
