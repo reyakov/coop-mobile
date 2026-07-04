@@ -7,15 +7,15 @@ fun PublicKey.short(): String {
     return bech32.substring(0, 6) + "..." + bech32.substring(bech32.length - 4)
 }
 
-private val urlRegex = Regex("(https?://\\S+)", RegexOption.IGNORE_CASE)
+val URL_REGEX = Regex("(https?://\\S+)", RegexOption.IGNORE_CASE)
 private val imageExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp")
 
 fun String.extractUrls(): List<String> {
-    return urlRegex.findAll(this).map { it.value }.toList()
+    return URL_REGEX.findAll(this).map { it.value }.toList()
 }
 
 fun String.removeImageUrls(): String {
-    return urlRegex.replace(this) { result ->
+    return URL_REGEX.replace(this) { result ->
         if (result.value.isImageUrl()) "" else result.value
     }.replace(Regex("\\s+"), " ").trim()
 }

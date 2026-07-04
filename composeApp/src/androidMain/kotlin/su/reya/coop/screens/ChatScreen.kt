@@ -59,6 +59,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -74,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -104,17 +106,76 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.Screen
-import su.reya.coop.extractUrls
+import su.reya.coop.URL_REGEX
 import su.reya.coop.formatAsGroupHeader
 import su.reya.coop.formatAsTime
 import su.reya.coop.humanReadable
 import su.reya.coop.isImageUrl
 import su.reya.coop.rememberUiState
-import su.reya.coop.removeImageUrls
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.short
+
+@Immutable
+data class MessageModel(
+    val id: String,
+    val annotatedContent: AnnotatedString,
+    val images: List<String>,
+    val timestamp: String,
+    val isMine: Boolean
+)
+
+@Composable
+fun rememberMessageModel(
+    event: UnsignedEvent,
+    currentUserPublicKey: PublicKey?,
+    contentColor: Color
+): MessageModel {
+    return remember(event, currentUserPublicKey, contentColor) {
+        val content = event.content()
+        val images = URL_REGEX.findAll(content)
+            .map { it.value }
+            .filter { it.isImageUrl() }
+            .toList()
+
+        val cleanedContent = URL_REGEX.replace(content) { result ->
+            if (result.value.isImageUrl()) "" else result.value
+        }.replace(Regex("\\s+"), " ").trim()
+
+        val annotatedString = buildAnnotatedString {
+            var lastIndex = 0
+            URL_REGEX.findAll(cleanedContent).forEach { matchResult ->
+                append(cleanedContent.substring(lastIndex, matchResult.range.first))
+                val url = matchResult.value
+                pushLink(
+                    LinkAnnotation.Url(
+                        url = url,
+                        styles = TextLinkStyles(
+                            style = SpanStyle(
+                                color = contentColor,
+                                textDecoration = TextDecoration.Underline,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    )
+                )
+                append(url)
+                pop()
+                lastIndex = matchResult.range.last + 1
+            }
+            append(cleanedContent.substring(lastIndex))
+        }
+
+        MessageModel(
+            id = event.id()?.toHex() ?: event.hashCode().toString(),
+            annotatedContent = annotatedString,
+            images = images,
+            timestamp = event.createdAt().formatAsTime(),
+            isMine = event.author() == currentUserPublicKey
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -156,9 +217,8 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     var requireScreening by remember { mutableStateOf(screening) }
 
     val messages = remember { mutableStateListOf<UnsignedEvent>() }
-    val groupedMessages = remember(messages.toList()) {
-        messages.groupBy { it.createdAt().formatAsGroupHeader() }
-    }
+    val groupedMessages =
+        remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroupHeader() } } }
 
     val sendFile = { uri: Uri ->
         scope.launch {
@@ -295,6 +355,9 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                         room?.let { ScreenerCard(it) }
                     }
 
+                    val mineColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    val otherColor = MaterialTheme.colorScheme.onSurface
+
                     when (messages.isNotEmpty()) {
                         true -> {
                             LazyColumn(
@@ -305,15 +368,18 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
                                 reverseLayout = true,
                                 state = listState,
                             ) {
-                                groupedMessages.forEach { (dateHeader, messagesInGroup) ->
+                                groupedMessages.value.forEach { (dateHeader, messagesInGroup) ->
                                     items(
                                         items = messagesInGroup,
-                                        key = { it.id()?.toBech32() ?: it.hashCode() }
-                                    ) {
-                                        ChatMessage(
-                                            rumor = it,
-                                            isMine = currentUser?.publicKey == it.author()
+                                        key = { it.id()?.toHex() ?: it.hashCode().toString() }
+                                    ) { event ->
+                                        val isMine = currentUser?.publicKey == event.author()
+                                        val uiModel = rememberMessageModel(
+                                            event = event,
+                                            currentUserPublicKey = currentUser?.publicKey,
+                                            contentColor = if (isMine) mineColor else otherColor
                                         )
+                                        ChatMessage(model = uiModel)
                                     }
                                     item {
                                         DateSeparator(dateHeader)
@@ -557,61 +623,26 @@ fun DateSeparator(date: String) {
 }
 
 @Composable
-fun ChatMessage(
-    rumor: UnsignedEvent,
-    isMine: Boolean = false,
-) {
-    val content = rumor.content()
-    val images = remember(content) { content.extractUrls().filter { it.isImageUrl() } }
-    val timestamp = remember(rumor) { rumor.createdAt().formatAsTime() }
+fun ChatMessage(model: MessageModel) {
+    var isMessageClicked by remember { mutableStateOf(false) }
 
-    val bubbleShape = if (isMine) {
+    val bubbleShape = if (model.isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
     } else {
         RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
     }
 
     val containerColor =
-        if (!isMine) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer
+        if (!model.isMine) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer
 
     val contentColor =
-        if (!isMine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
-
-    val annotatedContent = remember(content, contentColor) {
-        buildAnnotatedString {
-            val cleanedContent = content.removeImageUrls()
-            val urlRegex = Regex("(https?://\\S+)", RegexOption.IGNORE_CASE)
-            var lastIndex = 0
-            urlRegex.findAll(cleanedContent).forEach { matchResult ->
-                append(cleanedContent.substring(lastIndex, matchResult.range.first))
-                val url = matchResult.value
-                pushLink(
-                    LinkAnnotation.Url(
-                        url = url,
-                        styles = TextLinkStyles(
-                            style = SpanStyle(
-                                color = contentColor,
-                                textDecoration = TextDecoration.Underline,
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                    )
-                )
-                append(url)
-                pop()
-                lastIndex = matchResult.range.last + 1
-            }
-            append(cleanedContent.substring(lastIndex))
-        }
-    }
-
-    var isMessageClicked by remember { mutableStateOf(false) }
+        if (!model.isMine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+        contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Column(
             modifier = Modifier.clickable(
@@ -620,10 +651,10 @@ fun ChatMessage(
             ) {
                 isMessageClicked = !isMessageClicked
             },
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+            horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (annotatedContent.isNotBlank()) {
+            if (model.annotatedContent.isNotBlank()) {
                 Surface(
                     color = containerColor,
                     contentColor = contentColor,
@@ -631,13 +662,13 @@ fun ChatMessage(
                     modifier = Modifier.widthIn(max = 280.dp)
                 ) {
                     Text(
-                        text = annotatedContent,
+                        text = model.annotatedContent,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyLarge
                     )
                 }
             }
-            images.forEach { imageUrl ->
+            model.images.forEach { imageUrl ->
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
@@ -659,11 +690,11 @@ fun ChatMessage(
                 exit = fadeOut() + shrinkVertically()
             ) {
                 Text(
-                    text = timestamp,
+                    text = model.timestamp,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.align(
-                        if (isMine) Alignment.End else Alignment.Start
+                        if (model.isMine) Alignment.End else Alignment.Start
                     )
                 )
             }
