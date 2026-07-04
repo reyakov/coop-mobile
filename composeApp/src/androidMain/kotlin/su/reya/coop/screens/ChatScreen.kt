@@ -66,12 +66,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_add_circle
 import coop.composeapp.generated.resources.ic_arrow_back
@@ -92,9 +95,12 @@ import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.Screen
+import su.reya.coop.extractUrls
 import su.reya.coop.formatAsGroupHeader
 import su.reya.coop.humanReadable
+import su.reya.coop.isImageUrl
 import su.reya.coop.rememberUiState
+import su.reya.coop.removeImageUrls
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
@@ -545,17 +551,21 @@ fun ChatMessage(
     rumor: UnsignedEvent,
     isMine: Boolean = false,
 ) {
+    val content = rumor.content()
+    val images = remember(content) { content.extractUrls().filter { it.isImageUrl() } }
+    val cleanedContent = remember(content) { content.removeImageUrls() }
+
     val bubbleShape = if (isMine) {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
     } else {
-        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+        RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
     }
 
     val containerColor =
-        if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+        if (!isMine) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.primaryContainer
 
     val contentColor =
-        if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
+        if (!isMine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
         modifier = Modifier
@@ -564,19 +574,38 @@ fun ChatMessage(
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Column(
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
+            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Surface(
-                color = containerColor,
-                contentColor = contentColor,
-                shape = bubbleShape,
-                modifier = Modifier.widthIn(max = 280.dp)
-            ) {
-                Text(
-                    text = rumor.content(),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            if (cleanedContent.isNotBlank()) {
+                Surface(
+                    color = containerColor,
+                    contentColor = contentColor,
+                    shape = bubbleShape,
+                    modifier = Modifier.widthIn(max = 280.dp)
+                ) {
+                    Text(
+                        text = rumor.content(),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+            images.forEach { imageUrl ->
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.widthIn(max = 280.dp)
+                ) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Image from chat",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.FillWidth
+                    )
+                }
             }
         }
     }
