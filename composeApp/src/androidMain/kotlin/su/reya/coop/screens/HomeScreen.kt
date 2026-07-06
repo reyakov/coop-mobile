@@ -626,8 +626,8 @@ fun NewRequests(requests: List<Room>) {
     val secondRoom = requests.getOrNull(1)
 
     val firstRoomState by (firstRoom as Room).rememberUiState(nostrViewModel)
-    val secondRoomState by (secondRoom as Room).rememberUiState(nostrViewModel)
-
+    val secondRoomState by (secondRoom ?: firstRoom).rememberUiState(nostrViewModel)
+    
     val supportingText = when {
         total == 1 -> {
             val message = firstRoom.lastMessage ?: ""
