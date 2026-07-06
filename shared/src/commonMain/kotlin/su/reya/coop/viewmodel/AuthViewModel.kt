@@ -69,7 +69,7 @@ class AuthViewModel(
                 }
 
                 runCatching {
-                    val signer = createSigner(secret)
+                    val (signer, _) = createSigner(secret)
                     nostr.setSigner(signer)
                 }.onSuccess {
                     _state.update { it.copy(signerRequired = false) }
@@ -121,22 +121,27 @@ class AuthViewModel(
         return keys
     }
 
-    private suspend fun createSigner(secret: String, password: String? = null): AsyncNostrSigner {
+    private suspend fun createSigner(
+        secret: String,
+        password: String? = null
+    ): Pair<AsyncNostrSigner, String?> {
         return when {
-            secret.startsWith("nsec1") -> Keys.parse(secret)
+            secret.startsWith("nsec1") -> Keys.parse(secret) to null
 
             secret.startsWith("ncryptsec1") -> {
                 if (password == null) throw IllegalArgumentException("Password is required")
                 val enc = EncryptedSecretKey.fromBech32(secret)
                 val secret = enc.decrypt(password)
-                Keys(secret)
+                val keys = Keys(secret)
+
+                keys to keys.secretKey().toBech32()
             }
 
             secret.startsWith("bunker://") -> {
                 val appKeys = getOrInitAppKeys()
                 val bunker = NostrConnectUri.parse(secret)
                 val timeout = 50.seconds
-                NostrConnect(uri = bunker, appKeys, timeout, null)
+                NostrConnect(uri = bunker, appKeys, timeout, null) to null
             }
 
             secret.startsWith("nip55://") -> {
@@ -149,7 +154,7 @@ class AuthViewModel(
                 val pubkey = PublicKey.parse(parts[1])
 
                 handler.setPackageName(packageName)
-                ExternalSignerProxy(handler, pubkey)
+                ExternalSignerProxy(handler, pubkey) to null
             }
 
             else -> throw IllegalArgumentException("Invalid secret format")
@@ -157,11 +162,13 @@ class AuthViewModel(
     }
 
     suspend fun importIdentity(secret: String, password: String? = null) {
-        val signer = createSigner(secret, password)
+        val (signer, decryptedSecret) = createSigner(secret, password)
         // Update signer
         nostr.setSigner(signer)
         // Persist the secret in the secret storage
-        secretStore.set(KEY_USER_SIGNER, secret)
+        secretStore.set(KEY_USER_SIGNER, decryptedSecret ?: secret)
+        // Update local states
+        _state.update { it.copy(signerRequired = false) }
     }
 
     suspend fun connectExternalSigner() {
@@ -206,7 +213,7 @@ class AuthViewModel(
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
         val avatarUrl = picture?.let {
-            mediaRepository.blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg")
+            mediaRepository.blossomUpload(keys, it, contentType ?: "image/jpeg")
         }
         // Create identity
         nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
