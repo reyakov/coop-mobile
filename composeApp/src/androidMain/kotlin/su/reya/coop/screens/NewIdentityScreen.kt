@@ -1,9 +1,7 @@
 package su.reya.coop.screens
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
@@ -16,13 +14,9 @@ fun NewIdentityScreen() {
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val isBusy = authState.isBusy
-
     ProfileEditor(
         title = "Create a new identity",
         buttonLabel = "Continue",
-        isBusy = isBusy,
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {

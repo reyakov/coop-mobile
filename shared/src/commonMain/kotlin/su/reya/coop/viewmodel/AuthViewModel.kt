@@ -21,7 +21,6 @@ import su.reya.coop.storage.SecretStorage
 import kotlin.time.Duration.Companion.seconds
 
 data class AuthState(
-    val isBusy: Boolean = false,
     val signerRequired: Boolean? = null,
     val isNotificationBannerDismissed: Boolean = false,
 )
@@ -88,8 +87,6 @@ class AuthViewModel(
     fun logout(onLogout: () -> Unit = {}) {
         viewModelScope.launch {
             try {
-                _state.update { it.copy(isBusy = true) }
-
                 // Reset the nostr signer and prune the database
                 nostr.signer.switch(Keys.generate())
                 nostr.prune()
@@ -99,11 +96,10 @@ class AuthViewModel(
                 // Clear credentials from persistent storage
                 secretStore.clear(KEY_USER_SIGNER)
                 secretStore.clear(KEY_BANNER_DISMISSED)
-
                 // Call cleanup callback (e.g. to reset other ViewModels)
                 onLogout()
-
-                _state.update { it.copy(isBusy = false, signerRequired = true) }
+                // Reset local states
+                _state.update { it.copy(signerRequired = true) }
             }
         }
     }
@@ -207,27 +203,16 @@ class AuthViewModel(
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        _state.update { it.copy(isBusy = true) }
-
         val keys = Keys.generate()
         val secret = keys.secretKey().toBech32()
-
-        try {
-            val avatarUrl = picture?.let {
-                mediaRepository.blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg")
-            }
-
-            // Create identity
-            nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
-
-            // Persist the secret in the secret storage
-            secretStore.set(KEY_USER_SIGNER, secret)
-
-            // Update local states
-            _state.update { it.copy(isBusy = false, signerRequired = false) }
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            _state.update { it.copy(isBusy = false) }
+        val avatarUrl = picture?.let {
+            mediaRepository.blossomUpload(nostr.signer.get(), it, contentType ?: "image/jpeg")
         }
+        // Create identity
+        nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
+        // Persist the secret in the secret storage
+        secretStore.set(KEY_USER_SIGNER, secret)
+        // Update local states
+        _state.update { it.copy(signerRequired = false) }
     }
 }
