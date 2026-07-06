@@ -242,13 +242,17 @@ fun ImportScreen() {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    if (pubkey == null) {
-                                        authViewModel.verifyIdentity(secret).let { pubkey = it }
-                                    } else {
-                                        // Import the identity
-                                        authViewModel.importIdentity(secret)
-                                        // Navigate to the home screen
-                                        navigator.navigate(Screen.Home)
+                                    try {
+                                        if (pubkey == null) {
+                                            authViewModel.verifyIdentity(secret).let { pubkey = it }
+                                        } else {
+                                            // Import the identity
+                                            authViewModel.importIdentity(secret)
+                                            // Navigate to the home screen
+                                            navigator.navigate(Screen.Home)
+                                        }
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Error: ${e.message}")
                                     }
                                 }
 

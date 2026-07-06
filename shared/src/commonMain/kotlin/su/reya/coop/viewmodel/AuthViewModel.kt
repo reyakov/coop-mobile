@@ -160,9 +160,6 @@ class AuthViewModel(
     suspend fun verifyIdentity(secret: String): PublicKey? {
         try {
             val signer = createSigner(secret)
-            if (secret.startsWith("bunker://")) {
-                showError("Please approve the connection.")
-            }
             return signer.getPublicKeyAsync()
         } catch (e: Exception) {
             showError("Error: ${e.message}")
