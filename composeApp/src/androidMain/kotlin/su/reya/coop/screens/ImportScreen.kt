@@ -48,23 +48,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
-import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
-import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -74,19 +69,13 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val nostrViewModel = LocalNostrViewModel.current
     val authViewModel = LocalAuthViewModel.current
-
     val scope = rememberCoroutineScope()
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val isBusy = authState.isBusy
     var secret by remember { mutableStateOf("") }
-    var pubkey by remember { mutableStateOf<PublicKey?>(null) }
-
-    val profile by remember(pubkey) {
-        pubkey?.let(nostrViewModel::getMetadata) ?: flowOf(null)
-    }.collectAsStateWithLifecycle(null)
+    var password by remember { mutableStateOf("") }
+    var requirePassword by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
@@ -101,10 +90,16 @@ fun ImportScreen() {
             }.onSuccess {
                 secret = result
             }.onFailure { e ->
-                snackbarHostState.showSnackbar("Invalid secret: ${e.message}")
+                e.message?.let { snackbarHostState.showSnackbar(it) }
             }
             // Clear the nav state
             qrScanResult.clear()
+        }
+    }
+
+    LaunchedEffect(secret) {
+        if (secret.startsWith("ncryptsec1")) {
+            requirePassword = true
         }
     }
 
@@ -160,21 +155,14 @@ fun ImportScreen() {
                             .clip(MaterialShapes.Cookie9Sided.toShape()),
                         contentAlignment = Alignment.Center
                     ) {
-                        Avatar(
-                            picture = profile?.picture,
-                            description = "Profile picture",
-                            modifier = Modifier.fillMaxSize(),
-                            shape = MaterialShapes.Cookie9Sided.toShape(),
+                        Text(
+                            text = "",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
+                                fontFamily = getExpressiveFontFamily()
+                            ),
                         )
                     }
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(
-                        text = profile?.name ?: "",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                            fontFamily = getExpressiveFontFamily()
-                        ),
-                    )
                 }
                 Surface(
                     modifier = Modifier
@@ -186,7 +174,7 @@ fun ImportScreen() {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(24.dp)
+                            .padding(24.dp),
                     ) {
                         Column(
                             modifier = Modifier
@@ -203,9 +191,9 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
-                                enabled = !isBusy,
+                                enabled = !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                                maxLines = 4,
+                                singleLine = true,
                                 keyboardOptions = KeyboardOptions(
                                     imeAction = ImeAction.Done,
                                 ),
@@ -237,36 +225,68 @@ fun ImportScreen() {
                                     }
                                 }
                             )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            if (requirePassword) {
+                                Text(
+                                    text = "Decrypt Password:",
+                                    style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                )
+                                BasicTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    enabled = !loading && requirePassword,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            focusManager.clearFocus()
+                                        }
+                                    ),
+                                    visualTransformation = PasswordVisualTransformation('*'),
+                                    textStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
+                                        color = MaterialTheme.colorScheme.tertiaryFixedDim,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.tertiaryContainer),
+                                    decorationBox = { innerTextField ->
+                                        Box(contentAlignment = Alignment.CenterStart) {
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
                                 scope.launch {
+                                    loading = true
                                     try {
-                                        if (pubkey == null) {
-                                            authViewModel.verifyIdentity(secret).let { pubkey = it }
-                                        } else {
-                                            // Import the identity
-                                            authViewModel.importIdentity(secret)
-                                            // Navigate to the home screen
-                                            navigator.navigate(Screen.Home)
-                                        }
+                                        // Import the identity
+                                        authViewModel.importIdentity(secret, password)
+                                        // Navigate to the home screen
+                                        navigator.navigate(Screen.Home)
                                     } catch (e: Exception) {
-                                        snackbarHostState.showSnackbar("Error: ${e.message}")
+                                        snackbarHostState.showSnackbar(e.message ?: "Error")
+                                        loading = false
                                     }
                                 }
-
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !isBusy,
+                            enabled = secret.isNotBlank() && !loading,
                         ) {
-                            if (isBusy) {
+                            if (loading) {
                                 LoadingIndicator()
                             } else {
                                 Text(
-                                    text = if (pubkey == null) "Verify" else "Click again to Continue",
+                                    text = "Continue",
                                     style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }
