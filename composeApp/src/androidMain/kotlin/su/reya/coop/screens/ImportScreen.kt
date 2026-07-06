@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -30,7 +29,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,13 +38,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
@@ -60,7 +56,6 @@ import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
-import su.reya.coop.shared.getExpressiveFontFamily
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -80,7 +75,7 @@ fun ImportScreen() {
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             runCatching {
-                if (result.startsWith("nsec1")) {
+                if (result.startsWith("nsec1") || result.startsWith("ncryptsec1")) {
                     Keys.parse(result)
                 } else if (result.startsWith("bunker://")) {
                     NostrConnectUri.parse(result)
@@ -142,28 +137,6 @@ fun ImportScreen() {
                     .padding(top = innerPadding.calculateTopPadding())
                     .imePadding(),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(MaterialShapes.Cookie9Sided.toShape()),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                                fontFamily = getExpressiveFontFamily()
-                            ),
-                        )
-                    }
-                }
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()

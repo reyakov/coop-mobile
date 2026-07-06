@@ -59,7 +59,7 @@ class AuthViewModel(
     private fun login() {
         viewModelScope.launch {
             try {
-                val secret = withTimeoutOrNull(3.seconds) {
+                val secret = withTimeoutOrNull(5.seconds) {
                     secretStore.get(KEY_USER_SIGNER)
                 }
 
