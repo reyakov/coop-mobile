@@ -68,7 +68,6 @@ fun ProfileEditor(
     initialName: String = "",
     initialBio: String = "",
     initialPicture: Any? = null, // Accepts Uri (picked) or String (current URL)
-    isBusy: Boolean = false,
     onBack: () -> Unit,
     onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
 ) {
@@ -80,6 +79,7 @@ fun ProfileEditor(
     var name by remember(initialName) { mutableStateOf(initialName) }
     var bio by remember(initialBio) { mutableStateOf(initialBio) }
     var picture by remember(initialPicture) { mutableStateOf(initialPicture) }
+    var isBusy by remember { mutableStateOf(false) }
 
     val hasPicture = remember(picture) {
         when (picture) {
@@ -267,14 +267,20 @@ fun ProfileEditor(
                             .size(ButtonDefaults.MediumContainerHeight),
                         onClick = {
                             scope.launch {
-                                val bytes = withContext(Dispatchers.IO) {
-                                    (picture as? Uri)?.let {
-                                        context.contentResolver.openInputStream(it)?.readBytes()
+                                isBusy = true
+                                try {
+                                    val bytes = withContext(Dispatchers.IO) {
+                                        (picture as? Uri)?.let {
+                                            context.contentResolver.openInputStream(it)?.readBytes()
+                                        }
                                     }
+                                    val type =
+                                        (picture as? Uri)?.let { context.contentResolver.getType(it) }
+                                    onConfirm(name, bio, bytes, type)
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar(e.message ?: "Error")
                                 }
-                                val type =
-                                    (picture as? Uri)?.let { context.contentResolver.getType(it) }
-                                onConfirm(name, bio, bytes, type)
+                                isBusy = false
                             }
                         },
                         enabled = name.isNotBlank() && !isBusy

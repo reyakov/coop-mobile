@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -30,7 +29,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,32 +38,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
-import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
-import su.reya.coop.shared.Avatar
-import su.reya.coop.shared.getExpressiveFontFamily
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -74,24 +64,18 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val nostrViewModel = LocalNostrViewModel.current
     val authViewModel = LocalAuthViewModel.current
-
     val scope = rememberCoroutineScope()
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val isBusy = authState.isBusy
     var secret by remember { mutableStateOf("") }
-    var pubkey by remember { mutableStateOf<PublicKey?>(null) }
-
-    val profile by remember(pubkey) {
-        pubkey?.let(nostrViewModel::getMetadata) ?: flowOf(null)
-    }.collectAsStateWithLifecycle(null)
+    var password by remember { mutableStateOf("") }
+    var requirePassword by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
             runCatching {
-                if (result.startsWith("nsec1")) {
+                if (result.startsWith("nsec1") || result.startsWith("ncryptsec1")) {
                     Keys.parse(result)
                 } else if (result.startsWith("bunker://")) {
                     NostrConnectUri.parse(result)
@@ -101,10 +85,16 @@ fun ImportScreen() {
             }.onSuccess {
                 secret = result
             }.onFailure { e ->
-                snackbarHostState.showSnackbar("Invalid secret: ${e.message}")
+                e.message?.let { snackbarHostState.showSnackbar(it) }
             }
             // Clear the nav state
             qrScanResult.clear()
+        }
+    }
+
+    LaunchedEffect(secret) {
+        if (secret.startsWith("ncryptsec1")) {
+            requirePassword = true
         }
     }
 
@@ -147,35 +137,6 @@ fun ImportScreen() {
                     .padding(top = innerPadding.calculateTopPadding())
                     .imePadding(),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(MaterialShapes.Cookie9Sided.toShape()),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Avatar(
-                            picture = profile?.picture,
-                            description = "Profile picture",
-                            modifier = Modifier.fillMaxSize(),
-                            shape = MaterialShapes.Cookie9Sided.toShape(),
-                        )
-                    }
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(
-                        text = profile?.name ?: "",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleLargeEmphasized.copy(
-                            fontFamily = getExpressiveFontFamily()
-                        ),
-                    )
-                }
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -186,7 +147,7 @@ fun ImportScreen() {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(24.dp)
+                            .padding(24.dp),
                     ) {
                         Column(
                             modifier = Modifier
@@ -203,9 +164,9 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
-                                enabled = !isBusy,
+                                enabled = !loading,
                                 modifier = Modifier.fillMaxWidth(),
-                                maxLines = 4,
+                                singleLine = true,
                                 keyboardOptions = KeyboardOptions(
                                     imeAction = ImeAction.Done,
                                 ),
@@ -237,32 +198,68 @@ fun ImportScreen() {
                                     }
                                 }
                             )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            if (requirePassword) {
+                                Text(
+                                    text = "Decrypt Password:",
+                                    style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                )
+                                BasicTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    enabled = !loading && requirePassword,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            focusManager.clearFocus()
+                                        }
+                                    ),
+                                    visualTransformation = PasswordVisualTransformation('*'),
+                                    textStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
+                                        color = MaterialTheme.colorScheme.tertiaryFixedDim,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.tertiaryContainer),
+                                    decorationBox = { innerTextField ->
+                                        Box(contentAlignment = Alignment.CenterStart) {
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
                                 scope.launch {
-                                    if (pubkey == null) {
-                                        authViewModel.verifyIdentity(secret).let { pubkey = it }
-                                    } else {
+                                    loading = true
+                                    try {
                                         // Import the identity
-                                        authViewModel.importIdentity(secret)
+                                        authViewModel.importIdentity(secret, password)
                                         // Navigate to the home screen
                                         navigator.navigate(Screen.Home)
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar(e.message ?: "Error")
+                                        loading = false
                                     }
                                 }
-
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !isBusy,
+                            enabled = secret.isNotBlank() && !loading,
                         ) {
-                            if (isBusy) {
+                            if (loading) {
                                 LoadingIndicator()
                             } else {
                                 Text(
-                                    text = if (pubkey == null) "Verify" else "Click again to Continue",
+                                    text = "Continue",
                                     style = MaterialTheme.typography.titleMediumEmphasized,
                                 )
                             }

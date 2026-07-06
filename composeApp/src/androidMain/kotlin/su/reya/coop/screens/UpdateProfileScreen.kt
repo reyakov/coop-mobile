@@ -15,7 +15,6 @@ fun UpdateProfileScreen() {
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
 
-    val isBusy by nostrViewModel.isBusy.collectAsStateWithLifecycle(false)
     val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val profile = currentUser?.metadata?.asRecord()
 
@@ -25,7 +24,6 @@ fun UpdateProfileScreen() {
         initialName = profile?.displayName ?: profile?.name ?: "",
         initialBio = profile?.about ?: "",
         initialPicture = profile?.picture,
-        isBusy = isBusy,
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             scope.launch {

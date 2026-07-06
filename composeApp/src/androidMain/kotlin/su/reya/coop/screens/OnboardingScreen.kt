@@ -160,7 +160,10 @@ fun OnboardingScreen() {
                                     scope.launch {
                                         if (authViewModel.isExternalSignerAvailable()) {
                                             try {
+                                                // Connect to the external signer
+                                                // TODO: show all available signers?
                                                 authViewModel.connectExternalSigner()
+                                                // Navigate to the home screen
                                                 navigator.navigate(Screen.Home)
                                             } catch (e: Exception) {
                                                 e.message?.let { snackbarHostState.showSnackbar(it) }
