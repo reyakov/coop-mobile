@@ -155,7 +155,7 @@ class Nostr {
         val processedEvent = mutableSetOf<EventId>()
         val notifications = client?.notifications() ?: return@supervisorScope
 
-        val giftWrapQueue = Channel<Event>(Channel.UNLIMITED)
+        val giftWrapQueue = Channel<Event>(1024)
         var processedCount = 0
         var eoseReceived = false
 
