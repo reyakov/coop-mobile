@@ -71,9 +71,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
-
-    val isBusy = appState.map { it.isBusy }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    
     val isRelayListEmpty = appState.map { it.isRelayListEmpty }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 

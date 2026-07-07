@@ -65,7 +65,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
             launch {
                 nostr.messages.messageSyncState.collect { syncState ->
                     // When at least some messages are processed, allow UI to show the list
-                    if (syncState.processedCount > 0) {
+                    if (syncState.processedCount > 0 || !syncState.isSyncing) {
                         _state.update { it.copy(isPartialProcessedGiftWrap = true) }
                     }
 

@@ -219,6 +219,7 @@ class Nostr {
                                 KindStandard.INBOX_RELAYS -> {
                                     // Get all gift wrap events for the current user
                                     if (isSignedByUser(event = event)) {
+                                        messages.updateSyncState { it.copy(isSyncing = true) }
                                         messages.getUserMessages(msgRelayList = event)
                                     }
                                 }
