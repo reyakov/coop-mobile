@@ -155,7 +155,7 @@ class Nostr {
         val processedEvent = mutableSetOf<EventId>()
         val notifications = client?.notifications() ?: return@supervisorScope
 
-        val giftWrapQueue = Channel<Event>(Channel.UNLIMITED)
+        val giftWrapQueue = Channel<Event>(1024)
         var processedCount = 0
         var eoseReceived = false
 
@@ -219,6 +219,7 @@ class Nostr {
                                 KindStandard.INBOX_RELAYS -> {
                                     // Get all gift wrap events for the current user
                                     if (isSignedByUser(event = event)) {
+                                        messages.updateSyncState { it.copy(isSyncing = true) }
                                         messages.getUserMessages(msgRelayList = event)
                                     }
                                 }

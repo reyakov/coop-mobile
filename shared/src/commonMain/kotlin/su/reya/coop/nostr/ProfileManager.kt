@@ -82,7 +82,7 @@ class ProfileManager(private val nostr: Nostr) {
 
             client?.sync(filter, relays)
         } catch (e: Exception) {
-            throw IllegalStateException("Failed to fetch mutual contacts: ${e.message}", e)
+            println("Failed to sync mutual contacts: ${e.message}")
         }
     }
 
