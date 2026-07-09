@@ -33,6 +33,8 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.androidx.datastore.preferences)
+            implementation(libs.androidx.datastore)
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.8.0")
             implementation("su.reya:nostr-sdk-kmp:0.3.2")
