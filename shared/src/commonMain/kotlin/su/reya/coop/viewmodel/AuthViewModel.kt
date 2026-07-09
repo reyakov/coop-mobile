@@ -17,6 +17,7 @@ import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.nostr.SignerPermissions
 import su.reya.coop.repository.MediaRepository
+import su.reya.coop.storage.KeyValueStorage
 import su.reya.coop.storage.SecretStorage
 import kotlin.time.Duration.Companion.seconds
 
@@ -28,6 +29,7 @@ data class AuthState(
 class AuthViewModel(
     private val nostr: Nostr,
     private val secretStore: SecretStorage,
+    private val settingStorage: KeyValueStorage,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : BaseViewModel() {
     private val mediaRepository = MediaRepository()
@@ -51,7 +53,7 @@ class AuthViewModel(
 
     private fun checkNotificationBannerDismissedStatus() {
         viewModelScope.launch {
-            val dismissed = secretStore.get(KEY_BANNER_DISMISSED) == "true"
+            val dismissed = settingStorage.get(KEY_BANNER_DISMISSED) == "true"
             _state.update { it.copy(isNotificationBannerDismissed = dismissed) }
         }
     }
@@ -95,7 +97,7 @@ class AuthViewModel(
             } finally {
                 // Clear credentials from persistent storage
                 secretStore.clear(KEY_USER_SIGNER)
-                secretStore.clear(KEY_BANNER_DISMISSED)
+                settingStorage.clear(KEY_BANNER_DISMISSED)
                 // Call cleanup callback (e.g. to reset other ViewModels)
                 onLogout()
                 // Reset local states
@@ -106,7 +108,7 @@ class AuthViewModel(
 
     fun dismissNotificationBanner() {
         viewModelScope.launch {
-            secretStore.set(KEY_BANNER_DISMISSED, "true")
+            settingStorage.set(KEY_BANNER_DISMISSED, "true")
             _state.update { it.copy(isNotificationBannerDismissed = true) }
         }
     }

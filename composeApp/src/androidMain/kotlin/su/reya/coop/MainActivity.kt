@@ -14,6 +14,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import su.reya.coop.nostr.NostrManager
 import su.reya.coop.storage.SecretStore
+import su.reya.coop.storage.SettingStorage
+import su.reya.coop.storage.settingsDataStore
 import su.reya.coop.viewmodel.AuthViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
@@ -29,12 +31,13 @@ class MainActivity : ComponentActivity() {
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
             private val secretStore = SecretStore(this@MainActivity)
+            private val settingStorage = SettingStorage(this@MainActivity.settingsDataStore)
             private val nostrViewModel =
                 NostrViewModel(NostrManager.instance)
             private val chatViewModel =
                 ChatViewModel(NostrManager.instance)
             private val authViewModel =
-                AuthViewModel(NostrManager.instance, secretStore, androidSigner)
+                AuthViewModel(NostrManager.instance, secretStore, settingStorage, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
