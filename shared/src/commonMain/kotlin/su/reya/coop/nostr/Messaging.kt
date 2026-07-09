@@ -164,40 +164,35 @@ class MessageManager(private val nostr: Nostr) {
         try {
             val userPubkey =
                 signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
-
-            println("pubkey: ${userPubkey.toBech32()}")
-
+            
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
             // Get all DM events
             val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm"))
-            val events = client?.database()?.query(filter)
+            val events = client?.database()?.query(filter)?.toVec() ?: return null
 
             // Collect rooms
             val roomsMap: MutableMap<Long, Room> = mutableMapOf()
 
             events
-                ?.toVec()
-                ?.map { UnsignedEvent.fromJson(it.content()) }
-                ?.filter { it.tags().publicKeys().isNotEmpty() }
-                ?.forEach { event ->
-                    val newRoom = Room.new(rumor = event, userPubkey = userPubkey)
-                    val existingRoom = roomsMap[newRoom.id]
+                .map { UnsignedEvent.fromJson(it.content()) }
+                .filter { it.tags().publicKeys().isNotEmpty() }
+                .forEach { rumor ->
+                    val id = rumor.roomId()
+                    val isFromMe = rumor.author() == userPubkey
+                    val existing = roomsMap[id]
+                    val createdAt = rumor.createdAt()
 
-                    // Check if the room already exists
-                    if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
-                        val rTag = SingleLetterTag.lowercase(Alphabet.R)
-                        val filter = Filter().kind(kind).pubkey(userPubkey)
-                            .customTag(rTag, newRoom.id.toString())
-
-                        // Determine if it's an ongoing room
-                        val isOngoing =
-                            client?.database()?.query(filter)?.toVec()?.isNotEmpty() ?: false
-
-                        // Append room to map
-                        roomsMap[newRoom.id] =
-                            if (isOngoing) newRoom.copy(kind = RoomKind.Ongoing) else newRoom
+                    // If the room is new or the current rumor is newer than the existing one
+                    if (existing == null || createdAt.asSecs() > existing.createdAt.asSecs()) {
+                        // A room is "Ongoing" if it was already marked as such or if the current rumor is from the user
+                        val isOngoing = (existing?.kind == RoomKind.Ongoing) || isFromMe
+                        val room = Room.new(rumor = rumor, userPubkey = userPubkey, id = id)
+                        roomsMap[id] = if (isOngoing) room.copy(kind = RoomKind.Ongoing) else room
+                    } else if (isFromMe && existing.kind != RoomKind.Ongoing) {
+                        // If it's an older rumor but sent by the user, mark the room as Ongoing
+                        roomsMap[id] = existing.copy(kind = RoomKind.Ongoing)
                     }
                 }
 

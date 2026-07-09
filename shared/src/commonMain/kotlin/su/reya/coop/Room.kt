@@ -41,8 +41,7 @@ data class Room(
     }
 
     companion object {
-        fun new(rumor: UnsignedEvent, userPubkey: PublicKey): Room {
-            val id = rumor.roomId()
+        fun new(rumor: UnsignedEvent, userPubkey: PublicKey, id: Long = rumor.roomId()): Room {
             val createdAt = rumor.createdAt()
             val subject = rumor.tags().toVec().find { it.kind() == "subject" }?.content()
 
