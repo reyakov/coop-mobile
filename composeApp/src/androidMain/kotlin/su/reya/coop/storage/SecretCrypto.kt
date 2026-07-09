@@ -1,4 +1,4 @@
-package su.reya.coop.coop.storage
+package su.reya.coop.storage
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties

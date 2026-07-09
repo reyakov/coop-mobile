@@ -1,11 +1,10 @@
-package su.reya.coop.coop.storage
+package su.reya.coop.storage
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
-import su.reya.coop.storage.SecretStorage
 
 private val Context.dataStore by preferencesDataStore("secret_store")
 

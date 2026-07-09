@@ -12,8 +12,8 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import su.reya.coop.coop.storage.SecretStore
 import su.reya.coop.nostr.NostrManager
+import su.reya.coop.storage.SecretStore
 import su.reya.coop.viewmodel.AuthViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
