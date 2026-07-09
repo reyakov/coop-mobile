@@ -99,11 +99,13 @@ fun Room.uiStateFlow(
     val displayMembers = if (isGroup()) members.take(2) else members.take(1)
 
     if (!subject.isNullOrBlank()) {
-        return flowOf(RoomUiState(name = subject, isGroup = isGroup()))
+        return flowOf(RoomUiState(name = subject.sanitizeName(), isGroup = isGroup()))
     }
 
     return combine(displayMembers.map { nostrViewModel.getMetadata(it) }) { profiles ->
-        val names = profiles.mapIndexed { i, profile -> profile?.name ?: displayMembers[i].short() }
+        val names = profiles.mapIndexed { i, profile ->
+            profile?.name?.sanitizeName() ?: displayMembers[i].short()
+        }
 
         val name = when {
             isGroup() -> {

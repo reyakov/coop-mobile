@@ -20,3 +20,7 @@ fun String.isImageUrl(): Boolean {
     val extension = this.substringAfterLast('.', "").lowercase()
     return extension in imageExtensions
 }
+
+fun String.sanitizeName(): String {
+    return this.replace("\n", " ").replace("\r", " ").trim()
+}
