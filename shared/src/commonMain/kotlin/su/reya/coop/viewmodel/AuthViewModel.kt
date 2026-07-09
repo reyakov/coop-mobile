@@ -12,13 +12,12 @@ import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnect
 import rust.nostr.sdk.NostrConnectUri
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.AppStorage
 import su.reya.coop.nostr.ExternalSignerHandler
 import su.reya.coop.nostr.ExternalSignerProxy
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.nostr.SignerPermissions
 import su.reya.coop.repository.MediaRepository
-import su.reya.coop.storage.KeyValueStorage
-import su.reya.coop.storage.SecretStorage
 import kotlin.time.Duration.Companion.seconds
 
 data class AuthState(
@@ -28,8 +27,7 @@ data class AuthState(
 
 class AuthViewModel(
     private val nostr: Nostr,
-    private val secretStore: SecretStorage,
-    private val settingStorage: KeyValueStorage,
+    private val storage: AppStorage,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : BaseViewModel() {
     private val mediaRepository = MediaRepository()
@@ -53,7 +51,7 @@ class AuthViewModel(
 
     private fun checkNotificationBannerDismissedStatus() {
         viewModelScope.launch {
-            val dismissed = settingStorage.get(KEY_BANNER_DISMISSED) == "true"
+            val dismissed = storage.get(KEY_BANNER_DISMISSED) == "true"
             _state.update { it.copy(isNotificationBannerDismissed = dismissed) }
         }
     }
@@ -62,7 +60,7 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 val secret = withTimeoutOrNull(5.seconds) {
-                    secretStore.get(KEY_USER_SIGNER)
+                    storage.getSecret(KEY_USER_SIGNER)
                 }
 
                 if (secret == null) {
@@ -96,8 +94,8 @@ class AuthViewModel(
                 showError("Logout encountered an error: ${e.message}")
             } finally {
                 // Clear credentials from persistent storage
-                secretStore.clear(KEY_USER_SIGNER)
-                settingStorage.clear(KEY_BANNER_DISMISSED)
+                storage.clear(KEY_USER_SIGNER)
+                storage.clear(KEY_BANNER_DISMISSED)
                 // Call cleanup callback (e.g. to reset other ViewModels)
                 onLogout()
                 // Reset local states
@@ -108,18 +106,18 @@ class AuthViewModel(
 
     fun dismissNotificationBanner() {
         viewModelScope.launch {
-            settingStorage.set(KEY_BANNER_DISMISSED, "true")
+            storage.set(KEY_BANNER_DISMISSED, "true")
             _state.update { it.copy(isNotificationBannerDismissed = true) }
         }
     }
 
     private suspend fun getOrInitAppKeys(): Keys {
-        val secret = secretStore.get(KEY_APP_KEYS)
+        val secret = storage.getSecret(KEY_APP_KEYS)
         // If app keys are already stored, use them
         if (secret != null) return Keys.parse(secret)
         // Generate new app keys and save to the secret storage
         val keys = Keys.generate()
-        secretStore.set(KEY_APP_KEYS, keys.secretKey().toBech32())
+        storage.setSecret(KEY_APP_KEYS, keys.secretKey().toBech32())
         return keys
     }
 
@@ -168,7 +166,7 @@ class AuthViewModel(
         // Update signer
         nostr.setSigner(signer)
         // Persist the secret in the secret storage
-        secretStore.set(KEY_USER_SIGNER, decryptedSecret ?: secret)
+        storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
         // Update local states
         _state.update { it.copy(signerRequired = false) }
     }
@@ -197,7 +195,7 @@ class AuthViewModel(
         // Update signer
         nostr.setSigner(signer)
         // Store the signer in the secret storage
-        secretStore.set(KEY_USER_SIGNER, "nip55://${result.packageName}/${result.pubkey.toHex()}")
+        storage.setSecret(KEY_USER_SIGNER, "nip55://${result.packageName}/${result.pubkey.toHex()}")
         // Update local states
         _state.update { it.copy(signerRequired = false) }
     }
@@ -220,7 +218,7 @@ class AuthViewModel(
         // Create identity
         nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
         // Persist the secret in the secret storage
-        secretStore.set(KEY_USER_SIGNER, secret)
+        storage.setSecret(KEY_USER_SIGNER, secret)
         // Update local states
         _state.update { it.copy(signerRequired = false) }
     }
