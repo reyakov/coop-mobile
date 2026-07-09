@@ -155,7 +155,7 @@ fun HomeScreen() {
         onPauseOrDispose { }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(authState.signerRequired) {
         chatViewModel.refreshChatRooms()
     }
 

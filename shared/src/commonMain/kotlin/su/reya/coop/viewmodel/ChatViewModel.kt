@@ -69,8 +69,8 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
                         _state.update { it.copy(isPartialProcessedGiftWrap = true) }
                     }
 
-                    // Refresh UI every 10 messages OR when sync is fully done
-                    if (syncState.processedCount % 10 == 0 || !syncState.isSyncing) {
+                    // Refresh UI every 100 messages OR when sync is fully done
+                    if (syncState.processedCount % 100 == 0 || !syncState.isSyncing) {
                         refreshChatRooms()
                     }
                 }
@@ -97,9 +97,6 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
                     _newEvents.emit(event)
                 }
             }
-
-            // Initial load of rooms
-            refreshChatRooms()
         }
     }
 
@@ -149,9 +146,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
             _state.update { currentState ->
                 val merged = currentState.rooms.associateBy { it.id }.toMutableMap()
                 // Add or update rooms from the database
-                rooms.forEach { room ->
-                    merged[room.id] = room
-                }
+                rooms.forEach { room -> merged[room.id] = room }
                 // Return as a sorted set to maintain UI consistency
                 currentState.copy(rooms = merged.values.sortedDescending().toSet())
             }
