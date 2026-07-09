@@ -24,7 +24,7 @@ import su.reya.coop.repository.MediaRepository
 import su.reya.coop.roomId
 
 data class ChatState(
-    val rooms: Set<Room> = emptySet(),
+    val rooms: Map<Long, Room> = emptyMap(),
     val isSyncing: Boolean = false,
     val isPartialProcessedGiftWrap: Boolean = false,
 )
@@ -48,8 +48,8 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
     private val _sentReports = MutableSharedFlow<Map<EventId, List<RelayUrl>>>()
     val sentReport = _sentReports.asSharedFlow()
 
-    val chatRooms = state.map { it.rooms }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+    val chatRooms = state.map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isSyncing = state.map { it.isSyncing }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -80,16 +80,12 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
             launch {
                 nostr.newEvents.collect { event ->
                     val roomId = event.roomId()
-                    val existingRoom = _state.value.rooms.firstOrNull { it.id == roomId }
+                    val existingRoom = _state.value.rooms[roomId]
 
                     if (existingRoom == null) {
                         val currentUser = nostr.signer.getPublicKeyAsync() ?: return@collect
                         val newRoom = Room.new(event, currentUser)
-                        _state.update {
-                            it.copy(
-                                rooms = (it.rooms + newRoom).sortedDescending().toSet()
-                            )
-                        }
+                        _state.update { it.copy(rooms = it.rooms + (newRoom.id to newRoom)) }
                     } else {
                         updateRoomList(roomId, event)
                     }
@@ -117,7 +113,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
 
             // Check if the room already exists
             val id = rumor.roomId()
-            val existingRoom = _state.value.rooms.firstOrNull { it.id == id }
+            val existingRoom = _state.value.rooms[id]
 
             // If the room already exists, return its ID
             if (existingRoom != null) {
@@ -128,7 +124,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
             val room = Room.new(rumor, currentUser)
 
             // Update the chat rooms state
-            _state.update { it.copy(rooms = (it.rooms + room).sortedDescending().toSet()) }
+            _state.update { it.copy(rooms = it.rooms + (room.id to room)) }
 
             return room.id
         } catch (e: Exception) {
@@ -137,18 +133,16 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
     }
 
     fun getChatRoom(id: Long): Room? {
-        return _state.value.rooms.firstOrNull { it.id == id }
+        return _state.value.rooms[id]
     }
 
     suspend fun refreshChatRooms() {
         try {
             val rooms = nostr.messages.getChatRooms() ?: emptySet()
             _state.update { currentState ->
-                val merged = currentState.rooms.associateBy { it.id }.toMutableMap()
-                // Add or update rooms from the database
-                rooms.forEach { room -> merged[room.id] = room }
-                // Return as a sorted set to maintain UI consistency
-                currentState.copy(rooms = merged.values.sortedDescending().toSet())
+                val newMap = currentState.rooms.toMutableMap()
+                rooms.forEach { room -> newMap[room.id] = room }
+                currentState.copy(rooms = newMap)
             }
         } catch (e: Exception) {
             showError("Error: ${e.message}")
@@ -230,24 +224,19 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
 
     private fun updateRoomList(roomId: Long, newMessage: UnsignedEvent) {
         _state.update { currentState ->
-            val updatedRooms = currentState.rooms.map { room ->
-                if (room.id == roomId) {
-                    room.copy(
-                        lastMessage = newMessage.content(),
-                        createdAt = newMessage.createdAt()
-                    )
-                } else {
-                    room
-                }
-            }.sortedDescending().toSet()
-            currentState.copy(rooms = updatedRooms)
+            val room = currentState.rooms[roomId] ?: return@update currentState
+            val updatedRoom = room.copy(
+                lastMessage = newMessage.content(),
+                createdAt = newMessage.createdAt()
+            )
+            currentState.copy(rooms = currentState.rooms + (roomId to updatedRoom))
         }
     }
 
     fun resetInternalState() {
         _state.update {
             it.copy(
-                rooms = emptySet(),
+                rooms = emptyMap(),
                 isPartialProcessedGiftWrap = false,
             )
         }

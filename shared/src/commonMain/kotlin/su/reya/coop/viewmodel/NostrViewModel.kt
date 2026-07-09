@@ -71,7 +71,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
-    
+
     val isRelayListEmpty = appState.map { it.isRelayListEmpty }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -158,12 +158,14 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         viewModelScope.launch {
             // Wait until the client is ready
             nostr.waitUntilInitialized()
+            val cache = nostr.profiles.getAllCacheMetadata()
 
-            nostr.profiles.getAllCacheMetadata().forEach { (pubkey, metadata) ->
-                // Update the metadata state
-                updateMetadata(pubkey, Profile(pubkey, metadata))
-                // Update seenPublicKeys to avoid duplicate requests
-                seenPublicKeys.add(pubkey)
+            profilesMutex.withLock {
+                cache.forEach { (pubkey, metadata) ->
+                    val profile = Profile(pubkey, metadata)
+                    profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
+                    seenPublicKeys.add(pubkey)
+                }
             }
         }
     }
@@ -196,11 +198,9 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         }
     }
 
-    private fun updateMetadata(pubkey: PublicKey, profile: Profile) {
-        viewModelScope.launch {
-            profilesMutex.withLock {
-                profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
-            }
+    private suspend fun updateMetadata(pubkey: PublicKey, profile: Profile) {
+        profilesMutex.withLock {
+            profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
         }
     }
 
