@@ -10,8 +10,8 @@ data class Profile(
     private val record by lazy { metadata.asRecord() }
 
     val name: String
-        get() = record.displayName ?: record.name ?: publicKey.short()
-    
+        get() = record.displayName?.sanitizeName() ?: record.name ?: publicKey.short()
+
     val picture: String?
         get() = record.picture
 

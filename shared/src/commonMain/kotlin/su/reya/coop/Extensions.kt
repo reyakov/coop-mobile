@@ -10,17 +10,17 @@ fun PublicKey.short(): String {
 val URL_REGEX = Regex("(https?://\\S+)", RegexOption.IGNORE_CASE)
 private val imageExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp")
 
-fun String.extractUrls(): List<String> {
-    return URL_REGEX.findAll(this).map { it.value }.toList()
-}
-
 fun String.removeImageUrls(): String {
     return URL_REGEX.replace(this) { result ->
         if (result.value.isImageUrl()) "" else result.value
-    }.replace(Regex("\\s+"), " ").trim()
+    }.trim()
 }
 
 fun String.isImageUrl(): Boolean {
     val extension = this.substringAfterLast('.', "").lowercase()
     return extension in imageExtensions
+}
+
+fun String.sanitizeName(): String {
+    return this.replace("\n", " ").replace("\r", " ").trim()
 }
