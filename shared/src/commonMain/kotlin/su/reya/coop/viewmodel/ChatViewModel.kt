@@ -2,11 +2,11 @@ package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -16,7 +16,6 @@ import rust.nostr.sdk.EventId
 import rust.nostr.sdk.Kind
 import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.Room
@@ -26,7 +25,6 @@ import su.reya.coop.roomId
 
 data class ChatState(
     val rooms: Map<Long, Room> = emptyMap(),
-    val isSyncing: Boolean = false,
     val isPartialProcessedGiftWrap: Boolean = false,
 )
 
@@ -35,25 +33,23 @@ class ChatViewModel(
     private val mediaRepository: MediaRepository,
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(ChatState())
-    val state = combine(
-        _state,
-        nostr.messages.messageSyncState
-    ) { local, state -> local.copy(isSyncing = state.isSyncing) }.stateIn(
+    val state = _state.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         ChatState()
     )
 
-    private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
+    private val _newEvents = MutableSharedFlow<UnsignedEvent>(
+        replay = 0,
+        extraBufferCapacity = 100,
+        onBufferOverflow = BufferOverflow.SUSPEND
+    )
     val newEvents = _newEvents.asSharedFlow()
-
-    private val _sentReports = MutableSharedFlow<Map<EventId, List<RelayUrl>>>()
-    val sentReport = _sentReports.asSharedFlow()
 
     val chatRooms = state.map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val isSyncing = state.map { it.isSyncing }
+    val isSyncing = nostr.messages.messageSyncState.map { it.isSyncing }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val isPartialProcessedGiftWrap = state.map { it.isPartialProcessedGiftWrap }
@@ -92,7 +88,7 @@ class ChatViewModel(
                         updateRoomList(roomId, event)
                     }
 
-                    _newEvents.emit(event)
+                    _newEvents.tryEmit(event)
                 }
             }
         }
@@ -156,6 +152,8 @@ class ChatViewModel(
     suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
         try {
             return nostr.messages.getChatRoomMessages(roomId)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
@@ -191,7 +189,7 @@ class ChatViewModel(
                     replies = replies,
                     onRumorCreated = { event ->
                         updateRoomList(roomId, event)
-                        viewModelScope.launch { _newEvents.emit(event) }
+                        viewModelScope.launch { _newEvents.tryEmit(event) }
                     },
                 )
             } catch (e: Exception) {

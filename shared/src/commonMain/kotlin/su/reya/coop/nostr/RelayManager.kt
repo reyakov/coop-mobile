@@ -104,6 +104,32 @@ class RelayManager(private val nostr: Nostr) {
         return msgRelayList
     }
 
+    suspend fun getRelayList(publicKey: PublicKey): Map<RelayUrl, RelayMetadata?> {
+        try {
+            val kind = Kind.fromStd(KindStandard.RELAY_LIST)
+            val filter = Filter().kind(kind).author(publicKey).limit(1u)
+            val events = client?.database()?.query(filter)
+
+            return extractRelayList(events?.toVec()?.firstOrNull() ?: return emptyMap())
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to get relay list: ${e.message}", e)
+        }
+    }
+
+    suspend fun setRelaylist(relays: Map<RelayUrl, RelayMetadata?>) {
+        try {
+            val event = EventBuilder.relayList(relays).finalizeAsync(signer)
+
+            client?.sendEvent(
+                event = event,
+                target = SendEventTarget.broadcast(),
+                ackPolicy = AckPolicy.none(),
+            )
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
+        }
+    }
+    
     suspend fun setMsgRelays(urls: List<RelayUrl>) {
         try {
             val event = EventBuilder.nip17RelayList(urls).finalizeAsync(signer)
@@ -152,32 +178,6 @@ class RelayManager(private val nostr: Nostr) {
             return nip17ExtractRelayList(events?.toVec()?.firstOrNull() ?: return emptyList())
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch msg relays: ${e.message}", e)
-        }
-    }
-
-    suspend fun getRelayList(publicKey: PublicKey): Map<RelayUrl, RelayMetadata?> {
-        try {
-            val kind = Kind.fromStd(KindStandard.RELAY_LIST)
-            val filter = Filter().kind(kind).author(publicKey).limit(1u)
-            val events = client?.database()?.query(filter)
-
-            return extractRelayList(events?.toVec()?.firstOrNull() ?: return emptyMap())
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to get relay list: ${e.message}", e)
-        }
-    }
-
-    suspend fun setRelaylist(relays: Map<RelayUrl, RelayMetadata?>) {
-        try {
-            val event = EventBuilder.relayList(relays).finalizeAsync(signer)
-
-            client?.sendEvent(
-                event = event,
-                target = SendEventTarget.broadcast(),
-                ackPolicy = AckPolicy.none(),
-            )
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
         }
     }
 }

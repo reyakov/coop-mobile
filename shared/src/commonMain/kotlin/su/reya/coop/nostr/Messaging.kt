@@ -164,7 +164,7 @@ class MessageManager(private val nostr: Nostr) {
         try {
             val userPubkey =
                 signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
-            
+
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 

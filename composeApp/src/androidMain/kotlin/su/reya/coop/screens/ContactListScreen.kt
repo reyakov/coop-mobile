@@ -33,7 +33,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -328,7 +327,7 @@ fun ContactListItem(
 ) {
     val nostrViewModel = LocalNostrViewModel.current
     val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val profile by profileFlow.collectAsState(initial = null)
+    val profile by profileFlow.collectAsStateWithLifecycle(initialValue = null)
 
     SegmentedListItem(
         onClick = onClick,
