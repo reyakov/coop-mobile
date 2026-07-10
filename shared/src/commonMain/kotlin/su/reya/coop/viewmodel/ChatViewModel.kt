@@ -29,9 +29,10 @@ data class ChatState(
     val isPartialProcessedGiftWrap: Boolean = false,
 )
 
-class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
-    private val mediaRepository = MediaRepository()
-
+class ChatViewModel(
+    private val nostr: Nostr,
+    private val mediaRepository: MediaRepository,
+) : BaseViewModel() {
     private val _state = MutableStateFlow(ChatState())
     val state = combine(
         _state,
@@ -175,6 +176,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
     fun sendMessage(roomId: Long, message: String, replies: List<EventId> = emptyList()) {
         if (message.isEmpty()) {
             showError("Message cannot be empty")
+            return
         }
         viewModelScope.launch {
             try {
@@ -195,7 +197,7 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
         }
     }
 
-    suspend fun sendFileMessage(
+    fun sendFileMessage(
         roomId: Long,
         file: ByteArray?,
         contentType: String? = "image/jpeg",
@@ -203,11 +205,13 @@ class ChatViewModel(private val nostr: Nostr) : BaseViewModel() {
     ) {
         if (file == null) return
 
-        try {
-            val uri = mediaRepository.blossomUpload(nostr.signer.get(), file, contentType)
-            if (uri != null) sendMessage(roomId, uri, replies)
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Error: ${e.message}")
+        viewModelScope.launch {
+            try {
+                val uri = mediaRepository.blossomUpload(nostr.signer.get(), file, contentType)
+                if (uri != null) sendMessage(roomId, uri, replies)
+            } catch (e: Exception) {
+                showError("File upload failed: ${e.message}")
+            }
         }
     }
 

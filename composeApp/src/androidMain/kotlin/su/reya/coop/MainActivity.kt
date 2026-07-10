@@ -13,6 +13,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import su.reya.coop.nostr.NostrManager
+import su.reya.coop.repository.MediaRepository
 import su.reya.coop.viewmodel.AuthViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
@@ -26,12 +27,13 @@ class MainActivity : ComponentActivity() {
     private val factory by lazy {
         object : ViewModelProvider.Factory {
             private val storage = AppStore(this@MainActivity)
-            private val nostrViewModel = NostrViewModel(NostrManager.instance)
-            private val chatViewModel = ChatViewModel(NostrManager.instance)
+            private val mediaRepository = MediaRepository()
+            private val nostrViewModel = NostrViewModel(NostrManager.instance, mediaRepository)
+            private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
             private val authViewModel =
-                AuthViewModel(NostrManager.instance, storage, androidSigner)
+                AuthViewModel(NostrManager.instance, storage, mediaRepository, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {

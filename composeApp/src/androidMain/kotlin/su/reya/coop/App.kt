@@ -34,7 +34,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import su.reya.coop.repository.ErrorRepository
+import kotlinx.coroutines.launch
 import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
@@ -118,8 +118,20 @@ fun App(
     }
 
     LaunchedEffect(Unit) {
-        ErrorRepository.errors.collect { message ->
-            snackbarHostState.showSnackbar(message)
+        launch {
+            authViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+        launch {
+            chatViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+        launch {
+            nostrViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
         }
     }
 

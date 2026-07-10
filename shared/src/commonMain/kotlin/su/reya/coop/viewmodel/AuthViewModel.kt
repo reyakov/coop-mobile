@@ -23,15 +23,16 @@ import kotlin.time.Duration.Companion.seconds
 data class AuthState(
     val signerRequired: Boolean? = null,
     val isNotificationBannerDismissed: Boolean = false,
+    val isImporting: Boolean = false,
+    val importError: String? = null,
 )
 
 class AuthViewModel(
     private val nostr: Nostr,
     private val storage: AppStorage,
+    private val mediaRepository: MediaRepository,
     private val externalSignerHandler: ExternalSignerHandler? = null,
 ) : BaseViewModel() {
-    private val mediaRepository = MediaRepository()
-
     companion object {
         private const val KEY_USER_SIGNER = "user_signer"
         private const val KEY_APP_KEYS = "app_keys"
@@ -161,65 +162,98 @@ class AuthViewModel(
         }
     }
 
-    suspend fun importIdentity(secret: String, password: String? = null) {
-        val (signer, decryptedSecret) = createSigner(secret, password)
-        // Update signer
-        nostr.setSigner(signer)
-        // Persist the secret in the secret storage
-        storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
-        // Update local states
-        _state.update { it.copy(signerRequired = false) }
+    fun importIdentity(secret: String, password: String? = null) {
+        viewModelScope.launch {
+            _state.update { it.copy(isImporting = true, importError = null) }
+            try {
+                val (signer, decryptedSecret) = createSigner(secret, password)
+                // Update signer
+                nostr.setSigner(signer)
+                // Persist the secret in the secret storage
+                storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
+                // Update local states
+                _state.update { it.copy(signerRequired = false, isImporting = false) }
+            } catch (e: Exception) {
+                showError("Import failed: ${e.message}")
+                _state.update { it.copy(isImporting = false, importError = e.message) }
+            }
+        }
     }
 
-    suspend fun connectExternalSigner() {
-        val handler = externalSignerHandler ?: throw IllegalStateException("Signer not available")
+    fun connectExternalSigner() {
+        viewModelScope.launch {
+            _state.update { it.copy(isImporting = true, importError = null) }
+            try {
+                val handler = externalSignerHandler
+                    ?: throw IllegalStateException("Signer not available")
 
-        val permissions = SignerPermissions.toJson(
-            listOf(
-                SignerPermissions.signEvent(0),
-                SignerPermissions.signEvent(3),
-                SignerPermissions.signEvent(10000),
-                SignerPermissions.signEvent(10050),
-                SignerPermissions.signEvent(10063),
-                SignerPermissions.signEvent(22242),
-                SignerPermissions.signEvent(30030),
-                SignerPermissions.signEvent(30315),
-                SignerPermissions.nip44Encrypt(),
-                SignerPermissions.nip44Decrypt(),
-            )
-        )
+                val permissions = SignerPermissions.toJson(
+                    listOf(
+                        SignerPermissions.signEvent(0),
+                        SignerPermissions.signEvent(3),
+                        SignerPermissions.signEvent(10000),
+                        SignerPermissions.signEvent(10050),
+                        SignerPermissions.signEvent(10063),
+                        SignerPermissions.signEvent(22242),
+                        SignerPermissions.signEvent(30030),
+                        SignerPermissions.signEvent(30315),
+                        SignerPermissions.nip44Encrypt(),
+                        SignerPermissions.nip44Decrypt(),
+                    )
+                )
 
-        val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
-        val signer = ExternalSignerProxy(handler, result.pubkey)
+                val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
+                val signer = ExternalSignerProxy(handler, result.pubkey)
 
-        // Update signer
-        nostr.setSigner(signer)
-        // Store the signer in the secret storage
-        storage.setSecret(KEY_USER_SIGNER, "nip55://${result.packageName}/${result.pubkey.toHex()}")
-        // Update local states
-        _state.update { it.copy(signerRequired = false) }
+                // Update signer
+                nostr.setSigner(signer)
+                // Store the signer in the secret storage
+                storage.setSecret(
+                    KEY_USER_SIGNER,
+                    "nip55://${result.packageName}/${result.pubkey.toHex()}"
+                )
+                // Update local states
+                _state.update { it.copy(signerRequired = false, isImporting = false) }
+            } catch (e: Exception) {
+                showError("External signer connection failed: ${e.message}")
+                _state.update { it.copy(isImporting = false, importError = e.message) }
+            }
+        }
     }
 
     fun isExternalSignerAvailable(): Boolean {
         return externalSignerHandler?.isAvailable() == true
     }
 
-    suspend fun createIdentity(
+    fun createIdentity(
         name: String,
         bio: String?,
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        val keys = Keys.generate()
-        val secret = keys.secretKey().toBech32()
-        val avatarUrl = picture?.let {
-            mediaRepository.blossomUpload(keys, it, contentType ?: "image/jpeg")
+        viewModelScope.launch {
+            _state.update { it.copy(isImporting = true, importError = null) }
+            try {
+                val keys = Keys.generate()
+                val secret = keys.secretKey().toBech32()
+                val avatarUrl = picture?.let {
+                    mediaRepository.blossomUpload(keys, it, contentType ?: "image/jpeg")
+                }
+                // Create identity
+                nostr.profiles.createIdentity(
+                    keys = keys,
+                    name = name,
+                    bio = bio,
+                    picture = avatarUrl
+                )
+                // Persist the secret in the secret storage
+                storage.setSecret(KEY_USER_SIGNER, secret)
+                // Update local states
+                _state.update { it.copy(signerRequired = false, isImporting = false) }
+            } catch (e: Exception) {
+                showError("Identity creation failed: ${e.message}")
+                _state.update { it.copy(isImporting = false, importError = e.message) }
+            }
         }
-        // Create identity
-        nostr.profiles.createIdentity(keys = keys, name = name, bio = bio, picture = avatarUrl)
-        // Persist the secret in the secret storage
-        storage.setSecret(KEY_USER_SIGNER, secret)
-        // Update local states
-        _state.update { it.copy(signerRequired = false) }
     }
 }

@@ -69,7 +69,7 @@ fun ProfileEditor(
     initialBio: String = "",
     initialPicture: Any? = null, // Accepts Uri (picked) or String (current URL)
     onBack: () -> Unit,
-    onConfirm: suspend (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
+    onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
 ) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current

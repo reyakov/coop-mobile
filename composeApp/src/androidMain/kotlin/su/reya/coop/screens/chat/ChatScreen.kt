@@ -120,20 +120,16 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     val sendFile = { uri: Uri ->
         scope.launch {
-            try {
-                // Read file
-                val file = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                }
-
-                // Parse the file content type
-                val type = context.contentResolver.getType(uri)
-
-                // Send message
-                chatViewModel.sendFileMessage(id, file, type)
-            } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Error: ${e.message}")
+            // Read file on IO dispatcher
+            val file = withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             }
+
+            // Parse the file content type
+            val type = context.contentResolver.getType(uri)
+
+            // Send message (handles errors internally via ViewModel)
+            chatViewModel.sendFileMessage(id, file, type)
         }
     }
 

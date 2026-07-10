@@ -2,7 +2,6 @@ package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -10,11 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -39,30 +36,12 @@ data class NostrAppState(
     val isRelayListEmpty: Boolean = false,
 )
 
-class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
-    private val mediaRepository = MediaRepository()
-
-    private val alwaysRunTasks = flow {
-        coroutineScope {
-            val observerJob = launch { runObserver() }
-            val batchingJob = launch { runMetadataBatching() }
-            try {
-                emit(Unit)
-                awaitCancellation()
-            } finally {
-                observerJob.cancel()
-                batchingJob.cancel()
-            }
-        }
-    }
-
+class NostrViewModel(
+    private val nostr: Nostr,
+    private val mediaRepository: MediaRepository,
+) : BaseViewModel() {
     private val _appState = MutableStateFlow(NostrAppState())
-    val appState: StateFlow<NostrAppState> =
-        combine(_appState, alwaysRunTasks) { state, _ -> state }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = NostrAppState()
-        )
+    val appState: StateFlow<NostrAppState> = _appState.asStateFlow()
 
     private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
     val contactList = _contactList.asStateFlow()
@@ -83,6 +62,10 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
+        // Launch continuous background observers
+        viewModelScope.launch { runObserver() }
+        viewModelScope.launch { runMetadataBatching() }
+
         // Automatically reconnect bootstrap relays
         reconnect()
 
@@ -116,7 +99,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         }
     }
 
-    private suspend fun runMetadataBatching() = coroutineScope {
+    private suspend fun runMetadataBatching() {
         // Wait until the client is ready
         nostr.waitUntilInitialized()
 
@@ -192,9 +175,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
 
     private fun requestMetadata(pubkey: PublicKey) {
         if (seenPublicKeys.add(pubkey)) {
-            viewModelScope.launch {
-                metadataRequestChannel.send(pubkey)
-            }
+            metadataRequestChannel.trySend(pubkey)
         }
     }
 
@@ -224,32 +205,36 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
         _appState.update { it.copy(isRelayListEmpty = false) }
     }
 
-    suspend fun updateProfile(
+    fun updateProfile(
         name: String? = null,
         bio: String? = null,
         picture: ByteArray? = null,
         contentType: String? = null
     ) {
-        _appState.update { it.copy(isBusy = true) }
-        try {
-            val avatarUrl =
-                picture?.let {
-                    mediaRepository.blossomUpload(
-                        nostr.signer.get(),
-                        it,
-                        contentType ?: "image/jpeg"
-                    )
-                }
-            val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
-            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+        viewModelScope.launch {
+            _appState.update { it.copy(isBusy = true) }
+            try {
+                val avatarUrl =
+                    picture?.let {
+                        mediaRepository.blossomUpload(
+                            nostr.signer.get(),
+                            it,
+                            contentType ?: "image/jpeg"
+                        )
+                    }
+                val newMetadata = nostr.profiles.updateProfile(name, bio, avatarUrl)
+                val currentUser =
+                    nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
 
-            // Update the metadata state after successfully published
-            updateMetadata(currentUser, Profile(currentUser, newMetadata))
+                // Update the metadata state after successfully published
+                updateMetadata(currentUser, Profile(currentUser, newMetadata))
 
-            // Update local state
-            _appState.update { it.copy(isBusy = false) }
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
+                // Update local state
+                _appState.update { it.copy(isBusy = false) }
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                _appState.update { it.copy(isBusy = false) }
+            }
         }
     }
 
