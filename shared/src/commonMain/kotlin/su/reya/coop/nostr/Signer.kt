@@ -29,16 +29,14 @@ class UniversalSigner(initialSigner: AsyncNostrSigner) : AsyncNostrSigner {
     /**
      * Switch to a new signer.
      */
-    suspend fun switch(newSigner: AsyncNostrSigner) = mutex.withLock {
-        val pubkey = try {
-            withTimeoutOrNull(20.seconds) {
-                newSigner.getPublicKeyAsync()
-            }
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to get public key from signer", e)
+    suspend fun switch(newSigner: AsyncNostrSigner) {
+        val pubkey = withTimeoutOrNull(20.seconds) { newSigner.getPublicKeyAsync() }
+            ?: throw IllegalStateException("Failed to get public key from signer")
+
+        mutex.withLock {
+            signer = newSigner
+            _publicKeyFlow.value = pubkey
         }
-        signer = newSigner
-        _publicKeyFlow.value = pubkey
     }
 
     override suspend fun getPublicKeyAsync(): PublicKey? {

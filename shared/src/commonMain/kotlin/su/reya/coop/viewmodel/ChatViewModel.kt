@@ -1,6 +1,7 @@
 package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -145,6 +146,8 @@ class ChatViewModel(
                 rooms.forEach { room -> newMap[room.id] = room }
                 currentState.copy(rooms = newMap)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             showError("Error: ${e.message}")
         }
