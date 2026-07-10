@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,7 +78,11 @@ import su.reya.coop.shared.Avatar
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ChatScreen(id: Long, screening: Boolean = false) {
+fun ChatScreen(
+    id: Long,
+    screening: Boolean = false,
+    coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
@@ -121,7 +126,7 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val sendFile = { uri: Uri ->
         scope.launch {
             // Read file on IO dispatcher
-            val file = withContext(Dispatchers.IO) {
+            val file = withContext(coroutineDispatcher) {
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             }
 
@@ -149,12 +154,13 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     LaunchedEffect(id) {
         // Get messages
-        val initialMessages = chatViewModel.getChatRoomMessages(id)
-        messages.clear()
-        messages.addAll(initialMessages)
+        chatViewModel.loadChatRoomMessages(id) { initialMessages ->
+            messages.clear()
+            messages.addAll(initialMessages)
 
-        // Stop loading spinner
-        loading = false
+            // Stop loading spinner
+            loading = false
+        }
 
         // Get msg relays for each member
         chatViewModel.chatRoomConnect(id)

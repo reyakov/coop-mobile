@@ -1,5 +1,6 @@
 package su.reya.coop.nostr
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -119,7 +120,9 @@ class MessageManager(private val nostr: Nostr) {
             setCachedRumor(event.id(), unsignedEvent)
 
             return unsignedEvent
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             println("Failed to unwrap gift ${event.id().toHex()}: ${e.message}")
             return null
         }
@@ -131,7 +134,9 @@ class MessageManager(private val nostr: Nostr) {
             val event = client?.database()?.query(filter)?.first()
 
             return event?.content()?.let { UnsignedEvent.fromJson(it).ensureId() }
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             throw IllegalStateException("Failed to get cached rumor: ${e.message}", e)
         }
     }
@@ -155,7 +160,9 @@ class MessageManager(private val nostr: Nostr) {
                 .finalizeAsync(Keys.generate())
 
             client?.database()?.saveEvent(event)
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             println("Failed to set cached rumor: ${e.message}")
         }
     }
@@ -197,6 +204,8 @@ class MessageManager(private val nostr: Nostr) {
                 }
 
             return roomsMap.values.sortedByDescending { it.createdAt.asSecs() }.toSet()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             println("Failed to get chat rooms: ${e.message}")
             return null

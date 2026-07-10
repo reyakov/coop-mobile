@@ -51,6 +51,7 @@ import su.reya.coop.screens.UpdateProfileScreen
 import su.reya.coop.viewmodel.AuthViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.RelayViewModel
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
@@ -62,6 +63,10 @@ val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
 
 val LocalAuthViewModel = staticCompositionLocalOf<AuthViewModel> {
     error("No AuthViewModel provided")
+}
+
+val LocalRelayViewModel = staticCompositionLocalOf<RelayViewModel> {
+    error("No RelayViewModel provided")
 }
 
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
@@ -80,6 +85,7 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 @Composable
 fun App(
     nostrViewModel: NostrViewModel,
+    relayViewModel: RelayViewModel,
     chatViewModel: ChatViewModel,
     authViewModel: AuthViewModel,
 ) {
@@ -133,6 +139,11 @@ fun App(
                 snackbarHostState.showSnackbar(message)
             }
         }
+        launch {
+            relayViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
     }
 
     LaunchedEffect(activity) {
@@ -174,6 +185,7 @@ fun App(
     ) {
         CompositionLocalProvider(
             LocalNostrViewModel provides nostrViewModel,
+            LocalRelayViewModel provides relayViewModel,
             LocalChatViewModel provides chatViewModel,
             LocalAuthViewModel provides authViewModel,
             LocalSnackbarHostState provides snackbarHostState,

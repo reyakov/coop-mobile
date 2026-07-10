@@ -1,5 +1,6 @@
 package su.reya.coop.nostr
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
@@ -50,7 +51,9 @@ object NostrManager {
     val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
 }
 
-class Nostr {
+class Nostr(
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
@@ -164,7 +167,7 @@ class Nostr {
         var processedCount = 0
         var eoseReceived = false
 
-        launch(Dispatchers.Default) {
+        launch(defaultDispatcher) {
             for (event in giftWrapQueue) {
                 val rumor = messages.extractRumor(event)
                 processedCount++

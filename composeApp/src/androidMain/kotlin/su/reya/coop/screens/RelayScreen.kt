@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_check
@@ -67,14 +68,16 @@ import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalRelayViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RelayScreen() {
     val navigator = LocalNavigator.current
-    val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
+    val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
     val msgRelayList = remember { mutableStateListOf<RelayUrl>() }
@@ -96,8 +99,25 @@ fun RelayScreen() {
     var relayToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        relayList.putAll(nostrViewModel.currentUserRelayList())
-        msgRelayList.addAll(nostrViewModel.currentUserMsgRelayList())
+        relayViewModel.loadCurrentUserRelayList()
+        relayViewModel.loadCurrentUserMsgRelayList()
+    }
+
+    val loadedRelayList by relayViewModel.currentUserRelayList.collectAsStateWithLifecycle()
+    val loadedMsgRelayList by relayViewModel.currentUserMsgRelayList.collectAsStateWithLifecycle()
+
+    LaunchedEffect(loadedRelayList) {
+        if (loadedRelayList.isNotEmpty()) {
+            relayList.clear()
+            relayList.putAll(loadedRelayList)
+        }
+    }
+
+    LaunchedEffect(loadedMsgRelayList) {
+        if (loadedMsgRelayList.isNotEmpty()) {
+            msgRelayList.clear()
+            msgRelayList.addAll(loadedMsgRelayList)
+        }
     }
 
     Scaffold(
@@ -314,20 +334,16 @@ fun RelayScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        scope.launch {
-                            if (msgRelayList.size == 1) {
+                        if (msgRelayList.size == 1) {
+                            scope.launch {
                                 snackbarHostState.showSnackbar("You must have at least one relay")
-                                relayToDelete = null
-                                return@launch
                             }
-                            try {
-                                nostrViewModel.removeMsgRelay(relayToDelete!!)
-                                msgRelayList.removeIf { it.toString() == relayToDelete }
-                                relayToDelete = null
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Failed to remove relay: ${e.message}")
-                            }
+                            relayToDelete = null
+                            return@TextButton
                         }
+                        relayViewModel.removeMsgRelay(relayToDelete!!)
+                        msgRelayList.removeIf { it.toString() == relayToDelete }
+                        relayToDelete = null
                     }
                 ) {
                     Text("Confirm")
@@ -349,7 +365,7 @@ fun AddRelayDialog(
     onMsgRelayAdded: (newRelay: String) -> Unit,
     onRelayAdded: (newRelay: String, metadata: RelayMetadata?) -> Unit,
 ) {
-    val nostrViewModel = LocalNostrViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
@@ -397,26 +413,24 @@ fun AddRelayDialog(
                     },
                     actions = {
                         IconButton(onClick = {
-                            scope.launch {
-                                if (!isError) {
-                                    when (selected) {
-                                        "Messaging" -> {
-                                            nostrViewModel.addMsgRelay(relayAddress)
-                                            onMsgRelayAdded(relayAddress)
-                                        }
-
-                                        "Inbox" -> {
-                                            nostrViewModel.addInboxRelay(relayAddress)
-                                            onRelayAdded(relayAddress, RelayMetadata.WRITE)
-                                        }
-
-                                        "Outbox" -> {
-                                            nostrViewModel.addOutboxRelay(relayAddress)
-                                            onRelayAdded(relayAddress, RelayMetadata.READ)
-                                        }
+                            if (!isError) {
+                                when (selected) {
+                                    "Messaging" -> {
+                                        relayViewModel.addMsgRelay(relayAddress)
+                                        onMsgRelayAdded(relayAddress)
                                     }
-                                    onDismissRequest()
+
+                                    "Inbox" -> {
+                                        relayViewModel.addInboxRelay(relayAddress)
+                                        onRelayAdded(relayAddress, RelayMetadata.WRITE)
+                                    }
+
+                                    "Outbox" -> {
+                                        relayViewModel.addOutboxRelay(relayAddress)
+                                        onRelayAdded(relayAddress, RelayMetadata.READ)
+                                    }
                                 }
+                                onDismissRequest()
                             }
                         }) {
                             Icon(

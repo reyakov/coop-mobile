@@ -265,10 +265,8 @@ fun AddContactDialog(onDismissRequest: () -> Unit) {
                     },
                     actions = {
                         IconButton(onClick = {
-                            scope.launch {
-                                val success = nostrViewModel.addContact(contact)
-                                if (success) onDismissRequest()
-                            }
+                            nostrViewModel.addContact(contact)
+                            onDismissRequest()
                         }) {
                             Icon(
                                 painter = painterResource(Res.drawable.ic_check),

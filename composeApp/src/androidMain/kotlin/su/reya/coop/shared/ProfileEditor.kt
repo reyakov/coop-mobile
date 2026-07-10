@@ -54,6 +54,7 @@ import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_plus
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,7 +70,8 @@ fun ProfileEditor(
     initialBio: String = "",
     initialPicture: Any? = null, // Accepts Uri (picked) or String (current URL)
     onBack: () -> Unit,
-    onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
+    onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
@@ -269,7 +271,7 @@ fun ProfileEditor(
                             scope.launch {
                                 isBusy = true
                                 try {
-                                    val bytes = withContext(Dispatchers.IO) {
+                                    val bytes = withContext(ioDispatcher) {
                                         (picture as? Uri)?.let {
                                             context.contentResolver.openInputStream(it)?.readBytes()
                                         }

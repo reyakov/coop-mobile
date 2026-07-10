@@ -134,31 +134,33 @@ class ChatViewModel(
         return _state.value.rooms[id]
     }
 
-    suspend fun refreshChatRooms() {
-        try {
-            val rooms = nostr.messages.getChatRooms() ?: emptySet()
-            _state.update { currentState ->
-                val newMap = currentState.rooms.toMutableMap()
-                rooms.forEach { room -> newMap[room.id] = room }
-                currentState.copy(rooms = newMap)
+    fun refreshChatRooms() {
+        viewModelScope.launch {
+            try {
+                val rooms = nostr.messages.getChatRooms() ?: emptySet()
+                _state.update { currentState ->
+                    val newMap = currentState.rooms.toMutableMap()
+                    rooms.forEach { room -> newMap[room.id] = room }
+                    currentState.copy(rooms = newMap)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
         }
     }
 
-    suspend fun getChatRoomMessages(roomId: Long): List<UnsignedEvent> {
-        try {
-            return nostr.messages.getChatRoomMessages(roomId)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
+    fun loadChatRoomMessages(roomId: Long, onResult: (List<UnsignedEvent>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.messages.getChatRoomMessages(roomId))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
         }
-
-        return emptyList()
     }
 
     fun chatRoomConnect(roomId: Long) {

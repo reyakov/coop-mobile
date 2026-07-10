@@ -96,14 +96,16 @@ fun NewChatScreen() {
                     selectedReceivers.add(pubkey)
                 }
             } else if (query.contains("@")) {
-                val pubkey = nostrViewModel.searchByAddress(query)
-                if (pubkey != null) {
-                    selectedReceivers.add(pubkey)
+                nostrViewModel.searchByAddress(query) { pubkey ->
+                    if (pubkey != null) {
+                        selectedReceivers.add(pubkey)
+                    }
                 }
             } else {
-                val results = nostrViewModel.searchByNostr(query)
-                searchResults.clear()
-                searchResults.addAll(results)
+                nostrViewModel.searchByNostr(query) { results ->
+                    searchResults.clear()
+                    searchResults.addAll(results)
+                }
             }
 
             query = ""

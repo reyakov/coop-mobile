@@ -18,7 +18,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +28,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_cancel
 import coop.composeapp.generated.resources.ic_check_circle
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
@@ -46,7 +44,6 @@ fun ScreenerCard(room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
 
     val nostrViewModel = LocalNostrViewModel.current
-    val scope = rememberCoroutineScope()
 
     var isContact by remember { mutableStateOf(false) }
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
@@ -56,14 +53,12 @@ fun ScreenerCard(room: Room) {
     val profile by profileFlow.collectAsStateWithLifecycle()
 
     LaunchedEffect(pubkey) {
-        scope.launch {
-            // Check contact
-            nostrViewModel.verifyContact(pubkey).let { isContact = it }
-            // Get mutual contacts
-            nostrViewModel.mutualContacts(pubkey).let { mutualContacts = it }
-            // Get the last activity
-            nostrViewModel.verifyActivity(pubkey)?.let { lastActivity = it }
-        }
+        // Check contact
+        nostrViewModel.verifyContact(pubkey) { isContact = it }
+        // Get mutual contacts
+        nostrViewModel.mutualContacts(pubkey) { mutualContacts = it }
+        // Get the last activity
+        nostrViewModel.verifyActivity(pubkey) { lastActivity = it }
     }
 
     Column(

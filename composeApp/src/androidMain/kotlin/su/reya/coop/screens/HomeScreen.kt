@@ -93,6 +93,7 @@ import su.reya.coop.LocalAuthViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalRelayViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
@@ -114,6 +115,7 @@ fun HomeScreen() {
     val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
     val authViewModel = LocalAuthViewModel.current
+    val relayViewModel = LocalRelayViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
@@ -123,7 +125,7 @@ fun HomeScreen() {
     val userProfile by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
-    val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
+    val isRelayListEmpty by relayViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
 
@@ -319,11 +321,9 @@ fun HomeScreen() {
                         isRefreshing = isRefreshing,
                         state = pullToRefreshState,
                         onRefresh = {
-                            scope.launch {
-                                isRefreshing = true
-                                chatViewModel.refreshChatRooms()
-                                isRefreshing = false
-                            }
+                            isRefreshing = true
+                            chatViewModel.refreshChatRooms()
+                            isRefreshing = false
                         },
                         indicator = {
                             PullToRefreshDefaults.LoadingIndicator(
@@ -469,7 +469,7 @@ fun HomeScreen() {
     // Show the relay setup dialog if the msg relay list is empty
     if (isRelayListEmpty) {
         ModalBottomSheet(
-            onDismissRequest = { nostrViewModel.dismissRelayWarning() },
+            onDismissRequest = { relayViewModel.dismissRelayWarning() },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ) {
@@ -573,15 +573,9 @@ fun HomeScreen() {
                         TextButton(
                             enabled = !isBusy,
                             onClick = {
-                                scope.launch {
-                                    isBusy = true
-                                    try {
-                                        nostrViewModel.refetchMsgRelays()
-                                    } catch (e: Exception) {
-                                        snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
-                                    }
-                                    isBusy = false
-                                }
+                                isBusy = true
+                                relayViewModel.refetchMsgRelays()
+                                isBusy = false
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -595,10 +589,8 @@ fun HomeScreen() {
                         Button(
                             enabled = !isBusy,
                             onClick = {
-                                scope.launch {
-                                    nostrViewModel.useDefaultMsgRelayList()
-                                    sheetState.hide()
-                                }
+                                relayViewModel.useDefaultMsgRelayList()
+                                scope.launch { sheetState.hide() }
                             },
                             modifier = Modifier
                                 .weight(1f)

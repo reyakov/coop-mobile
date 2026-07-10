@@ -1,10 +1,13 @@
 package su.reya.coop.viewmodel
 
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.EncryptedSecretKey
@@ -32,6 +35,7 @@ class AuthViewModel(
     private val storage: AppStorage,
     private val mediaRepository: MediaRepository,
     private val externalSignerHandler: ExternalSignerHandler? = null,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : BaseViewModel() {
     companion object {
         private const val KEY_USER_SIGNER = "user_signer"
@@ -112,21 +116,21 @@ class AuthViewModel(
         }
     }
 
-    private suspend fun getOrInitAppKeys(): Keys {
+    private suspend fun getOrInitAppKeys(): Keys = withContext(defaultDispatcher) {
         val secret = storage.getSecret(KEY_APP_KEYS)
         // If app keys are already stored, use them
-        if (secret != null) return Keys.parse(secret)
+        if (secret != null) return@withContext Keys.parse(secret)
         // Generate new app keys and save to the secret storage
         val keys = Keys.generate()
         storage.setSecret(KEY_APP_KEYS, keys.secretKey().toBech32())
-        return keys
+        keys
     }
 
     private suspend fun createSigner(
         secret: String,
         password: String? = null
-    ): Pair<AsyncNostrSigner, String?> {
-        return when {
+    ): Pair<AsyncNostrSigner, String?> = withContext(defaultDispatcher) {
+        when {
             secret.startsWith("nsec1") -> Keys.parse(secret) to null
 
             secret.startsWith("ncryptsec1") -> {

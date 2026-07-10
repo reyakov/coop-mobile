@@ -17,6 +17,7 @@ import su.reya.coop.repository.MediaRepository
 import su.reya.coop.viewmodel.AuthViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.RelayViewModel
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
             private val storage = AppStore(this@MainActivity)
             private val mediaRepository = MediaRepository()
             private val nostrViewModel = NostrViewModel(NostrManager.instance, mediaRepository)
+            private val relayViewModel = RelayViewModel(NostrManager.instance)
             private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
@@ -38,6 +40,7 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
                     modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
+                    modelClass.isAssignableFrom(RelayViewModel::class.java) -> relayViewModel
                     modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
                     modelClass.isAssignableFrom(AuthViewModel::class.java) -> authViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
@@ -47,6 +50,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val nostrViewModel: NostrViewModel by viewModels { factory }
+    private val relayViewModel: RelayViewModel by viewModels { factory }
     private val chatViewModel: ChatViewModel by viewModels { factory }
     private val authViewModel: AuthViewModel by viewModels { factory }
 
@@ -93,6 +97,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 nostrViewModel = nostrViewModel,
+                relayViewModel = relayViewModel,
                 chatViewModel = chatViewModel,
                 authViewModel = authViewModel,
             )

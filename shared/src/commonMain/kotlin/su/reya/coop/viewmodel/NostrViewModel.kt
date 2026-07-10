@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +12,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -21,19 +19,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.RelayMetadata
-import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Timestamp
 import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.repository.MediaRepository
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 data class NostrAppState(
     val isBusy: Boolean = false,
-    val isRelayListEmpty: Boolean = false,
 )
 
 class NostrViewModel(
@@ -51,9 +45,6 @@ class NostrViewModel(
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
-    val isRelayListEmpty = appState.map { it.isRelayListEmpty }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentUserProfile = nostr.signer.publicKeyFlow
         .flatMapLatest { pubkey ->
@@ -69,8 +60,8 @@ class NostrViewModel(
         // Automatically reconnect bootstrap relays
         reconnect()
 
-        // Observe the signer state and verify the relay list
-        observeSignerAndCheckRelays()
+        // Fetch metadata for the current user
+        fetchUserMetadata()
 
         // Get all local stored metadata
         getCacheMetadata()
@@ -153,7 +144,7 @@ class NostrViewModel(
         }
     }
 
-    private fun observeSignerAndCheckRelays() {
+    private fun fetchUserMetadata() {
         viewModelScope.launch {
             // Wait until the client is ready
             nostr.waitUntilInitialized()
@@ -163,13 +154,6 @@ class NostrViewModel(
 
             // Get all metadata for the current user
             nostr.profiles.getUserMetadata()
-
-            // Small delay to ensure all relays are connected
-            delay(2.seconds)
-
-            // Check if the relay list is empty
-            val relays = nostr.relays.getMsgRelays(currentUser)
-            if (relays.isEmpty()) _appState.update { it.copy(isRelayListEmpty = true) }
         }
     }
 
@@ -194,15 +178,6 @@ class NostrViewModel(
 
     fun resetInternalState() {
         _contactList.value = emptySet()
-        _appState.update {
-            it.copy(
-                isRelayListEmpty = false,
-            )
-        }
-    }
-
-    fun dismissRelayWarning() {
-        _appState.update { it.copy(isRelayListEmpty = false) }
     }
 
     fun updateProfile(
@@ -238,131 +213,36 @@ class NostrViewModel(
         }
     }
 
-    suspend fun refetchMsgRelays() {
-        val currentUser = nostr.signer.getPublicKeyAsync() ?: return
-        val relays = nostr.relays.fetchMsgRelays(currentUser)
-
-        if (relays.isNotEmpty()) dismissRelayWarning()
-    }
-
-    suspend fun useDefaultMsgRelayList() {
-        try {
-            val defaultRelays = nostr.relays.getDefaultMsgRelayList()
-            nostr.relays.setMsgRelays(defaultRelays)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun currentUserRelayList(): Map<RelayUrl, RelayMetadata?> {
-        try {
-            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-            return nostr.relays.getRelayList(currentUser)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            return emptyMap()
-        }
-    }
-
-    suspend fun addInboxRelay(relay: String) {
-        try {
-            val relayUrl = RelayUrl.parse(relay)
-            val relays = currentUserRelayList().toMutableMap()
-            relays[relayUrl] = RelayMetadata.WRITE
-
-            nostr.relays.setRelaylist(relays)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun addOutboxRelay(relay: String) {
-        try {
-            val relayUrl = RelayUrl.parse(relay)
-            val relays = currentUserRelayList().toMutableMap()
-            relays[relayUrl] = RelayMetadata.READ
-
-            nostr.relays.setRelaylist(relays)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun removeRelay(relay: String) {
-        try {
-            val relayUrl = RelayUrl.parse(relay)
-            val relays = currentUserRelayList().toMutableMap()
-            relays.remove(relayUrl)
-
-            nostr.relays.setRelaylist(relays)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun currentUserMsgRelayList(): List<RelayUrl> {
-        try {
-            val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-            return nostr.relays.getMsgRelays(currentUser)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            return emptyList()
-        }
-    }
-
-    suspend fun addMsgRelay(relay: String) {
-        try {
-            val relayUrl = RelayUrl.parse(relay)
-            val relays = currentUserMsgRelayList().toMutableSet()
-            relays.add(relayUrl)
-
-            nostr.relays.setMsgRelays(relays.toList())
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    suspend fun removeMsgRelay(relay: String) {
-        try {
-            val relayUrl = RelayUrl.parse(relay)
-            val relays = currentUserMsgRelayList().toMutableSet()
-            relays.remove(relayUrl)
-
-            nostr.relays.setMsgRelays(relays.toList())
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-    }
-
-    private suspend fun newContact(publicKey: PublicKey) {
+    private fun newContact(publicKey: PublicKey) {
         if (publicKey in contactList.value) return
 
-        try {
-            val updated = contactList.value + publicKey
-            // Publish new event
-            nostr.profiles.setContactList(updated.toList())
-            // Optimistic local update
-            _contactList.update { it + publicKey }
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
+        viewModelScope.launch {
+            try {
+                val updated = contactList.value + publicKey
+                // Publish new event
+                nostr.profiles.setContactList(updated.toList())
+                // Optimistic local update
+                _contactList.update { it + publicKey }
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
         }
     }
 
-    suspend fun addContact(address: String): Boolean {
-        val pubkey = try {
-            if (address.contains("@")) {
-                nostr.profiles.searchByAddress(address)
-            } else {
-                PublicKey.parse(address)
+    fun addContact(address: String) {
+        viewModelScope.launch {
+            val pubkey = try {
+                if (address.contains("@")) {
+                    nostr.profiles.searchByAddress(address)
+                } else {
+                    PublicKey.parse(address)
+                }
+            } catch (e: Exception) {
+                showError("Invalid contact address: ${e.message}")
+                return@launch
             }
-        } catch (e: Exception) {
-            showError("Invalid contact address: ${e.message}")
-            return false
-        }
 
-        return run {
             newContact(pubkey)
-            true
         }
     }
 
@@ -382,48 +262,58 @@ class NostrViewModel(
         }
     }
 
-    suspend fun searchByAddress(query: String): PublicKey? {
-        try {
-            return nostr.profiles.searchByAddress(query)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-        return null
-    }
-
-    suspend fun searchByNostr(query: String): List<PublicKey> {
-        try {
-            return nostr.profiles.searchByNostr(query)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-        }
-        return emptyList()
-    }
-
-    suspend fun verifyActivity(pubkey: PublicKey): Timestamp? {
-        return try {
-            nostr.profiles.verifyActivity(pubkey)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            null
+    fun searchByAddress(query: String, onResult: (PublicKey?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.profiles.searchByAddress(query))
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                onResult(null)
+            }
         }
     }
 
-    suspend fun verifyContact(pubkey: PublicKey): Boolean {
-        return try {
-            nostr.profiles.verifyContact(pubkey)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            false
+    fun searchByNostr(query: String, onResult: (List<PublicKey>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.profiles.searchByNostr(query))
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                onResult(emptyList())
+            }
         }
     }
 
-    suspend fun mutualContacts(pubkey: PublicKey): Set<PublicKey> {
-        return try {
-            nostr.profiles.mutualContacts(pubkey)
-        } catch (e: Exception) {
-            showError("Error: ${e.message}")
-            setOf()
+    fun verifyActivity(pubkey: PublicKey, onResult: (Timestamp?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.profiles.verifyActivity(pubkey))
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                onResult(null)
+            }
+        }
+    }
+
+    fun verifyContact(pubkey: PublicKey, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.profiles.verifyContact(pubkey))
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                onResult(false)
+            }
+        }
+    }
+
+    fun mutualContacts(pubkey: PublicKey, onResult: (Set<PublicKey>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onResult(nostr.profiles.mutualContacts(pubkey))
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+                onResult(emptySet())
+            }
         }
     }
 }
