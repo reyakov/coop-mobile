@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -92,7 +93,8 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     // Get current user
-    val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
+    val accountViewModel = LocalAccountViewModel.current
+    val currentUser by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
 
     // Get chat room by ID
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()

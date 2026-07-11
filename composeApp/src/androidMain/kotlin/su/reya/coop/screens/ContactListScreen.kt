@@ -58,6 +58,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -72,9 +73,10 @@ fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
 
-    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
     var contactToDelete by remember { mutableStateOf<PublicKey?>(null) }
 
@@ -201,7 +203,7 @@ fun ContactListScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        contactToDelete?.let { nostrViewModel.removeContact(it) }
+                        contactToDelete?.let { accountViewModel.removeContact(it) }
                         contactToDelete = null
                     }
                 ) {
@@ -222,6 +224,7 @@ fun ContactListScreen() {
 fun AddContactDialog(onDismissRequest: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
@@ -265,7 +268,7 @@ fun AddContactDialog(onDismissRequest: () -> Unit) {
                     },
                     actions = {
                         IconButton(onClick = {
-                            nostrViewModel.addContact(contact)
+                            accountViewModel.addContact(contact)
                             onDismissRequest()
                         }) {
                             Icon(

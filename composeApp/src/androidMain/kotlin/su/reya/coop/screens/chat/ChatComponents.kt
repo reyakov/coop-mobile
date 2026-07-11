@@ -31,6 +31,7 @@ import coop.composeapp.generated.resources.ic_check_circle
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.Room
 import su.reya.coop.humanReadable
@@ -44,6 +45,7 @@ fun ScreenerCard(room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
 
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     var isContact by remember { mutableStateOf(false) }
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
@@ -54,11 +56,11 @@ fun ScreenerCard(room: Room) {
 
     LaunchedEffect(pubkey) {
         // Check contact
-        nostrViewModel.verifyContact(pubkey) { isContact = it }
+        accountViewModel.verifyContact(pubkey) { isContact = it }
         // Get mutual contacts
-        nostrViewModel.mutualContacts(pubkey) { mutualContacts = it }
+        accountViewModel.mutualContacts(pubkey) { mutualContacts = it }
         // Get the last activity
-        nostrViewModel.verifyActivity(pubkey) { lastActivity = it }
+        accountViewModel.verifyActivity(pubkey) { lastActivity = it }
     }
 
     Column(

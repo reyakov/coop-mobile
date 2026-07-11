@@ -89,11 +89,10 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
-import su.reya.coop.LocalRelayViewModel
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
@@ -114,23 +113,22 @@ fun HomeScreen() {
     val clipboardManager = LocalClipboard.current
     val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val authViewModel = LocalAuthViewModel.current
-    val relayViewModel = LocalRelayViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    val userProfile by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
+    val userProfile by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
-    val isRelayListEmpty by relayViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
+    val isRelayListEmpty by accountViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val isBannerDismissed = authState.isNotificationBannerDismissed
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val isBannerDismissed = accountState.isNotificationBannerDismissed
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -157,7 +155,7 @@ fun HomeScreen() {
         onPauseOrDispose { }
     }
 
-    LaunchedEffect(authState.signerRequired) {
+    LaunchedEffect(accountState.signerRequired) {
         chatViewModel.refreshChatRooms()
     }
 
@@ -282,7 +280,7 @@ fun HomeScreen() {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = { authViewModel.dismissNotificationBanner() },
+                                    onClick = { accountViewModel.dismissNotificationBanner() },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(text = "Maybe later")
@@ -469,7 +467,7 @@ fun HomeScreen() {
     // Show the relay setup dialog if the msg relay list is empty
     if (isRelayListEmpty) {
         ModalBottomSheet(
-            onDismissRequest = { relayViewModel.dismissRelayWarning() },
+            onDismissRequest = { accountViewModel.dismissRelayWarning() },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ) {
@@ -574,7 +572,7 @@ fun HomeScreen() {
                             enabled = !isBusy,
                             onClick = {
                                 isBusy = true
-                                relayViewModel.refetchMsgRelays()
+                                accountViewModel.refetchMsgRelays()
                                 isBusy = false
                             },
                             modifier = Modifier
@@ -589,7 +587,7 @@ fun HomeScreen() {
                         Button(
                             enabled = !isBusy,
                             onClick = {
-                                relayViewModel.useDefaultMsgRelayList()
+                                accountViewModel.useDefaultMsgRelayList()
                                 scope.launch { sheetState.hide() }
                             },
                             modifier = Modifier
@@ -738,7 +736,7 @@ fun BottomMenuList(
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
@@ -770,8 +768,8 @@ fun BottomMenuList(
         FilledTonalButton(
             onClick = {
                 onDismiss {
-                    authViewModel.logout(onLogout = {
-                        nostrViewModel.resetInternalState()
+                    accountViewModel.logout(onLogout = {
+                        accountViewModel.resetInternalState()
                         chatViewModel.resetInternalState()
                     })
                 }

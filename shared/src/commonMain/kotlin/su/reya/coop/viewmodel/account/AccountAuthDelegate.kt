@@ -1,9 +1,10 @@
-package su.reya.coop.viewmodel
+package su.reya.coop.viewmodel.account
 
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -23,46 +24,46 @@ import su.reya.coop.nostr.SignerPermissions
 import su.reya.coop.repository.MediaRepository
 import kotlin.time.Duration.Companion.seconds
 
-data class AuthState(
+data class AccountState(
     val signerRequired: Boolean? = null,
     val isNotificationBannerDismissed: Boolean = false,
     val isImporting: Boolean = false,
     val importError: String? = null,
 )
 
-class AuthViewModel(
+class AccountAuthDelegate(
     private val nostr: Nostr,
     private val storage: AppStorage,
     private val mediaRepository: MediaRepository,
     private val externalSignerHandler: ExternalSignerHandler? = null,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
-) : BaseViewModel() {
+    private val onError: (String) -> Unit,
+    private val onSignerReady: () -> Unit,
+    private val scope: CoroutineScope,
+) {
     companion object {
         private const val KEY_USER_SIGNER = "user_signer"
         private const val KEY_APP_KEYS = "app_keys"
         private const val KEY_BANNER_DISMISSED = "notification_banner_dismissed"
     }
 
-    private val _state = MutableStateFlow(AuthState())
-    val state = _state.asStateFlow()
+    private val _state = MutableStateFlow(AccountState())
+    val state: StateFlow<AccountState> = _state.asStateFlow()
 
-    init {
-        // Check if the notification banner has been dismissed
+    fun init() {
         checkNotificationBannerDismissedStatus()
-
-        // Check local stored secret (secret key or bunker)
         login()
     }
 
     private fun checkNotificationBannerDismissedStatus() {
-        viewModelScope.launch {
+        scope.launch {
             val dismissed = storage.get(KEY_BANNER_DISMISSED) == "true"
             _state.update { it.copy(isNotificationBannerDismissed = dismissed) }
         }
     }
 
     private fun login() {
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val secret = withTimeoutOrNull(5.seconds) {
                     storage.getSecret(KEY_USER_SIGNER)
@@ -78,39 +79,36 @@ class AuthViewModel(
                     nostr.setSigner(signer)
                 }.onSuccess {
                     _state.update { it.copy(signerRequired = false) }
+                    onSignerReady()
                 }.onFailure { e ->
-                    showError("Login failed: ${e.message}")
+                    onError("Login failed: ${e.message}")
                     _state.update { it.copy(signerRequired = true) }
                 }
             } catch (e: Exception) {
-                showError("Login failed: ${e.message}")
+                onError("Login failed: ${e.message}")
                 _state.update { it.copy(signerRequired = true) }
             }
         }
     }
 
     fun logout(onLogout: () -> Unit = {}) {
-        viewModelScope.launch {
+        scope.launch {
             try {
-                // Reset the nostr signer and prune the database
                 nostr.signer.switch(Keys.generate())
                 nostr.prune()
             } catch (e: Exception) {
-                showError("Logout encountered an error: ${e.message}")
+                onError("Logout encountered an error: ${e.message}")
             } finally {
-                // Clear credentials from persistent storage
                 storage.clear(KEY_USER_SIGNER)
                 storage.clear(KEY_BANNER_DISMISSED)
-                // Call cleanup callback (e.g. to reset other ViewModels)
                 onLogout()
-                // Reset local states
                 _state.update { it.copy(signerRequired = true) }
             }
         }
     }
 
     fun dismissNotificationBanner() {
-        viewModelScope.launch {
+        scope.launch {
             storage.set(KEY_BANNER_DISMISSED, "true")
             _state.update { it.copy(isNotificationBannerDismissed = true) }
         }
@@ -118,9 +116,7 @@ class AuthViewModel(
 
     private suspend fun getOrInitAppKeys(): Keys = withContext(defaultDispatcher) {
         val secret = storage.getSecret(KEY_APP_KEYS)
-        // If app keys are already stored, use them
         if (secret != null) return@withContext Keys.parse(secret)
-        // Generate new app keys and save to the secret storage
         val keys = Keys.generate()
         storage.setSecret(KEY_APP_KEYS, keys.secretKey().toBech32())
         keys
@@ -136,9 +132,8 @@ class AuthViewModel(
             secret.startsWith("ncryptsec1") -> {
                 if (password == null) throw IllegalArgumentException("Password is required")
                 val enc = EncryptedSecretKey.fromBech32(secret)
-                val secret = enc.decrypt(password)
-                val keys = Keys(secret)
-
+                val decrypted = enc.decrypt(password)
+                val keys = Keys(decrypted)
                 keys to keys.secretKey().toBech32()
             }
 
@@ -153,7 +148,6 @@ class AuthViewModel(
                 val handler = externalSignerHandler
                     ?: throw IllegalStateException("External signer not available on this platform")
 
-                // Format: nip55://packageName/hexPubkey
                 val parts = secret.removePrefix("nip55://").split("/", limit = 2)
                 val packageName = parts[0]
                 val pubkey = PublicKey.parse(parts[1])
@@ -167,25 +161,23 @@ class AuthViewModel(
     }
 
     fun importIdentity(secret: String, password: String? = null) {
-        viewModelScope.launch {
+        scope.launch {
             _state.update { it.copy(isImporting = true, importError = null) }
             try {
                 val (signer, decryptedSecret) = createSigner(secret, password)
-                // Update signer
                 nostr.setSigner(signer)
-                // Persist the secret in the secret storage
                 storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
-                // Update local states
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
+                onSignerReady()
             } catch (e: Exception) {
-                showError("Import failed: ${e.message}")
+                onError("Import failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }
             }
         }
     }
 
     fun connectExternalSigner() {
-        viewModelScope.launch {
+        scope.launch {
             _state.update { it.copy(isImporting = true, importError = null) }
             try {
                 val handler = externalSignerHandler
@@ -209,17 +201,15 @@ class AuthViewModel(
                 val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
                 val signer = ExternalSignerProxy(handler, result.pubkey)
 
-                // Update signer
                 nostr.setSigner(signer)
-                // Store the signer in the secret storage
                 storage.setSecret(
                     KEY_USER_SIGNER,
                     "nip55://${result.packageName}/${result.pubkey.toHex()}"
                 )
-                // Update local states
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
+                onSignerReady()
             } catch (e: Exception) {
-                showError("External signer connection failed: ${e.message}")
+                onError("External signer connection failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }
             }
         }
@@ -235,7 +225,7 @@ class AuthViewModel(
         picture: ByteArray?,
         contentType: String? = null
     ) {
-        viewModelScope.launch {
+        scope.launch {
             _state.update { it.copy(isImporting = true, importError = null) }
             try {
                 val keys = Keys.generate()
@@ -243,19 +233,17 @@ class AuthViewModel(
                 val avatarUrl = picture?.let {
                     mediaRepository.blossomUpload(keys, it, contentType ?: "image/jpeg")
                 }
-                // Create identity
                 nostr.profiles.createIdentity(
                     keys = keys,
                     name = name,
                     bio = bio,
                     picture = avatarUrl
                 )
-                // Persist the secret in the secret storage
                 storage.setSecret(KEY_USER_SIGNER, secret)
-                // Update local states
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
+                onSignerReady()
             } catch (e: Exception) {
-                showError("Identity creation failed: ${e.message}")
+                onError("Identity creation failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }
             }
         }

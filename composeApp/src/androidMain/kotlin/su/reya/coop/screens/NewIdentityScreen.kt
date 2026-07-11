@@ -1,14 +1,14 @@
 package su.reya.coop.screens
 
 import androidx.compose.runtime.Composable
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.Screen
 import su.reya.coop.shared.ProfileEditor
 
 @Composable
 fun NewIdentityScreen() {
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val navigator = LocalNavigator.current
 
     ProfileEditor(
@@ -16,7 +16,7 @@ fun NewIdentityScreen() {
         buttonLabel = "Continue",
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
-            authViewModel.createIdentity(name, bio, bytes, type)
+            accountViewModel.createIdentity(name, bio, bytes, type)
             navigator.navigate(Screen.Home)
         }
     )

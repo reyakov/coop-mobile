@@ -68,7 +68,7 @@ import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
-import su.reya.coop.LocalRelayViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalSnackbarHostState
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -76,7 +76,7 @@ import su.reya.coop.LocalSnackbarHostState
 fun RelayScreen() {
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
-    val relayViewModel = LocalRelayViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
@@ -99,12 +99,12 @@ fun RelayScreen() {
     var relayToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        relayViewModel.loadCurrentUserRelayList()
-        relayViewModel.loadCurrentUserMsgRelayList()
+        accountViewModel.loadCurrentUserRelayList()
+        accountViewModel.loadCurrentUserMsgRelayList()
     }
 
-    val loadedRelayList by relayViewModel.currentUserRelayList.collectAsStateWithLifecycle()
-    val loadedMsgRelayList by relayViewModel.currentUserMsgRelayList.collectAsStateWithLifecycle()
+    val loadedRelayList by accountViewModel.currentUserRelayList.collectAsStateWithLifecycle()
+    val loadedMsgRelayList by accountViewModel.currentUserMsgRelayList.collectAsStateWithLifecycle()
 
     LaunchedEffect(loadedRelayList) {
         if (loadedRelayList.isNotEmpty()) {
@@ -341,7 +341,7 @@ fun RelayScreen() {
                             relayToDelete = null
                             return@TextButton
                         }
-                        relayViewModel.removeMsgRelay(relayToDelete!!)
+                        accountViewModel.removeMsgRelay(relayToDelete!!)
                         msgRelayList.removeIf { it.toString() == relayToDelete }
                         relayToDelete = null
                     }
@@ -365,7 +365,7 @@ fun AddRelayDialog(
     onMsgRelayAdded: (newRelay: String) -> Unit,
     onRelayAdded: (newRelay: String, metadata: RelayMetadata?) -> Unit,
 ) {
-    val relayViewModel = LocalRelayViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
@@ -416,17 +416,17 @@ fun AddRelayDialog(
                             if (!isError) {
                                 when (selected) {
                                     "Messaging" -> {
-                                        relayViewModel.addMsgRelay(relayAddress)
+                                        accountViewModel.addMsgRelay(relayAddress)
                                         onMsgRelayAdded(relayAddress)
                                     }
 
                                     "Inbox" -> {
-                                        relayViewModel.addInboxRelay(relayAddress)
+                                        accountViewModel.addInboxRelay(relayAddress)
                                         onRelayAdded(relayAddress, RelayMetadata.WRITE)
                                     }
 
                                     "Outbox" -> {
-                                        relayViewModel.addOutboxRelay(relayAddress)
+                                        accountViewModel.addOutboxRelay(relayAddress)
                                         onRelayAdded(relayAddress, RelayMetadata.READ)
                                     }
                                 }

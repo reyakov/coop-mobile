@@ -55,6 +55,7 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -72,9 +73,10 @@ fun NewChatScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
 
-    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
 
     val createGroup = remember { mutableStateOf(false) }
@@ -96,13 +98,13 @@ fun NewChatScreen() {
                     selectedReceivers.add(pubkey)
                 }
             } else if (query.contains("@")) {
-                nostrViewModel.searchByAddress(query) { pubkey ->
+                accountViewModel.searchByAddress(query) { pubkey ->
                     if (pubkey != null) {
                         selectedReceivers.add(pubkey)
                     }
                 }
             } else {
-                nostrViewModel.searchByNostr(query) { results ->
+                accountViewModel.searchByNostr(query) { results ->
                     searchResults.clear()
                     searchResults.addAll(results)
                 }

@@ -48,7 +48,7 @@ import coop.composeapp.generated.resources.coop
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -60,21 +60,21 @@ fun OnboardingScreen() {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Navigate to Home on successful external signer connection
-    LaunchedEffect(authState.signerRequired) {
-        if (authState.signerRequired == false) {
+    LaunchedEffect(accountState.signerRequired) {
+        if (accountState.signerRequired == false) {
             navigator.navigate(Screen.Home)
         }
     }
 
     // Show connection errors
-    LaunchedEffect(authState.importError) {
-        authState.importError?.let {
+    LaunchedEffect(accountState.importError) {
+        accountState.importError?.let {
             snackbarHostState.showSnackbar(it)
         }
     }
@@ -176,10 +176,10 @@ fun OnboardingScreen() {
                             Spacer(modifier = Modifier.size(8.dp))
                             FilledTonalButton(
                                 onClick = {
-                                    if (authViewModel.isExternalSignerAvailable()) {
+                                    if (accountViewModel.isExternalSignerAvailable()) {
                                         // Connect to the external signer
                                         // TODO: show all available signers?
-                                        authViewModel.connectExternalSigner()
+                                        accountViewModel.connectExternalSigner()
                                     } else {
                                         scope.launch {
                                             val result = snackbarHostState.showSnackbar(

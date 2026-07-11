@@ -50,7 +50,7 @@ import coop.composeapp.generated.resources.ic_scanner
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
@@ -63,9 +63,9 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
 
     var secret by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -98,15 +98,15 @@ fun ImportScreen() {
     }
 
     // Navigate to Home on successful import (signerRequired becomes false)
-    LaunchedEffect(authState.signerRequired) {
-        if (authState.signerRequired == false) {
+    LaunchedEffect(accountState.signerRequired) {
+        if (accountState.signerRequired == false) {
             navigator.navigate(Screen.Home)
         }
     }
 
     // Show import errors via snackbar
-    LaunchedEffect(authState.importError) {
-        authState.importError?.let {
+    LaunchedEffect(accountState.importError) {
+        accountState.importError?.let {
             snackbarHostState.showSnackbar(it)
         }
     }
@@ -177,7 +177,7 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
-                                enabled = !authState.isImporting,
+                                enabled = !accountState.isImporting,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(
@@ -222,7 +222,7 @@ fun ImportScreen() {
                                 BasicTextField(
                                     value = password,
                                     onValueChange = { password = it },
-                                    enabled = !authState.isImporting && requirePassword,
+                                    enabled = !accountState.isImporting && requirePassword,
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(
@@ -250,14 +250,14 @@ fun ImportScreen() {
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
-                                authViewModel.importIdentity(secret, password)
+                                accountViewModel.importIdentity(secret, password)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !authState.isImporting,
+                            enabled = secret.isNotBlank() && !accountState.isImporting,
                         ) {
-                            if (authState.isImporting) {
+                            if (accountState.isImporting) {
                                 LoadingIndicator()
                             } else {
                                 Text(
