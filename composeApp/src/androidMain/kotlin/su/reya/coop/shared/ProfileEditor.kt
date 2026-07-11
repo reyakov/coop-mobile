@@ -54,6 +54,7 @@ import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_plus
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,8 +69,10 @@ fun ProfileEditor(
     initialName: String = "",
     initialBio: String = "",
     initialPicture: Any? = null, // Accepts Uri (picked) or String (current URL)
+    isBusy: Boolean = false,
     onBack: () -> Unit,
-    onConfirm: suspend (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit
+    onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
@@ -79,7 +82,6 @@ fun ProfileEditor(
     var name by remember(initialName) { mutableStateOf(initialName) }
     var bio by remember(initialBio) { mutableStateOf(initialBio) }
     var picture by remember(initialPicture) { mutableStateOf(initialPicture) }
-    var isBusy by remember { mutableStateOf(false) }
 
     val hasPicture = remember(picture) {
         when (picture) {
@@ -267,9 +269,8 @@ fun ProfileEditor(
                             .size(ButtonDefaults.MediumContainerHeight),
                         onClick = {
                             scope.launch {
-                                isBusy = true
                                 try {
-                                    val bytes = withContext(Dispatchers.IO) {
+                                    val bytes = withContext(ioDispatcher) {
                                         (picture as? Uri)?.let {
                                             context.contentResolver.openInputStream(it)?.readBytes()
                                         }
@@ -280,7 +281,6 @@ fun ProfileEditor(
                                 } catch (e: Exception) {
                                     snackbarHostState.showSnackbar(e.message ?: "Error")
                                 }
-                                isBusy = false
                             }
                         },
                         enabled = name.isNotBlank() && !isBusy

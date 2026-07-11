@@ -24,6 +24,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -44,8 +46,9 @@ import androidx.core.net.toUri
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
@@ -57,8 +60,24 @@ fun OnboardingScreen() {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
+
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+
+    // Navigate to Home on successful external signer connection
+    LaunchedEffect(accountState.signerRequired) {
+        if (accountState.signerRequired == false) {
+            navigator.navigate(Screen.Home)
+        }
+    }
+
+    // Show connection errors
+    LaunchedEffect(accountState.importError) {
+        accountState.importError?.let {
+            snackbarHostState.showSnackbar(it)
+        }
+    }
 
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
@@ -157,18 +176,12 @@ fun OnboardingScreen() {
                             Spacer(modifier = Modifier.size(8.dp))
                             FilledTonalButton(
                                 onClick = {
-                                    scope.launch {
-                                        if (authViewModel.isExternalSignerAvailable()) {
-                                            try {
-                                                // Connect to the external signer
-                                                // TODO: show all available signers?
-                                                authViewModel.connectExternalSigner()
-                                                // Navigate to the home screen
-                                                navigator.navigate(Screen.Home)
-                                            } catch (e: Exception) {
-                                                e.message?.let { snackbarHostState.showSnackbar(it) }
-                                            }
-                                        } else {
+                                    if (accountViewModel.isExternalSignerAvailable()) {
+                                        // Connect to the external signer
+                                        // TODO: show all available signers?
+                                        accountViewModel.connectExternalSigner()
+                                    } else {
+                                        scope.launch {
                                             val result = snackbarHostState.showSnackbar(
                                                 message = "External signer not installed. Please install Amber or alternatives.",
                                                 actionLabel = "Install",

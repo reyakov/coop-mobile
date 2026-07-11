@@ -34,8 +34,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import su.reya.coop.repository.ErrorRepository
-import su.reya.coop.screens.chat.ChatScreen
+import kotlinx.coroutines.launch
 import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
@@ -48,9 +47,10 @@ import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
 import su.reya.coop.screens.UpdateProfileScreen
-import su.reya.coop.viewmodel.AuthViewModel
+import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.account.AccountViewModel
 
 val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
     error("No NostrViewModel provided")
@@ -60,9 +60,10 @@ val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
     error("No ChatViewModel provided")
 }
 
-val LocalAuthViewModel = staticCompositionLocalOf<AuthViewModel> {
-    error("No AuthViewModel provided")
+val LocalAccountViewModel = staticCompositionLocalOf<AccountViewModel> {
+    error("No AccountViewModel provided")
 }
+
 
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
@@ -81,7 +82,7 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 fun App(
     nostrViewModel: NostrViewModel,
     chatViewModel: ChatViewModel,
-    authViewModel: AuthViewModel,
+    accountViewModel: AccountViewModel,
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
@@ -90,8 +91,8 @@ fun App(
     val qrScanResult = remember { QrScanResult() }
 
     // Get the signer required state
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val signerRequired = authState.signerRequired
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val signerRequired = accountState.signerRequired
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -118,8 +119,20 @@ fun App(
     }
 
     LaunchedEffect(Unit) {
-        ErrorRepository.errors.collect { message ->
-            snackbarHostState.showSnackbar(message)
+        launch {
+            accountViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+        launch {
+            chatViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+        launch {
+            nostrViewModel.errorEvents.collect { message ->
+                snackbarHostState.showSnackbar(message)
+            }
         }
     }
 
@@ -163,7 +176,7 @@ fun App(
         CompositionLocalProvider(
             LocalNostrViewModel provides nostrViewModel,
             LocalChatViewModel provides chatViewModel,
-            LocalAuthViewModel provides authViewModel,
+            LocalAccountViewModel provides accountViewModel,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,

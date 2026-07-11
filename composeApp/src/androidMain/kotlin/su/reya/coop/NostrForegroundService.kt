@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,6 +28,8 @@ private const val GROUP_KEY_MESSAGES = "su.reya.coop.MESSAGES"
 
 class NostrForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     private val nostr by lazy { NostrManager.instance }
     private var notificationJob: Job? = null
 

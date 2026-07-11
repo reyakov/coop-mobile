@@ -59,11 +59,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -77,7 +79,11 @@ import su.reya.coop.shared.Avatar
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ChatScreen(id: Long, screening: Boolean = false) {
+fun ChatScreen(
+    id: Long,
+    screening: Boolean = false,
+    coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
@@ -87,7 +93,8 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
     val listState = rememberLazyListState()
 
     // Get current user
-    val currentUser by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
+    val accountViewModel = LocalAccountViewModel.current
+    val currentUser by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
 
     // Get chat room by ID
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
@@ -120,20 +127,16 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     val sendFile = { uri: Uri ->
         scope.launch {
-            try {
-                // Read file
-                val file = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                }
-
-                // Parse the file content type
-                val type = context.contentResolver.getType(uri)
-
-                // Send message
-                chatViewModel.sendFileMessage(id, file, type)
-            } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Error: ${e.message}")
+            // Read file on IO dispatcher
+            val file = withContext(coroutineDispatcher) {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             }
+
+            // Parse the file content type
+            val type = context.contentResolver.getType(uri)
+
+            // Send message (handles errors internally via ViewModel)
+            chatViewModel.sendFileMessage(id, file, type)
         }
     }
 
@@ -153,12 +156,13 @@ fun ChatScreen(id: Long, screening: Boolean = false) {
 
     LaunchedEffect(id) {
         // Get messages
-        val initialMessages = chatViewModel.getChatRoomMessages(id)
-        messages.clear()
-        messages.addAll(initialMessages)
+        chatViewModel.loadChatRoomMessages(id) { initialMessages ->
+            messages.clear()
+            messages.addAll(initialMessages)
 
-        // Stop loading spinner
-        loading = false
+            // Stop loading spinner
+            loading = false
+        }
 
         // Get msg relays for each member
         chatViewModel.chatRoomConnect(id)

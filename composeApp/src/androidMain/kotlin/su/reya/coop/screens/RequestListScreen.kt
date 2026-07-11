@@ -101,11 +101,9 @@ fun RequestListScreen() {
                     isRefreshing = isRefreshing,
                     state = pullToRefreshState,
                     onRefresh = {
-                        scope.launch {
-                            isRefreshing = true
-                            chatViewModel.refreshChatRooms()
-                            isRefreshing = false
-                        }
+                        isRefreshing = true
+                        chatViewModel.refreshChatRooms()
+                        isRefreshing = false
                     },
                     indicator = {
                         PullToRefreshDefaults.LoadingIndicator(

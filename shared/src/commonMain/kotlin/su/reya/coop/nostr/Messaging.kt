@@ -1,5 +1,6 @@
 package su.reya.coop.nostr
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -119,7 +120,9 @@ class MessageManager(private val nostr: Nostr) {
             setCachedRumor(event.id(), unsignedEvent)
 
             return unsignedEvent
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             println("Failed to unwrap gift ${event.id().toHex()}: ${e.message}")
             return null
         }
@@ -131,7 +134,9 @@ class MessageManager(private val nostr: Nostr) {
             val event = client?.database()?.query(filter)?.first()
 
             return event?.content()?.let { UnsignedEvent.fromJson(it).ensureId() }
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             throw IllegalStateException("Failed to get cached rumor: ${e.message}", e)
         }
     }
@@ -155,7 +160,9 @@ class MessageManager(private val nostr: Nostr) {
                 .finalizeAsync(Keys.generate())
 
             client?.database()?.saveEvent(event)
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             println("Failed to set cached rumor: ${e.message}")
         }
     }
@@ -170,36 +177,35 @@ class MessageManager(private val nostr: Nostr) {
 
             // Get all DM events
             val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm"))
-            val events = client?.database()?.query(filter)
+            val events = client?.database()?.query(filter)?.toVec() ?: return null
 
             // Collect rooms
             val roomsMap: MutableMap<Long, Room> = mutableMapOf()
 
             events
-                ?.toVec()
-                ?.map { UnsignedEvent.fromJson(it.content()) }
-                ?.filter { it.tags().publicKeys().isNotEmpty() }
-                ?.forEach { event ->
-                    val newRoom = Room.new(rumor = event, userPubkey = userPubkey)
-                    val existingRoom = roomsMap[newRoom.id]
+                .map { UnsignedEvent.fromJson(it.content()) }
+                .filter { it.tags().publicKeys().isNotEmpty() }
+                .forEach { rumor ->
+                    val id = rumor.roomId()
+                    val isFromMe = rumor.author() == userPubkey
+                    val existing = roomsMap[id]
+                    val createdAt = rumor.createdAt()
 
-                    // Check if the room already exists
-                    if (existingRoom == null || newRoom.createdAt.asSecs() > existingRoom.createdAt.asSecs()) {
-                        val rTag = SingleLetterTag.lowercase(Alphabet.R)
-                        val filter = Filter().kind(kind).pubkey(userPubkey)
-                            .customTag(rTag, newRoom.id.toString())
-
-                        // Determine if it's an ongoing room
-                        val isOngoing =
-                            client?.database()?.query(filter)?.toVec()?.isNotEmpty() ?: false
-
-                        // Append room to map
-                        roomsMap[newRoom.id] =
-                            if (isOngoing) newRoom.copy(kind = RoomKind.Ongoing) else newRoom
+                    // If the room is new or the current rumor is newer than the existing one
+                    if (existing == null || createdAt.asSecs() > existing.createdAt.asSecs()) {
+                        // A room is "Ongoing" if it was already marked as such or if the current rumor is from the user
+                        val isOngoing = (existing?.kind == RoomKind.Ongoing) || isFromMe
+                        val room = Room.new(rumor = rumor, userPubkey = userPubkey, id = id)
+                        roomsMap[id] = if (isOngoing) room.copy(kind = RoomKind.Ongoing) else room
+                    } else if (isFromMe && existing.kind != RoomKind.Ongoing) {
+                        // If it's an older rumor but sent by the user, mark the room as Ongoing
+                        roomsMap[id] = existing.copy(kind = RoomKind.Ongoing)
                     }
                 }
 
             return roomsMap.values.sortedByDescending { it.createdAt.asSecs() }.toSet()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             println("Failed to get chat rooms: ${e.message}")
             return null

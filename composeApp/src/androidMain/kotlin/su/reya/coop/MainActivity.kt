@@ -13,9 +13,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import su.reya.coop.nostr.NostrManager
-import su.reya.coop.viewmodel.AuthViewModel
+import su.reya.coop.repository.MediaRepository
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.account.AccountViewModel
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
@@ -26,18 +27,19 @@ class MainActivity : ComponentActivity() {
     private val factory by lazy {
         object : ViewModelProvider.Factory {
             private val storage = AppStore(this@MainActivity)
+            private val mediaRepository = MediaRepository()
             private val nostrViewModel = NostrViewModel(NostrManager.instance)
-            private val chatViewModel = ChatViewModel(NostrManager.instance)
+            private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
-            private val authViewModel =
-                AuthViewModel(NostrManager.instance, storage, androidSigner)
+            private val accountViewModel =
+                AccountViewModel(NostrManager.instance, storage, mediaRepository, androidSigner)
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
                     modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
                     modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
-                    modelClass.isAssignableFrom(AuthViewModel::class.java) -> authViewModel
+                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> accountViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
                 } as T
             }
@@ -46,7 +48,7 @@ class MainActivity : ComponentActivity() {
 
     private val nostrViewModel: NostrViewModel by viewModels { factory }
     private val chatViewModel: ChatViewModel by viewModels { factory }
-    private val authViewModel: AuthViewModel by viewModels { factory }
+    private val accountViewModel: AccountViewModel by viewModels { factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -85,14 +87,14 @@ class MainActivity : ComponentActivity() {
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
-            authViewModel.state.value.signerRequired == null
+            accountViewModel.state.value.signerRequired == null
         }
 
         setContent {
             App(
                 nostrViewModel = nostrViewModel,
                 chatViewModel = chatViewModel,
-                authViewModel = authViewModel,
+                accountViewModel = accountViewModel,
             )
         }
     }

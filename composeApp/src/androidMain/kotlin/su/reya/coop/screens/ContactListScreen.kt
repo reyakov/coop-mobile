@@ -33,7 +33,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +58,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -73,9 +73,10 @@ fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
 
-    val contactList by nostrViewModel.contactList.collectAsStateWithLifecycle()
+    val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
     var contactToDelete by remember { mutableStateOf<PublicKey?>(null) }
 
@@ -202,7 +203,7 @@ fun ContactListScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        contactToDelete?.let { nostrViewModel.removeContact(it) }
+                        contactToDelete?.let { accountViewModel.removeContact(it) }
                         contactToDelete = null
                     }
                 ) {
@@ -223,6 +224,7 @@ fun ContactListScreen() {
 fun AddContactDialog(onDismissRequest: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
     val nostrViewModel = LocalNostrViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
@@ -266,10 +268,8 @@ fun AddContactDialog(onDismissRequest: () -> Unit) {
                     },
                     actions = {
                         IconButton(onClick = {
-                            scope.launch {
-                                val success = nostrViewModel.addContact(contact)
-                                if (success) onDismissRequest()
-                            }
+                            accountViewModel.addContact(contact)
+                            onDismissRequest()
                         }) {
                             Icon(
                                 painter = painterResource(Res.drawable.ic_check),
@@ -328,7 +328,7 @@ fun ContactListItem(
 ) {
     val nostrViewModel = LocalNostrViewModel.current
     val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
-    val profile by profileFlow.collectAsState(initial = null)
+    val profile by profileFlow.collectAsStateWithLifecycle(initialValue = null)
 
     SegmentedListItem(
         onClick = onClick,

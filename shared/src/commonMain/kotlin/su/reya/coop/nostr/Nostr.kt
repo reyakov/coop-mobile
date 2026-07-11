@@ -1,12 +1,15 @@
 package su.reya.coop.nostr
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import rust.nostr.sdk.AsyncNostrSigner
@@ -30,6 +33,7 @@ import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import rust.nostr.sdk.initLogger
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 object NostrManager {
     val instance = Nostr()
@@ -47,7 +51,9 @@ object NostrManager {
     val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
 }
 
-class Nostr {
+class Nostr(
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+) {
     var client: Client? = null
         private set
     var signer: UniversalSigner = UniversalSigner(Keys.generate())
@@ -59,17 +65,18 @@ class Nostr {
 
     private val isInitialized = MutableStateFlow(false)
 
-    private val _newEvents = MutableSharedFlow<UnsignedEvent>(extraBufferCapacity = 100)
+    private val _newEvents = MutableSharedFlow<UnsignedEvent>(
+        replay = 0,
+        extraBufferCapacity = 100,
+        onBufferOverflow = BufferOverflow.SUSPEND
+    )
     val newEvents = _newEvents.asSharedFlow()
 
-    suspend fun emitNewEvent(event: UnsignedEvent) {
-        _newEvents.emit(event)
+    fun emitNewEvent(event: UnsignedEvent) {
+        _newEvents.tryEmit(event)
     }
 
-    suspend fun init(
-        dbPath: String,
-        logLevel: LogLevel = LogLevel.WARN
-    ) {
+    suspend fun init(dbPath: String, logLevel: LogLevel = LogLevel.WARN) {
         try {
             if (isInitialized.value) return
 
@@ -105,7 +112,8 @@ class Nostr {
     }
 
     suspend fun waitUntilInitialized() {
-        isInitialized.first { it }
+        withTimeoutOrNull(30.seconds) { isInitialized.first { it } }
+            ?: throw IllegalStateException("Nostr initialization timed out")
     }
 
     suspend fun connectBootstrapRelays() {
@@ -159,7 +167,7 @@ class Nostr {
         var processedCount = 0
         var eoseReceived = false
 
-        launch(Dispatchers.Default) {
+        launch(defaultDispatcher) {
             for (event in giftWrapQueue) {
                 val rumor = messages.extractRumor(event)
                 processedCount++

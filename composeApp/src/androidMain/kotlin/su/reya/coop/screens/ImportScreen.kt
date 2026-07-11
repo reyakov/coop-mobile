@@ -34,7 +34,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,14 +43,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
@@ -64,13 +63,13 @@ fun ImportScreen() {
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val authViewModel = LocalAuthViewModel.current
-    val scope = rememberCoroutineScope()
+    val accountViewModel = LocalAccountViewModel.current
+
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
 
     var secret by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var requirePassword by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
 
     LaunchedEffect(qrScanResult.content) {
         qrScanResult.content?.let { result ->
@@ -95,6 +94,20 @@ fun ImportScreen() {
     LaunchedEffect(secret) {
         if (secret.startsWith("ncryptsec1")) {
             requirePassword = true
+        }
+    }
+
+    // Navigate to Home on successful import (signerRequired becomes false)
+    LaunchedEffect(accountState.signerRequired) {
+        if (accountState.signerRequired == false) {
+            navigator.navigate(Screen.Home)
+        }
+    }
+
+    // Show import errors via snackbar
+    LaunchedEffect(accountState.importError) {
+        accountState.importError?.let {
+            snackbarHostState.showSnackbar(it)
         }
     }
 
@@ -164,7 +177,7 @@ fun ImportScreen() {
                             BasicTextField(
                                 value = secret,
                                 onValueChange = { secret = it },
-                                enabled = !loading,
+                                enabled = !accountState.isImporting,
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(
@@ -209,7 +222,7 @@ fun ImportScreen() {
                                 BasicTextField(
                                     value = password,
                                     onValueChange = { password = it },
-                                    enabled = !loading && requirePassword,
+                                    enabled = !accountState.isImporting && requirePassword,
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(
@@ -237,25 +250,14 @@ fun ImportScreen() {
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
-                                scope.launch {
-                                    loading = true
-                                    try {
-                                        // Import the identity
-                                        authViewModel.importIdentity(secret, password)
-                                        // Navigate to the home screen
-                                        navigator.navigate(Screen.Home)
-                                    } catch (e: Exception) {
-                                        snackbarHostState.showSnackbar(e.message ?: "Error")
-                                        loading = false
-                                    }
-                                }
+                                accountViewModel.importIdentity(secret, password)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(ButtonDefaults.MediumContainerHeight),
-                            enabled = secret.isNotBlank() && !loading,
+                            enabled = secret.isNotBlank() && !accountState.isImporting,
                         ) {
-                            if (loading) {
+                            if (accountState.isImporting) {
                                 LoadingIndicator()
                             } else {
                                 Text(

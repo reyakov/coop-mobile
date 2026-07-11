@@ -89,7 +89,7 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAuthViewModel
+import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
@@ -113,22 +113,22 @@ fun HomeScreen() {
     val clipboardManager = LocalClipboard.current
     val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    val userProfile by nostrViewModel.currentUserProfile.collectAsStateWithLifecycle()
+    val userProfile by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
-    val isRelayListEmpty by nostrViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
+    val isRelayListEmpty by accountViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
     val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
 
-    val authState by authViewModel.state.collectAsStateWithLifecycle()
-    val isBannerDismissed = authState.isNotificationBannerDismissed
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val isBannerDismissed = accountState.isNotificationBannerDismissed
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -155,7 +155,7 @@ fun HomeScreen() {
         onPauseOrDispose { }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(accountState.signerRequired) {
         chatViewModel.refreshChatRooms()
     }
 
@@ -280,7 +280,7 @@ fun HomeScreen() {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = { authViewModel.dismissNotificationBanner() },
+                                    onClick = { accountViewModel.dismissNotificationBanner() },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(text = "Maybe later")
@@ -319,11 +319,9 @@ fun HomeScreen() {
                         isRefreshing = isRefreshing,
                         state = pullToRefreshState,
                         onRefresh = {
-                            scope.launch {
-                                isRefreshing = true
-                                chatViewModel.refreshChatRooms()
-                                isRefreshing = false
-                            }
+                            isRefreshing = true
+                            chatViewModel.refreshChatRooms()
+                            isRefreshing = false
                         },
                         indicator = {
                             PullToRefreshDefaults.LoadingIndicator(
@@ -469,7 +467,7 @@ fun HomeScreen() {
     // Show the relay setup dialog if the msg relay list is empty
     if (isRelayListEmpty) {
         ModalBottomSheet(
-            onDismissRequest = { nostrViewModel.dismissRelayWarning() },
+            onDismissRequest = { accountViewModel.dismissRelayWarning() },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ) {
@@ -573,15 +571,9 @@ fun HomeScreen() {
                         TextButton(
                             enabled = !isBusy,
                             onClick = {
-                                scope.launch {
-                                    isBusy = true
-                                    try {
-                                        nostrViewModel.refetchMsgRelays()
-                                    } catch (e: Exception) {
-                                        snackbarHostState.showSnackbar("Failed to refresh metadata: ${e.message}")
-                                    }
-                                    isBusy = false
-                                }
+                                isBusy = true
+                                accountViewModel.refetchMsgRelays()
+                                isBusy = false
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -595,10 +587,8 @@ fun HomeScreen() {
                         Button(
                             enabled = !isBusy,
                             onClick = {
-                                scope.launch {
-                                    nostrViewModel.useDefaultMsgRelayList()
-                                    sheetState.hide()
-                                }
+                                accountViewModel.useDefaultMsgRelayList()
+                                scope.launch { sheetState.hide() }
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -746,7 +736,7 @@ fun BottomMenuList(
     val navigator = LocalNavigator.current
     val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
-    val authViewModel = LocalAuthViewModel.current
+    val accountViewModel = LocalAccountViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
@@ -778,8 +768,8 @@ fun BottomMenuList(
         FilledTonalButton(
             onClick = {
                 onDismiss {
-                    authViewModel.logout(onLogout = {
-                        nostrViewModel.resetInternalState()
+                    accountViewModel.logout(onLogout = {
+                        accountViewModel.resetInternalState()
                         chatViewModel.resetInternalState()
                     })
                 }

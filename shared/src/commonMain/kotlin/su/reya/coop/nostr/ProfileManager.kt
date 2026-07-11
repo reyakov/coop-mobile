@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import rust.nostr.sdk.AckPolicy
@@ -33,10 +34,19 @@ class ProfileManager(private val nostr: Nostr) {
     private val signer: UniversalSigner get() = nostr.signer
 
     private val _metadataUpdates =
-        MutableSharedFlow<Pair<PublicKey, Metadata>>(extraBufferCapacity = 100)
+        MutableSharedFlow<Pair<PublicKey, Metadata>>(
+            replay = 0,
+            extraBufferCapacity = 100,
+            onBufferOverflow = BufferOverflow.SUSPEND
+        )
     val metadataUpdates = _metadataUpdates.asSharedFlow()
 
-    private val _contactListUpdates = MutableSharedFlow<List<PublicKey>>(extraBufferCapacity = 100)
+    private val _contactListUpdates =
+        MutableSharedFlow<List<PublicKey>>(
+            replay = 0,
+            extraBufferCapacity = 100,
+            onBufferOverflow = BufferOverflow.SUSPEND
+        )
     val contactListUpdates = _contactListUpdates.asSharedFlow()
 
     suspend fun emitMetadataUpdate(pubkey: PublicKey, metadata: Metadata) {
@@ -138,19 +148,24 @@ class ProfileManager(private val nostr: Nostr) {
         bio: String? = null,
         picture: String? = null
     ): Metadata {
-        val currentUser =
-            signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
-
         try {
-            val record = getLatestMetadata(currentUser)?.asRecord() ?: MetadataRecord()
-            val newRecord = record.copy(
-                displayName = name ?: record.displayName,
-                about = bio ?: record.about,
-                picture = picture ?: record.picture
-            )
-            val newMetadata = Metadata.fromRecord(newRecord)
-            val event = EventBuilder.metadata(newMetadata).finalizeAsync(signer)
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
 
+            // Get the latest metadata event
+            val record = getLatestMetadata(currentUser)?.asRecord() ?: MetadataRecord()
+
+            // Build a new metadata based on old records
+            val newMetadata = Metadata.fromRecord(
+                record.copy(
+                    displayName = name ?: record.displayName,
+                    about = bio ?: record.about,
+                    picture = picture ?: record.picture
+                )
+            )
+
+            // Send the new metadata event
+            val event = EventBuilder.metadata(newMetadata).finalizeAsync(signer)
             client?.sendEvent(
                 event = event,
                 target = SendEventTarget.broadcast(),
