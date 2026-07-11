@@ -14,6 +14,7 @@ fun UpdateProfileScreen() {
 
     val currentUser by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val profile = currentUser?.metadata?.asRecord()
+    val isUpdatingProfile by accountViewModel.isUpdatingProfile.collectAsStateWithLifecycle()
 
     ProfileEditor(
         title = "Update profile",
@@ -21,6 +22,7 @@ fun UpdateProfileScreen() {
         initialName = profile?.displayName ?: profile?.name ?: "",
         initialBio = profile?.about ?: "",
         initialPicture = profile?.picture,
+        isBusy = isUpdatingProfile,
         onBack = { navigator.goBack() },
         onConfirm = { name, bio, bytes, type ->
             accountViewModel.updateProfile(name, bio, bytes, type)

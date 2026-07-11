@@ -145,9 +145,7 @@ class AccountAuthDelegate(
             }
 
             secret.startsWith("nip55://") -> {
-                val handler = externalSignerHandler
-                    ?: throw IllegalStateException("External signer not available on this platform")
-
+                val handler = externalSignerHandler ?: throw IllegalStateException("Not available")
                 val parts = secret.removePrefix("nip55://").split("/", limit = 2)
                 val packageName = parts[0]
                 val pubkey = PublicKey.parse(parts[1])
@@ -160,15 +158,21 @@ class AccountAuthDelegate(
         }
     }
 
+    fun isExternalSignerAvailable(): Boolean {
+        return externalSignerHandler?.isAvailable() == true
+    }
+
     fun importIdentity(secret: String, password: String? = null) {
         scope.launch {
             _state.update { it.copy(isImporting = true, importError = null) }
             try {
                 val (signer, decryptedSecret) = createSigner(secret, password)
+
                 nostr.setSigner(signer)
+                onSignerReady()
+
                 storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
-                onSignerReady()
             } catch (e: Exception) {
                 onError("Import failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }
@@ -180,8 +184,8 @@ class AccountAuthDelegate(
         scope.launch {
             _state.update { it.copy(isImporting = true, importError = null) }
             try {
-                val handler = externalSignerHandler
-                    ?: throw IllegalStateException("Signer not available")
+                val handler =
+                    externalSignerHandler ?: throw IllegalStateException("Signer not available")
 
                 val permissions = SignerPermissions.toJson(
                     listOf(
@@ -200,23 +204,18 @@ class AccountAuthDelegate(
 
                 val result = handler.getPublicKey(permissions) ?: throw Exception("Rejected")
                 val signer = ExternalSignerProxy(handler, result.pubkey)
+                val uri = "nip55://${result.packageName}/${result.pubkey.toHex()}"
 
                 nostr.setSigner(signer)
-                storage.setSecret(
-                    KEY_USER_SIGNER,
-                    "nip55://${result.packageName}/${result.pubkey.toHex()}"
-                )
-                _state.update { it.copy(signerRequired = false, isImporting = false) }
                 onSignerReady()
+
+                storage.setSecret(KEY_USER_SIGNER, uri)
+                _state.update { it.copy(signerRequired = false, isImporting = false) }
             } catch (e: Exception) {
                 onError("External signer connection failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }
             }
         }
-    }
-
-    fun isExternalSignerAvailable(): Boolean {
-        return externalSignerHandler?.isAvailable() == true
     }
 
     fun createIdentity(
@@ -233,15 +232,17 @@ class AccountAuthDelegate(
                 val avatarUrl = picture?.let {
                     mediaRepository.blossomUpload(keys, it, contentType ?: "image/jpeg")
                 }
+                
                 nostr.profiles.createIdentity(
                     keys = keys,
                     name = name,
                     bio = bio,
                     picture = avatarUrl
                 )
+                onSignerReady()
+
                 storage.setSecret(KEY_USER_SIGNER, secret)
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
-                onSignerReady()
             } catch (e: Exception) {
                 onError("Identity creation failed: ${e.message}")
                 _state.update { it.copy(isImporting = false, importError = e.message) }

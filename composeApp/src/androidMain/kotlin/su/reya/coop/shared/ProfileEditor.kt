@@ -69,6 +69,7 @@ fun ProfileEditor(
     initialName: String = "",
     initialBio: String = "",
     initialPicture: Any? = null, // Accepts Uri (picked) or String (current URL)
+    isBusy: Boolean = false,
     onBack: () -> Unit,
     onConfirm: (name: String, bio: String, pictureBytes: ByteArray?, contentType: String?) -> Unit,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -81,7 +82,6 @@ fun ProfileEditor(
     var name by remember(initialName) { mutableStateOf(initialName) }
     var bio by remember(initialBio) { mutableStateOf(initialBio) }
     var picture by remember(initialPicture) { mutableStateOf(initialPicture) }
-    var isBusy by remember { mutableStateOf(false) }
 
     val hasPicture = remember(picture) {
         when (picture) {
@@ -269,7 +269,6 @@ fun ProfileEditor(
                             .size(ButtonDefaults.MediumContainerHeight),
                         onClick = {
                             scope.launch {
-                                isBusy = true
                                 try {
                                     val bytes = withContext(ioDispatcher) {
                                         (picture as? Uri)?.let {
@@ -282,7 +281,6 @@ fun ProfileEditor(
                                 } catch (e: Exception) {
                                     snackbarHostState.showSnackbar(e.message ?: "Error")
                                 }
-                                isBusy = false
                             }
                         },
                         enabled = name.isNotBlank() && !isBusy
