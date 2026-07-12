@@ -68,7 +68,7 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.RoomUiState
@@ -88,7 +88,7 @@ fun ChatScreen(
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val chatViewModel = LocalChatViewModel.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -116,7 +116,7 @@ fun ChatScreen(
         return
     }
 
-    val roomState by (room as Room).uiStateFlow(nostrViewModel, currentUser?.publicKey)
+    val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
         .collectAsStateWithLifecycle(RoomUiState())
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }

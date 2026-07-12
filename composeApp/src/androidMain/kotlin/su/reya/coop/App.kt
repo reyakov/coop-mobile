@@ -50,10 +50,10 @@ import su.reya.coop.screens.UpdateProfileScreen
 import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatViewModel
-import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.ProfileCache
 
-val LocalNostrViewModel = staticCompositionLocalOf<NostrViewModel> {
-    error("No NostrViewModel provided")
+val LocalProfileCache = staticCompositionLocalOf<ProfileCache> {
+    error("No ProfileCache provided")
 }
 
 val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
@@ -80,7 +80,7 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun App(
-    nostrViewModel: NostrViewModel,
+    profileCache: ProfileCache,
     chatViewModel: ChatViewModel,
     accountViewModel: AccountViewModel,
 ) {
@@ -130,7 +130,7 @@ fun App(
             }
         }
         launch {
-            nostrViewModel.errorEvents.collect { message ->
+            profileCache.errorEvents.collect { message ->
                 snackbarHostState.showSnackbar(message)
             }
         }
@@ -174,7 +174,7 @@ fun App(
         motionScheme = MotionScheme.expressive(),
     ) {
         CompositionLocalProvider(
-            LocalNostrViewModel provides nostrViewModel,
+            LocalProfileCache provides profileCache,
             LocalChatViewModel provides chatViewModel,
             LocalAccountViewModel provides accountViewModel,
             LocalSnackbarHostState provides snackbarHostState,

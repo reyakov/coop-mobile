@@ -11,7 +11,7 @@ import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
-import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.ProfileCache
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -72,7 +72,7 @@ data class RoomUiState(
 )
 
 fun Room.uiStateFlow(
-    nostrViewModel: NostrViewModel,
+    profileCache: ProfileCache,
     currentUser: PublicKey? = null
 ): Flow<RoomUiState> {
     val displayMembers = if (isGroup()) members.take(2) else members.take(1)
@@ -81,7 +81,7 @@ fun Room.uiStateFlow(
         return flowOf(RoomUiState(name = subject.sanitizeName(), isGroup = isGroup()))
     }
 
-    return combine(displayMembers.map { nostrViewModel.getMetadata(it) }) { profiles ->
+    return combine(displayMembers.map { profileCache.getMetadata(it) }) { profiles ->
         val names = profiles.mapIndexed { i, profile ->
             profile?.name?.sanitizeName() ?: displayMembers[i].short()
         }

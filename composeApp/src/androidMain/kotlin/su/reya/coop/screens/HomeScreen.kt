@@ -92,7 +92,7 @@ import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
@@ -609,15 +609,15 @@ fun HomeScreen() {
 @Composable
 fun NewRequests(requests: List<Room>) {
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
 
     val total = requests.size
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstRoomState by (firstRoom as Room).uiStateFlow(nostrViewModel)
+    val firstRoomState by (firstRoom as Room).uiStateFlow(profileCache)
         .collectAsStateWithLifecycle(RoomUiState())
-    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(nostrViewModel)
+    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(profileCache)
         .collectAsStateWithLifecycle(RoomUiState())
 
     val supportingText = when {
@@ -689,8 +689,8 @@ fun NewRequests(requests: List<Room>) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
-    val nostrViewModel = LocalNostrViewModel.current
-    val roomState by room.uiStateFlow(nostrViewModel)
+    val profileCache = LocalProfileCache.current
+    val roomState by room.uiStateFlow(profileCache)
         .collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
@@ -737,7 +737,7 @@ fun BottomMenuList(
     onDismiss: (suspend () -> Unit) -> Unit
 ) {
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val chatViewModel = LocalChatViewModel.current
     val accountViewModel = LocalAccountViewModel.current
 

@@ -61,7 +61,7 @@ import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -72,7 +72,7 @@ import su.reya.coop.short
 fun ContactListScreen() {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val accountViewModel = LocalAccountViewModel.current
     val chatViewModel = LocalChatViewModel.current
 
@@ -223,7 +223,7 @@ fun ContactListScreen() {
 @Composable
 fun AddContactDialog(onDismissRequest: () -> Unit) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val accountViewModel = LocalAccountViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
@@ -326,8 +326,8 @@ fun ContactListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val nostrViewModel = LocalNostrViewModel.current
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profileCache = LocalProfileCache.current
+    val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle(initialValue = null)
 
     SegmentedListItem(

@@ -67,7 +67,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalSnackbarHostState
 
@@ -75,7 +75,7 @@ import su.reya.coop.LocalSnackbarHostState
 @Composable
 fun RelayScreen() {
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val accountViewModel = LocalAccountViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 

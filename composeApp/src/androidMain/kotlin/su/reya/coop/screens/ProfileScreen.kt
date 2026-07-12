@@ -46,7 +46,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
@@ -61,11 +61,11 @@ fun ProfileScreen(pubkey: String) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val chatViewModel = LocalChatViewModel.current
     val scope = rememberCoroutineScope()
 
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle()
 
     val metadata = profile?.metadata?.asRecord()

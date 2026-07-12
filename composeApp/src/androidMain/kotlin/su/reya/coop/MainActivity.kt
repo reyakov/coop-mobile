@@ -16,7 +16,7 @@ import su.reya.coop.nostr.NostrManager
 import su.reya.coop.repository.MediaRepository
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatViewModel
-import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.ProfileCache
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
@@ -24,11 +24,12 @@ class MainActivity : ComponentActivity() {
         val externalSignerLauncher = ExternalSignerLauncher()
     }
 
+    private val profileCache by lazy { ProfileCache(NostrManager.instance) }
+
     private val factory by lazy {
         object : ViewModelProvider.Factory {
             private val storage = AppStore(this@MainActivity)
             private val mediaRepository = MediaRepository()
-            private val nostrViewModel = NostrViewModel(NostrManager.instance)
             private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
             private val androidSigner =
                 AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
@@ -37,7 +38,6 @@ class MainActivity : ComponentActivity() {
 
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return when {
-                    modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
                     modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
                     modelClass.isAssignableFrom(AccountViewModel::class.java) -> accountViewModel
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
@@ -46,7 +46,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val nostrViewModel: NostrViewModel by viewModels { factory }
     private val chatViewModel: ChatViewModel by viewModels { factory }
     private val accountViewModel: AccountViewModel by viewModels { factory }
 
@@ -92,7 +91,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             App(
-                nostrViewModel = nostrViewModel,
+                profileCache = profileCache,
                 chatViewModel = chatViewModel,
                 accountViewModel = accountViewModel,
             )

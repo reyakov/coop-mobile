@@ -32,7 +32,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.Room
 import su.reya.coop.humanReadable
 import su.reya.coop.shared.Avatar
@@ -44,14 +44,14 @@ import su.reya.coop.short
 fun ScreenerCard(room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
 
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
     val accountViewModel = LocalAccountViewModel.current
 
     var isContact by remember { mutableStateOf(false) }
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
     var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
 
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle()
 
     LaunchedEffect(pubkey) {

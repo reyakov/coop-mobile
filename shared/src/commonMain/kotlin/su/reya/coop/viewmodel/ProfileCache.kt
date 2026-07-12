@@ -1,7 +1,8 @@
 package su.reya.coop.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,33 +17,36 @@ import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
 import kotlin.time.Duration.Companion.milliseconds
 
-class NostrViewModel(private val nostr: Nostr) : ViewModel(), ErrorHost by createErrorHost() {
+/**
+ * Application-level singleton cache for Nostr user profiles.
+ *
+ * Replaces [NostrViewModel] as a non-ViewModel component with its own lifecycle scope.
+ * This is appropriate because profile caching is not screen-specific — it's a shared
+ * concern used by every screen that displays user metadata.
+ *
+ * Long-running tasks ([runObserver], [runMetadataBatching]) run in a dedicated
+ * [CoroutineScope] that outlives any individual screen, ensuring continuous operation
+ * regardless of navigation.
+ */
+class ProfileCache(
+    private val nostr: Nostr,
+) : ErrorHost by createErrorHost() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val profilesMutex = Mutex()
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
     private val seenPublicKeys = mutableSetOf<PublicKey>()
 
     init {
-        // Launch continuous background observers
-        viewModelScope.launch { runObserver() }
-        viewModelScope.launch { runMetadataBatching() }
-
-        // Automatically reconnect bootstrap relays
-        reconnect()
-
-        // Get all local stored metadata
-        getCacheMetadata()
-    }
-
-    private fun reconnect() {
-        viewModelScope.launch {
+        scope.launch { runObserver() }
+        scope.launch { runMetadataBatching() }
+        scope.launch {
             nostr.waitUntilInitialized()
-            nostr.reconnect()
+            loadCacheMetadata()
         }
     }
 
     private suspend fun runObserver() = coroutineScope {
-        // Observe metadata updates
         launch {
             nostr.profiles.metadataUpdates.collect { (pubkey, metadata) ->
                 updateMetadata(pubkey, Profile(pubkey, metadata))
@@ -57,7 +61,6 @@ class NostrViewModel(private val nostr: Nostr) : ViewModel(), ErrorHost by creat
             val firstKey = metadataRequestChannel.receive()
             val batch = mutableSetOf(firstKey)
 
-            // Collect up to 10 keys that arrive within 500ms
             while (batch.size < 10) {
                 val nextKey =
                     withTimeoutOrNull(500.milliseconds) { metadataRequestChannel.receive() }
@@ -69,18 +72,14 @@ class NostrViewModel(private val nostr: Nostr) : ViewModel(), ErrorHost by creat
         }
     }
 
-    private fun getCacheMetadata() {
-        viewModelScope.launch {
-            // Wait until the client is ready
-            nostr.waitUntilInitialized()
-            val cache = nostr.profiles.getAllCacheMetadata()
+    private suspend fun loadCacheMetadata() {
+        val cache = nostr.profiles.getAllCacheMetadata()
 
-            profilesMutex.withLock {
-                cache.forEach { (pubkey, metadata) ->
-                    val profile = Profile(pubkey, metadata)
-                    profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
-                    seenPublicKeys.add(pubkey)
-                }
+        profilesMutex.withLock {
+            cache.forEach { (pubkey, metadata) ->
+                val profile = Profile(pubkey, metadata)
+                profiles.getOrPut(pubkey) { MutableStateFlow(null) }.value = profile
+                seenPublicKeys.add(pubkey)
             }
         }
     }
@@ -97,11 +96,13 @@ class NostrViewModel(private val nostr: Nostr) : ViewModel(), ErrorHost by creat
         }
     }
 
+    /**
+     * Returns a [StateFlow] for the profile of the given [pubkey].
+     * Triggers a metadata fetch if the profile is not yet cached.
+     */
     fun getMetadata(pubkey: PublicKey): StateFlow<Profile?> {
         val flow = profiles.getOrPut(pubkey) { MutableStateFlow(null) }
         if (flow.value == null) requestMetadata(pubkey)
-
         return flow.asStateFlow()
     }
-
 }
