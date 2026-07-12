@@ -71,9 +71,10 @@ import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalNostrViewModel
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
-import su.reya.coop.rememberUiState
+import su.reya.coop.uiStateFlow
 import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
 
@@ -115,7 +116,8 @@ fun ChatScreen(
         return
     }
 
-    val roomState by (room as Room).rememberUiState(nostrViewModel, currentUser?.publicKey)
+    val roomState by (room as Room).uiStateFlow(nostrViewModel, currentUser?.publicKey)
+        .collectAsStateWithLifecycle(RoomUiState())
     var text by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var newOtherMessages by remember { mutableIntStateOf(0) }

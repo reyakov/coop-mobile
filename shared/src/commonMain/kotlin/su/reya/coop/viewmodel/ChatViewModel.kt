@@ -1,5 +1,6 @@
 package su.reya.coop.viewmodel
 
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
@@ -22,6 +23,8 @@ import su.reya.coop.Room
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.repository.MediaRepository
 import su.reya.coop.roomId
+import su.reya.coop.viewmodel.createErrorHost
+import su.reya.coop.viewmodel.ErrorHost
 
 data class ChatState(
     val rooms: Map<Long, Room> = emptyMap(),
@@ -31,7 +34,7 @@ data class ChatState(
 class ChatViewModel(
     private val nostr: Nostr,
     private val mediaRepository: MediaRepository,
-) : BaseViewModel() {
+) : ViewModel(), ErrorHost by createErrorHost() {
     private val _state = MutableStateFlow(ChatState())
     val state = _state.stateIn(
         viewModelScope,

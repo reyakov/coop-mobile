@@ -14,9 +14,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import su.reya.coop.nostr.NostrManager
 import su.reya.coop.repository.MediaRepository
+import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.NostrViewModel
-import su.reya.coop.viewmodel.account.AccountViewModel
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {

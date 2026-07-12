@@ -20,14 +20,28 @@ import rust.nostr.sdk.nip17ExtractRelayList
 import kotlin.time.Duration
 
 class RelayManager(private val nostr: Nostr) {
+    companion object {
+        val BOOTSTRAP_RELAYS = listOf(
+            "wss://relay.primal.net",
+            "wss://relay.ditto.pub",
+            "wss://user.kindpag.es",
+        )
+
+        val INDEXER_RELAY = listOf(
+            "wss://indexer.coracle.social",
+        )
+
+        val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
+    }
+
     private val client: Client? get() = nostr.client
     private val signer: UniversalSigner get() = nostr.signer
 
     suspend fun connectBootstrapRelays() {
-        NostrManager.BOOTSTRAP_RELAYS.forEach { url ->
+        BOOTSTRAP_RELAYS.forEach { url ->
             client?.addRelay(RelayUrl.parse(url))
         }
-        NostrManager.INDEXER_RELAY.forEach { url ->
+        INDEXER_RELAY.forEach { url ->
             client?.addRelay(
                 url = RelayUrl.parse(url),
                 capabilities = RelayCapabilities.gossip()
@@ -38,7 +52,7 @@ class RelayManager(private val nostr: Nostr) {
     }
 
     suspend fun reconnect() {
-        NostrManager.ALL_RELAYS.forEach { url ->
+        ALL_RELAYS.forEach { url ->
             try {
                 client?.relay(RelayUrl.parse(url)).let { relay ->
                     if (relay != null) {
@@ -54,7 +68,7 @@ class RelayManager(private val nostr: Nostr) {
     }
 
     suspend fun disconnect() {
-        NostrManager.ALL_RELAYS.forEach { url ->
+        ALL_RELAYS.forEach { url ->
             try {
                 client?.disconnectRelay(RelayUrl.parse(url))
             } catch (e: Exception) {

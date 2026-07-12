@@ -97,11 +97,12 @@ import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.RoomKind
+import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
 import su.reya.coop.ago
-import su.reya.coop.rememberUiState
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
+import su.reya.coop.uiStateFlow
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +112,6 @@ fun HomeScreen() {
     val qrScanResult = LocalScanResult.current
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
-    val nostrViewModel = LocalNostrViewModel.current
     val chatViewModel = LocalChatViewModel.current
     val accountViewModel = LocalAccountViewModel.current
 
@@ -615,8 +615,10 @@ fun NewRequests(requests: List<Room>) {
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstRoomState by (firstRoom as Room).rememberUiState(nostrViewModel)
-    val secondRoomState by (secondRoom ?: firstRoom).rememberUiState(nostrViewModel)
+    val firstRoomState by (firstRoom as Room).uiStateFlow(nostrViewModel)
+        .collectAsStateWithLifecycle(RoomUiState())
+    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(nostrViewModel)
+        .collectAsStateWithLifecycle(RoomUiState())
 
     val supportingText = when {
         total == 1 -> {
@@ -688,7 +690,8 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val nostrViewModel = LocalNostrViewModel.current
-    val roomState by room.rememberUiState(nostrViewModel)
+    val roomState by room.uiStateFlow(nostrViewModel)
+        .collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

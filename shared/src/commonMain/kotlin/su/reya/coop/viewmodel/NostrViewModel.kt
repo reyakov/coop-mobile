@@ -1,5 +1,6 @@
 package su.reya.coop.viewmodel
 
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -13,10 +14,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.PublicKey
 import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
-import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 
-class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
+class NostrViewModel(private val nostr: Nostr) : ViewModel(), ErrorHost by createErrorHost() {
     private val profilesMutex = Mutex()
     private val profiles = mutableMapOf<PublicKey, MutableStateFlow<Profile?>>()
     private val metadataRequestChannel = Channel<PublicKey>(Channel.UNLIMITED)
@@ -51,40 +51,21 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
     }
 
     private suspend fun runMetadataBatching() {
-        // Wait until the client is ready
         nostr.waitUntilInitialized()
 
-        val batch = mutableSetOf<PublicKey>()
-        val timeout = 500L // 500ms timeout for batching
-
         while (true) {
-            // Get the first pubkey
             val firstKey = metadataRequestChannel.receive()
-            batch.add(firstKey)
+            val batch = mutableSetOf(firstKey)
 
-            // Get current time
-            val lastFlushTime = Clock.System.now().toEpochMilliseconds()
-
-            while (batch.isNotEmpty()) {
-                // Get the next pubkey
-                val nextKey = withTimeoutOrNull(timeout.milliseconds) {
-                    metadataRequestChannel.receive()
-                }
-
-                // Only add the pubkey if it's not null
-                if (nextKey != null) batch.add(nextKey)
-
-                // Get current time
-                val now = Clock.System.now().toEpochMilliseconds()
-
-                // Check if the batch is full or timeout has passed
-                if (batch.size >= 10 || (now - lastFlushTime) >= timeout || nextKey == null) {
-                    val keysToRequest = batch.toList()
-                    batch.clear()
-
-                    nostr.profiles.fetchMetadataBatch(keysToRequest)
-                }
+            // Collect up to 10 keys that arrive within 500ms
+            while (batch.size < 10) {
+                val nextKey =
+                    withTimeoutOrNull(500.milliseconds) { metadataRequestChannel.receive() }
+                        ?: break
+                batch.add(nextKey)
             }
+
+            nostr.profiles.fetchMetadataBatch(batch.toList())
         }
     }
 
@@ -103,7 +84,7 @@ class NostrViewModel(private val nostr: Nostr) : BaseViewModel() {
             }
         }
     }
-    
+
     private fun requestMetadata(pubkey: PublicKey) {
         if (seenPublicKeys.add(pubkey)) {
             metadataRequestChannel.trySend(pubkey)

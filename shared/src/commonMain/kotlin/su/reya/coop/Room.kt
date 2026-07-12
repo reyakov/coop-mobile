@@ -1,9 +1,5 @@
 package su.reya.coop
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.remember
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
@@ -66,22 +62,6 @@ data class Room(
         }
     }
 
-    fun setKind(kind: RoomKind): Room {
-        return this.copy(kind = kind)
-    }
-
-    fun setCreatedAt(createdAt: Timestamp): Room {
-        return this.copy(createdAt = createdAt)
-    }
-
-    fun setSubject(subject: String?): Room {
-        return this.copy(subject = subject)
-    }
-
-    fun setLastMessage(message: String?): Room {
-        return this.copy(lastMessage = message)
-    }
-
     fun isGroup(): Boolean = members.size > 1
 }
 
@@ -125,19 +105,6 @@ fun Room.uiStateFlow(
             isGroup = isGroup()
         )
     }
-}
-
-@Composable
-fun Room.rememberUiState(
-    viewModel: NostrViewModel,
-    currentUser: PublicKey? = null
-): State<RoomUiState> {
-    return remember(this, currentUser) {
-        uiStateFlow(
-            viewModel,
-            currentUser
-        )
-    }.collectAsStateWithLifecycle(RoomUiState())
 }
 
 fun UnsignedEvent.roomId(): Long {
