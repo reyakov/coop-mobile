@@ -8,17 +8,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.MainScope
 import su.reya.coop.nostr.NostrManager
 import su.reya.coop.repository.AccountRepository
 import su.reya.coop.repository.ChatRepository
 import su.reya.coop.repository.MediaRepository
-import su.reya.coop.viewmodel.AccountViewModel
-import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.ProfileCache
 import kotlin.system.exitProcess
 
@@ -41,28 +36,6 @@ class MainActivity : ComponentActivity() {
         val mediaRepository = MediaRepository()
         ChatRepository(NostrManager.instance, mediaRepository, scope)
     }
-
-    private val factory by lazy {
-        object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val result = when {
-                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> ChatViewModel(
-                        chatRepository
-                    )
-
-                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> AccountViewModel(
-                        accountRepository
-                    )
-
-                    else -> throw IllegalArgumentException("Unknown ViewModel class")
-                }
-                @Suppress("UNCHECKED_CAST")
-                return result as T
-            }
-        }
-    }
-
-    private val accountViewModel: AccountViewModel by viewModels { factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -101,7 +74,7 @@ class MainActivity : ComponentActivity() {
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
-            accountViewModel.state.value.signerRequired == null
+            accountRepository.state.value.signerRequired == null
         }
 
         setContent {

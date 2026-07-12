@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -92,7 +94,20 @@ class AccountRepository(
     init {
         checkNotificationBannerDismissedStatus()
         login()
+        observeSignerState()
         observeContactList()
+    }
+
+    private fun observeSignerState() {
+        scope.launch {
+            nostr.signer.publicKeyFlow
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collectLatest {
+                    getUserMetadata()
+                    checkRelayList()
+                }
+        }
     }
 
     private fun checkNotificationBannerDismissedStatus() {
@@ -119,7 +134,6 @@ class AccountRepository(
                     nostr.setSigner(signer)
                 }.onSuccess {
                     _state.update { it.copy(signerRequired = false) }
-                    onSignerReady()
                 }.onFailure { e ->
                     showError("Login failed: ${e.message}")
                     _state.update { it.copy(signerRequired = true) }
@@ -209,7 +223,6 @@ class AccountRepository(
                 val (signer, decryptedSecret) = createSigner(secret, password)
 
                 nostr.setSigner(signer)
-                onSignerReady()
 
                 storage.setSecret(KEY_USER_SIGNER, decryptedSecret ?: secret)
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
@@ -247,7 +260,6 @@ class AccountRepository(
                 val uri = "nip55://${result.packageName}/${result.pubkey.toHex()}"
 
                 nostr.setSigner(signer)
-                onSignerReady()
 
                 storage.setSecret(KEY_USER_SIGNER, uri)
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
@@ -279,7 +291,6 @@ class AccountRepository(
                     bio = bio,
                     picture = avatarUrl
                 )
-                onSignerReady()
 
                 storage.setSecret(KEY_USER_SIGNER, secret)
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
@@ -290,10 +301,6 @@ class AccountRepository(
         }
     }
 
-    private fun onSignerReady() {
-        getUserMetadata()
-        checkRelayList()
-    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun currentUserProfileFlow(pubkey: PublicKey) = merge(
@@ -308,7 +315,7 @@ class AccountRepository(
             .map { (p, m) -> Profile(p, m) }
     )
 
-    fun getUserMetadata() {
+    private fun getUserMetadata() {
         scope.launch {
             nostr.profiles.getUserMetadata()
         }
@@ -448,7 +455,7 @@ class AccountRepository(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun checkRelayList() {
+    private fun checkRelayList() {
         scope.launch {
             val currentUser = nostr.signer.publicKeyFlow.filterNotNull().first()
 
