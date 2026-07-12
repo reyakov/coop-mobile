@@ -89,8 +89,6 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalScanResult
@@ -103,17 +101,20 @@ import su.reya.coop.ago
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.uiStateFlow
+import su.reya.coop.viewmodel.AccountViewModel
+import su.reya.coop.viewmodel.ChatViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel
+) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
-    val chatViewModel = LocalChatViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
@@ -459,7 +460,11 @@ fun HomeScreen() {
                     }
                 }
                 Spacer(modifier = Modifier.size(16.dp))
-                BottomMenuList(onDismiss = dismissAndRun)
+                BottomMenuList(
+                    onDismiss = dismissAndRun,
+                    accountViewModel = accountViewModel,
+                    chatViewModel = chatViewModel
+                )
             }
         }
     }
@@ -734,12 +739,11 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomMenuList(
-    onDismiss: (suspend () -> Unit) -> Unit
+    onDismiss: (suspend () -> Unit) -> Unit,
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel,
 ) {
     val navigator = LocalNavigator.current
-    val profileCache = LocalProfileCache.current
-    val chatViewModel = LocalChatViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },

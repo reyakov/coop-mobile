@@ -96,10 +96,6 @@ class ProfileCache(
         }
     }
 
-    /**
-     * Returns a [StateFlow] for the profile of the given [pubkey].
-     * Triggers a metadata fetch if the profile is not yet cached.
-     */
     fun getMetadata(pubkey: PublicKey): StateFlow<Profile?> {
         val flow = profiles.getOrPut(pubkey) { MutableStateFlow(null) }
         if (flow.value == null) requestMetadata(pubkey)

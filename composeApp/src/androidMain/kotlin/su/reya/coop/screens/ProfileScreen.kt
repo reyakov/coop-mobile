@@ -44,7 +44,6 @@ import coop.composeapp.generated.resources.ic_share
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
@@ -52,17 +51,20 @@ import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.short
+import su.reya.coop.viewmodel.ChatViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ProfileScreen(pubkey: String) {
+fun ProfileScreen(
+    pubkey: String,
+    chatViewModel: ChatViewModel
+) {
     val pubkey = runCatching { PublicKey.parse(pubkey) }.getOrNull() ?: return
 
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val profileCache = LocalProfileCache.current
-    val chatViewModel = LocalChatViewModel.current
     val scope = rememberCoroutineScope()
 
     val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }

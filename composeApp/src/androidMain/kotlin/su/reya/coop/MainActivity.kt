@@ -12,7 +12,10 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.MainScope
 import su.reya.coop.nostr.NostrManager
+import su.reya.coop.repository.AccountRepository
+import su.reya.coop.repository.ChatRepository
 import su.reya.coop.repository.MediaRepository
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatViewModel
@@ -25,28 +28,40 @@ class MainActivity : ComponentActivity() {
     }
 
     private val profileCache by lazy { ProfileCache(NostrManager.instance) }
+    private val scope = MainScope()
+
+    private val accountRepository by lazy {
+        val storage = AppStore(this@MainActivity)
+        val mediaRepository = MediaRepository()
+        val androidSigner = AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
+        AccountRepository(NostrManager.instance, storage, mediaRepository, scope, androidSigner)
+    }
+
+    private val chatRepository by lazy {
+        val mediaRepository = MediaRepository()
+        ChatRepository(NostrManager.instance, mediaRepository, scope)
+    }
 
     private val factory by lazy {
         object : ViewModelProvider.Factory {
-            private val storage = AppStore(this@MainActivity)
-            private val mediaRepository = MediaRepository()
-            private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
-            private val androidSigner =
-                AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
-            private val accountViewModel =
-                AccountViewModel(NostrManager.instance, storage, mediaRepository, androidSigner)
-
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return when {
-                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
-                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> accountViewModel
+                val result = when {
+                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> ChatViewModel(
+                        chatRepository
+                    )
+
+                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> AccountViewModel(
+                        accountRepository
+                    )
+
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
-                } as T
+                }
+                @Suppress("UNCHECKED_CAST")
+                return result as T
             }
         }
     }
 
-    private val chatViewModel: ChatViewModel by viewModels { factory }
     private val accountViewModel: AccountViewModel by viewModels { factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,8 +107,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 profileCache = profileCache,
-                chatViewModel = chatViewModel,
-                accountViewModel = accountViewModel,
+                accountRepository = accountRepository,
+                chatRepository = chatRepository,
             )
         }
     }

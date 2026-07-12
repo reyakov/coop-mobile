@@ -67,16 +67,13 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalProfileCache
-import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.viewmodel.AccountViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun RelayScreen() {
+fun RelayScreen(viewModel: AccountViewModel) {
     val navigator = LocalNavigator.current
-    val profileCache = LocalProfileCache.current
-    val accountViewModel = LocalAccountViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
 
     val scope = rememberCoroutineScope()
@@ -99,12 +96,12 @@ fun RelayScreen() {
     var relayToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        accountViewModel.loadCurrentUserRelayList()
-        accountViewModel.loadCurrentUserMsgRelayList()
+        viewModel.loadCurrentUserRelayList()
+        viewModel.loadCurrentUserMsgRelayList()
     }
 
-    val loadedRelayList by accountViewModel.currentUserRelayList.collectAsStateWithLifecycle()
-    val loadedMsgRelayList by accountViewModel.currentUserMsgRelayList.collectAsStateWithLifecycle()
+    val loadedRelayList by viewModel.currentUserRelayList.collectAsStateWithLifecycle()
+    val loadedMsgRelayList by viewModel.currentUserMsgRelayList.collectAsStateWithLifecycle()
 
     LaunchedEffect(loadedRelayList) {
         if (loadedRelayList.isNotEmpty()) {
@@ -316,6 +313,7 @@ fun RelayScreen() {
 
     if (openAddRelayDialog) {
         AddRelayDialog(
+            viewModel = viewModel,
             onDismissRequest = { openAddRelayDialog = false },
             onMsgRelayAdded = { newRelay ->
                 msgRelayList.add(RelayUrl.parse(newRelay))
@@ -341,7 +339,7 @@ fun RelayScreen() {
                             relayToDelete = null
                             return@TextButton
                         }
-                        accountViewModel.removeMsgRelay(relayToDelete!!)
+                        viewModel.removeMsgRelay(relayToDelete!!)
                         msgRelayList.removeIf { it.toString() == relayToDelete }
                         relayToDelete = null
                     }
@@ -361,14 +359,12 @@ fun RelayScreen() {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AddRelayDialog(
+    viewModel: AccountViewModel,
     onDismissRequest: () -> Unit,
     onMsgRelayAdded: (newRelay: String) -> Unit,
     onRelayAdded: (newRelay: String, metadata: RelayMetadata?) -> Unit,
 ) {
-    val accountViewModel = LocalAccountViewModel.current
     val snackbarHostState = LocalSnackbarHostState.current
-
-    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     var relayAddress by remember { mutableStateOf("") }
@@ -416,17 +412,17 @@ fun AddRelayDialog(
                             if (!isError) {
                                 when (selected) {
                                     "Messaging" -> {
-                                        accountViewModel.addMsgRelay(relayAddress)
+                                        viewModel.addMsgRelay(relayAddress)
                                         onMsgRelayAdded(relayAddress)
                                     }
 
                                     "Inbox" -> {
-                                        accountViewModel.addInboxRelay(relayAddress)
+                                        viewModel.addInboxRelay(relayAddress)
                                         onRelayAdded(relayAddress, RelayMetadata.WRITE)
                                     }
 
                                     "Outbox" -> {
-                                        accountViewModel.addOutboxRelay(relayAddress)
+                                        viewModel.addOutboxRelay(relayAddress)
                                         onRelayAdded(relayAddress, RelayMetadata.READ)
                                     }
                                 }

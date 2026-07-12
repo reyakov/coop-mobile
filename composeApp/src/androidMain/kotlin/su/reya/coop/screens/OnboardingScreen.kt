@@ -43,26 +43,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.coop
 import kotlinx.coroutines.launch
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.painterResource
-import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.getExpressiveFontFamily
+import su.reya.coop.viewmodel.AccountViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun OnboardingScreen() {
+fun OnboardingScreen(viewModel: AccountViewModel) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val accountViewModel = LocalAccountViewModel.current
-
-    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val accountState by viewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Navigate to Home on successful external signer connection
@@ -176,10 +174,10 @@ fun OnboardingScreen() {
                             Spacer(modifier = Modifier.size(8.dp))
                             FilledTonalButton(
                                 onClick = {
-                                    if (accountViewModel.isExternalSignerAvailable()) {
+                                    if (viewModel.isExternalSignerAvailable()) {
                                         // Connect to the external signer
                                         // TODO: show all available signers?
-                                        accountViewModel.connectExternalSigner()
+                                        viewModel.connectExternalSigner()
                                     } else {
                                         scope.launch {
                                             val result = snackbarHostState.showSnackbar(

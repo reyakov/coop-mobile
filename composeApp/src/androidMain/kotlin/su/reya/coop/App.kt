@@ -26,7 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.util.Consumer
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -35,6 +38,8 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.launch
+import su.reya.coop.repository.AccountRepository
+import su.reya.coop.repository.ChatRepository
 import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
@@ -49,21 +54,13 @@ import su.reya.coop.screens.ScanScreen
 import su.reya.coop.screens.UpdateProfileScreen
 import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.viewmodel.AccountViewModel
+import su.reya.coop.viewmodel.ChatScreenViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.ProfileCache
 
 val LocalProfileCache = staticCompositionLocalOf<ProfileCache> {
     error("No ProfileCache provided")
 }
-
-val LocalChatViewModel = staticCompositionLocalOf<ChatViewModel> {
-    error("No ChatViewModel provided")
-}
-
-val LocalAccountViewModel = staticCompositionLocalOf<AccountViewModel> {
-    error("No AccountViewModel provided")
-}
-
 
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
@@ -81,9 +78,32 @@ val LocalScanResult = staticCompositionLocalOf<QrScanResult> {
 @Composable
 fun App(
     profileCache: ProfileCache,
-    chatViewModel: ChatViewModel,
-    accountViewModel: AccountViewModel,
+    accountRepository: AccountRepository,
+    chatRepository: ChatRepository,
 ) {
+    val viewModelFactory = remember {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val result = when {
+                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> ChatViewModel(
+                        chatRepository
+                    )
+
+                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> AccountViewModel(
+                        accountRepository
+                    )
+
+                    else -> throw IllegalArgumentException("Unknown ViewModel class")
+                }
+                @Suppress("UNCHECKED_CAST")
+                return result as T
+            }
+        }
+    }
+
+    val accountViewModel: AccountViewModel = viewModel(factory = viewModelFactory)
+    val chatViewModel: ChatViewModel = viewModel(factory = viewModelFactory)
+
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val backStack = rememberNavBackStack(Screen.Home)
@@ -141,7 +161,7 @@ fun App(
             fun handleIntent(intent: Intent) {
                 val screen = Screen.fromIntent(intent)
                 // Prevent pushing the same screen
-                if (screen != null && backStack.lastOrNull() != screen) {
+                if ((screen != null) && (backStack.lastOrNull() != screen)) {
                     navigator.navigate(screen)
                 }
             }
@@ -175,8 +195,6 @@ fun App(
     ) {
         CompositionLocalProvider(
             LocalProfileCache provides profileCache,
-            LocalChatViewModel provides chatViewModel,
-            LocalAccountViewModel provides accountViewModel,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,
@@ -197,43 +215,62 @@ fun App(
                 ),
                 entryProvider = entryProvider {
                     entry<Screen.Home> {
-                        HomeScreen()
+                        HomeScreen(accountViewModel, chatViewModel)
                     }
                     entry<Screen.RequestList> {
-                        RequestListScreen()
+                        RequestListScreen(chatViewModel)
                     }
                     entry<Screen.Onboarding> {
-                        OnboardingScreen()
+                        OnboardingScreen(accountViewModel)
                     }
                     entry<Screen.Import> {
-                        ImportScreen()
+                        ImportScreen(accountViewModel)
                     }
                     entry<Screen.NewIdentity> {
-                        NewIdentityScreen()
+                        NewIdentityScreen(accountViewModel)
                     }
                     entry<Screen.Chat> { key ->
-                        ChatScreen(id = key.id, screening = key.screening)
+                        val factory = remember(key) {
+                            object : ViewModelProvider.Factory {
+                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                    @Suppress("UNCHECKED_CAST")
+                                    return ChatScreenViewModel(
+                                        key.id,
+                                        key.screening,
+                                        accountRepository,
+                                        chatRepository
+                                    ) as T
+                                }
+                            }
+                        }
+                        ChatScreen(
+                            viewModel<ChatScreenViewModel>(
+                                key = key.id.toString(),
+                                factory = factory
+                            ),
+                            accountViewModel
+                        )
                     }
                     entry<Screen.NewChat> {
-                        NewChatScreen()
+                        NewChatScreen(accountViewModel, chatViewModel)
                     }
                     entry<Screen.Profile> { key ->
-                        ProfileScreen(pubkey = key.pubkey)
+                        ProfileScreen(pubkey = key.pubkey, chatViewModel = chatViewModel)
                     }
                     entry<Screen.UpdateProfile> {
-                        UpdateProfileScreen()
+                        UpdateProfileScreen(accountViewModel)
                     }
                     entry<Screen.Scan> {
                         ScanScreen()
                     }
                     entry<Screen.MyQr> {
-                        MyQrScreen()
+                        MyQrScreen(accountViewModel)
                     }
                     entry<Screen.ContactList> {
-                        ContactListScreen()
+                        ContactListScreen(accountViewModel, chatViewModel)
                     }
                     entry<Screen.Relay> {
-                        RelayScreen()
+                        RelayScreen(accountViewModel)
                     }
                 }
             )
