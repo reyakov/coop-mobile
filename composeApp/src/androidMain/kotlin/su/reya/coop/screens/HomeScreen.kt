@@ -89,31 +89,32 @@ import coop.composeapp.generated.resources.ic_scanner
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.RoomKind
+import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
 import su.reya.coop.ago
-import su.reya.coop.rememberUiState
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
+import su.reya.coop.uiStateFlow
+import su.reya.coop.viewmodel.AccountViewModel
+import su.reya.coop.viewmodel.ChatViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel
+) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val snackbarHostState = LocalSnackbarHostState.current
     val clipboardManager = LocalClipboard.current
-    val nostrViewModel = LocalNostrViewModel.current
-    val chatViewModel = LocalChatViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(true)
@@ -459,7 +460,11 @@ fun HomeScreen() {
                     }
                 }
                 Spacer(modifier = Modifier.size(16.dp))
-                BottomMenuList(onDismiss = dismissAndRun)
+                BottomMenuList(
+                    onDismiss = dismissAndRun,
+                    accountViewModel = accountViewModel,
+                    chatViewModel = chatViewModel
+                )
             }
         }
     }
@@ -609,14 +614,16 @@ fun HomeScreen() {
 @Composable
 fun NewRequests(requests: List<Room>) {
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
+    val profileCache = LocalProfileCache.current
 
     val total = requests.size
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstRoomState by (firstRoom as Room).rememberUiState(nostrViewModel)
-    val secondRoomState by (secondRoom ?: firstRoom).rememberUiState(nostrViewModel)
+    val firstRoomState by (firstRoom as Room).uiStateFlow(profileCache)
+        .collectAsStateWithLifecycle(RoomUiState())
+    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(profileCache)
+        .collectAsStateWithLifecycle(RoomUiState())
 
     val supportingText = when {
         total == 1 -> {
@@ -687,8 +694,9 @@ fun NewRequests(requests: List<Room>) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
-    val nostrViewModel = LocalNostrViewModel.current
-    val roomState by room.rememberUiState(nostrViewModel)
+    val profileCache = LocalProfileCache.current
+    val roomState by room.uiStateFlow(profileCache)
+        .collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
@@ -731,12 +739,11 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomMenuList(
-    onDismiss: (suspend () -> Unit) -> Unit
+    onDismiss: (suspend () -> Unit) -> Unit,
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel,
 ) {
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
-    val chatViewModel = LocalChatViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
 
     val defaultMenuList = listOf(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },

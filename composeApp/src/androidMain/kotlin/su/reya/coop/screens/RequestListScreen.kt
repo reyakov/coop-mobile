@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,26 +35,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
-import kotlinx.coroutines.launch
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.RoomKind
 import su.reya.coop.Screen
+import su.reya.coop.viewmodel.ChatViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun RequestListScreen() {
+fun RequestListScreen(viewModel: ChatViewModel) {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val chatViewModel = LocalChatViewModel.current
 
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
 
     var isRefreshing by remember { mutableStateOf(false) }
-    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
+    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
 
     // Get all request rooms
     val requests = remember(chatRooms) {
@@ -102,7 +98,7 @@ fun RequestListScreen() {
                     state = pullToRefreshState,
                     onRefresh = {
                         isRefreshing = true
-                        chatViewModel.refreshChatRooms()
+                        viewModel.refreshChatRooms()
                         isRefreshing = false
                     },
                     indicator = {

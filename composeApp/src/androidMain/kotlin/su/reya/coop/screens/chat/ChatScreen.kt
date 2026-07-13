@@ -45,8 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,40 +62,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
-import rust.nostr.sdk.UnsignedEvent
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
+import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
 import su.reya.coop.formatAsGroupHeader
-import su.reya.coop.rememberUiState
-import su.reya.coop.roomId
 import su.reya.coop.shared.Avatar
+import su.reya.coop.uiStateFlow
+import su.reya.coop.viewmodel.AccountViewModel
+import su.reya.coop.viewmodel.ChatScreenViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(
-    id: Long,
-    screening: Boolean = false,
+    viewModel: ChatScreenViewModel,
+    accountViewModel: AccountViewModel,
     coroutineDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
-    val nostrViewModel = LocalNostrViewModel.current
-    val chatViewModel = LocalChatViewModel.current
+    val profileCache = LocalProfileCache.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    // Get current user
-    val accountViewModel = LocalAccountViewModel.current
-    val currentUser by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
-
-    // Get chat room by ID
-    val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
+    val id = viewModel.id
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
     val room by remember(id) { derivedStateOf { chatRooms.firstOrNull { it.id == id } } }
 
     // Show empty screen
@@ -115,13 +108,15 @@ fun ChatScreen(
         return
     }
 
-    val roomState by (room as Room).rememberUiState(nostrViewModel, currentUser?.publicKey)
-    var text by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var newOtherMessages by remember { mutableIntStateOf(0) }
-    var requireScreening by remember { mutableStateOf(screening) }
+    val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
+        .collectAsStateWithLifecycle(RoomUiState())
 
-    val messages = remember { mutableStateListOf<UnsignedEvent>() }
+    var text by remember { mutableStateOf("") }
+    val loading = viewModel.loading
+    val newOtherMessages = viewModel.newOtherMessages
+    val requireScreening = viewModel.requireScreening
+
+    val messages = viewModel.messages
     val groupedMessages =
         remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroupHeader() } } }
 
@@ -136,7 +131,7 @@ fun ChatScreen(
             val type = context.contentResolver.getType(uri)
 
             // Send message (handles errors internally via ViewModel)
-            chatViewModel.sendFileMessage(id, file, type)
+            viewModel.sendFileMessage(file, type)
         }
     }
 
@@ -155,29 +150,6 @@ fun ChatScreen(
         }
 
     LaunchedEffect(id) {
-        // Get messages
-        chatViewModel.loadChatRoomMessages(id) { initialMessages ->
-            messages.clear()
-            messages.addAll(initialMessages)
-
-            // Stop loading spinner
-            loading = false
-        }
-
-        // Get msg relays for each member
-        chatViewModel.chatRoomConnect(id)
-
-        // Handle new messages
-        chatViewModel.newEvents.collect { event ->
-            if (event.roomId() == id) {
-                if (event.id() !in messages.map { it.id() }) {
-                    messages.add(0, event)
-                }
-            } else {
-                // If the event is not in the current room, it's a new message from another user
-                newOtherMessages++
-            }
-        }
     }
 
     LaunchedEffect(messages.size) {
@@ -254,7 +226,7 @@ fun ChatScreen(
                         .padding(bottom = innerPadding.calculateBottomPadding())
                 ) {
                     if (requireScreening) {
-                        room?.let { ScreenerCard(it) }
+                        room?.let { ScreenerCard(accountViewModel, it) }
                     }
 
                     val mineColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -338,7 +310,7 @@ fun ChatScreen(
                                     )
                                 }
                                 FilledTonalButton(
-                                    onClick = { requireScreening = false },
+                                    onClick = { viewModel.requireScreening = false },
                                     modifier = Modifier
                                         .weight(1f)
                                         .size(ButtonDefaults.MediumContainerHeight)
@@ -356,7 +328,7 @@ fun ChatScreen(
                                 value = text,
                                 onValueChange = { text = it },
                                 onSend = {
-                                    chatViewModel.sendMessage(id, text)
+                                    viewModel.sendMessage(text)
                                     text = ""
                                 },
                                 onUpload = {

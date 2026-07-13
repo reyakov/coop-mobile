@@ -32,6 +32,7 @@ import kotlin.time.Duration
 class ProfileManager(private val nostr: Nostr) {
     private val client: Client? get() = nostr.client
     private val signer: UniversalSigner get() = nostr.signer
+    private val httpClient by lazy { HttpClient() }
 
     private val _metadataUpdates =
         MutableSharedFlow<Pair<PublicKey, Metadata>>(
@@ -88,7 +89,7 @@ class ProfileManager(private val nostr: Nostr) {
         try {
             val kind = Kind.fromStd(KindStandard.CONTACT_LIST)
             val filter = Filter().kind(kind).authors(pubkeys).limit(pubkeys.size.toULong())
-            val relays = NostrManager.BOOTSTRAP_RELAYS.map { RelayUrl.parse(it) }
+            val relays = RelayManager.BOOTSTRAP_RELAYS.map { RelayUrl.parse(it) }
 
             client?.sync(filter, relays)
         } catch (e: Exception) {
@@ -226,7 +227,7 @@ class ProfileManager(private val nostr: Nostr) {
 
             // Construct request target
             val target = mutableMapOf<RelayUrl, List<Filter>>()
-            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+            RelayManager.BOOTSTRAP_RELAYS.forEach { relay ->
                 target[RelayUrl.parse(relay)] = listOf(filter)
             }
 
@@ -265,7 +266,7 @@ class ProfileManager(private val nostr: Nostr) {
     suspend fun searchByAddress(query: String): PublicKey {
         try {
             val address = Nip05Address.parse(query)
-            val profile = profileFromAddress(HttpClient(), address)
+            val profile = profileFromAddress(httpClient, address)
 
             return profile.publicKey()
         } catch (e: Exception) {
@@ -312,7 +313,7 @@ class ProfileManager(private val nostr: Nostr) {
         try {
             val filter = Filter().author(pubkey).limit(3u)
             val target = mutableMapOf<RelayUrl, List<Filter>>()
-            NostrManager.BOOTSTRAP_RELAYS.forEach { relay ->
+            RelayManager.BOOTSTRAP_RELAYS.forEach { relay ->
                 target[RelayUrl.parse(relay)] = listOf(filter)
             }
 

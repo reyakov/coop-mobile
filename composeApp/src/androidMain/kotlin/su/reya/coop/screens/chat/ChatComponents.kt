@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,36 +30,35 @@ import coop.composeapp.generated.resources.ic_check_circle
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.Room
 import su.reya.coop.humanReadable
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
 import su.reya.coop.short
+import su.reya.coop.viewmodel.AccountViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ScreenerCard(room: Room) {
+fun ScreenerCard(viewModel: AccountViewModel, room: Room) {
     val pubkey = room.members.firstOrNull() ?: return
 
-    val nostrViewModel = LocalNostrViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
+    val profileCache = LocalProfileCache.current
 
     var isContact by remember { mutableStateOf(false) }
     var mutualContacts by remember { mutableStateOf<Set<PublicKey>>(emptySet()) }
     var lastActivity by remember { mutableStateOf<Timestamp?>(null) }
 
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle()
 
     LaunchedEffect(pubkey) {
         // Check contact
-        accountViewModel.verifyContact(pubkey) { isContact = it }
+        viewModel.verifyContact(pubkey) { isContact = it }
         // Get mutual contacts
-        accountViewModel.mutualContacts(pubkey) { mutualContacts = it }
+        viewModel.mutualContacts(pubkey) { mutualContacts = it }
         // Get the last activity
-        accountViewModel.verifyActivity(pubkey) { lastActivity = it }
+        viewModel.verifyActivity(pubkey) { lastActivity = it }
     }
 
     Column(

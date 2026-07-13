@@ -1,9 +1,5 @@
 package su.reya.coop
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.remember
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
@@ -15,7 +11,7 @@ import kotlinx.datetime.toLocalDateTime
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
-import su.reya.coop.viewmodel.NostrViewModel
+import su.reya.coop.viewmodel.ProfileCache
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -66,22 +62,6 @@ data class Room(
         }
     }
 
-    fun setKind(kind: RoomKind): Room {
-        return this.copy(kind = kind)
-    }
-
-    fun setCreatedAt(createdAt: Timestamp): Room {
-        return this.copy(createdAt = createdAt)
-    }
-
-    fun setSubject(subject: String?): Room {
-        return this.copy(subject = subject)
-    }
-
-    fun setLastMessage(message: String?): Room {
-        return this.copy(lastMessage = message)
-    }
-
     fun isGroup(): Boolean = members.size > 1
 }
 
@@ -92,7 +72,7 @@ data class RoomUiState(
 )
 
 fun Room.uiStateFlow(
-    nostrViewModel: NostrViewModel,
+    profileCache: ProfileCache,
     currentUser: PublicKey? = null
 ): Flow<RoomUiState> {
     val displayMembers = if (isGroup()) members.take(2) else members.take(1)
@@ -101,7 +81,7 @@ fun Room.uiStateFlow(
         return flowOf(RoomUiState(name = subject.sanitizeName(), isGroup = isGroup()))
     }
 
-    return combine(displayMembers.map { nostrViewModel.getMetadata(it) }) { profiles ->
+    return combine(displayMembers.map { profileCache.getMetadata(it) }) { profiles ->
         val names = profiles.mapIndexed { i, profile ->
             profile?.name?.sanitizeName() ?: displayMembers[i].short()
         }
@@ -125,19 +105,6 @@ fun Room.uiStateFlow(
             isGroup = isGroup()
         )
     }
-}
-
-@Composable
-fun Room.rememberUiState(
-    viewModel: NostrViewModel,
-    currentUser: PublicKey? = null
-): State<RoomUiState> {
-    return remember(this, currentUser) {
-        uiStateFlow(
-            viewModel,
-            currentUser
-        )
-    }.collectAsStateWithLifecycle(RoomUiState())
 }
 
 fun UnsignedEvent.roomId(): Long {

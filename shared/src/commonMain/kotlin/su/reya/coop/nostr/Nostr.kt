@@ -37,18 +37,6 @@ import kotlin.time.Duration.Companion.seconds
 
 object NostrManager {
     val instance = Nostr()
-
-    val BOOTSTRAP_RELAYS = listOf(
-        "wss://relay.primal.net",
-        "wss://relay.ditto.pub",
-        "wss://user.kindpag.es",
-    )
-
-    val INDEXER_RELAY = listOf(
-        "wss://indexer.coracle.social",
-    )
-
-    val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
 }
 
 class Nostr(

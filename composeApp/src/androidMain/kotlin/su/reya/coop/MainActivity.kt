@@ -8,15 +8,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.MainScope
 import su.reya.coop.nostr.NostrManager
+import su.reya.coop.repository.AccountRepository
+import su.reya.coop.repository.ChatRepository
 import su.reya.coop.repository.MediaRepository
-import su.reya.coop.viewmodel.ChatViewModel
-import su.reya.coop.viewmodel.NostrViewModel
-import su.reya.coop.viewmodel.account.AccountViewModel
+import su.reya.coop.viewmodel.ProfileCache
 import kotlin.system.exitProcess
 
 class MainActivity : ComponentActivity() {
@@ -24,31 +22,20 @@ class MainActivity : ComponentActivity() {
         val externalSignerLauncher = ExternalSignerLauncher()
     }
 
-    private val factory by lazy {
-        object : ViewModelProvider.Factory {
-            private val storage = AppStore(this@MainActivity)
-            private val mediaRepository = MediaRepository()
-            private val nostrViewModel = NostrViewModel(NostrManager.instance)
-            private val chatViewModel = ChatViewModel(NostrManager.instance, mediaRepository)
-            private val androidSigner =
-                AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
-            private val accountViewModel =
-                AccountViewModel(NostrManager.instance, storage, mediaRepository, androidSigner)
+    private val profileCache by lazy { ProfileCache(NostrManager.instance) }
+    private val scope = MainScope()
 
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return when {
-                    modelClass.isAssignableFrom(NostrViewModel::class.java) -> nostrViewModel
-                    modelClass.isAssignableFrom(ChatViewModel::class.java) -> chatViewModel
-                    modelClass.isAssignableFrom(AccountViewModel::class.java) -> accountViewModel
-                    else -> throw IllegalArgumentException("Unknown ViewModel class")
-                } as T
-            }
-        }
+    private val accountRepository by lazy {
+        val storage = AppStore(this@MainActivity)
+        val mediaRepository = MediaRepository()
+        val androidSigner = AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
+        AccountRepository(NostrManager.instance, storage, mediaRepository, scope, androidSigner)
     }
 
-    private val nostrViewModel: NostrViewModel by viewModels { factory }
-    private val chatViewModel: ChatViewModel by viewModels { factory }
-    private val accountViewModel: AccountViewModel by viewModels { factory }
+    private val chatRepository by lazy {
+        val mediaRepository = MediaRepository()
+        ChatRepository(NostrManager.instance, mediaRepository, scope)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -87,14 +74,14 @@ class MainActivity : ComponentActivity() {
 
         // Keep the splash screen visible until the signer check is complete
         splashScreen.setKeepOnScreenCondition {
-            accountViewModel.state.value.signerRequired == null
+            accountRepository.state.value.signerRequired == null
         }
 
         setContent {
             App(
-                nostrViewModel = nostrViewModel,
-                chatViewModel = chatViewModel,
-                accountViewModel = accountViewModel,
+                profileCache = profileCache,
+                accountRepository = accountRepository,
+                chatRepository = chatRepository,
             )
         }
     }

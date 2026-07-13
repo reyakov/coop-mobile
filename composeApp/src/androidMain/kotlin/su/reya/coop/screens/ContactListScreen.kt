@@ -36,7 +36,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,28 +53,26 @@ import coop.composeapp.generated.resources.ic_check
 import coop.composeapp.generated.resources.ic_close
 import coop.composeapp.generated.resources.ic_plus
 import coop.composeapp.generated.resources.ic_scanner
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Nip05Address
 import rust.nostr.sdk.PublicKey
-import su.reya.coop.LocalAccountViewModel
-import su.reya.coop.LocalChatViewModel
 import su.reya.coop.LocalNavigator
-import su.reya.coop.LocalNostrViewModel
+import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
 import su.reya.coop.shared.Avatar
 import su.reya.coop.short
+import su.reya.coop.viewmodel.AccountViewModel
+import su.reya.coop.viewmodel.ChatViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ContactListScreen() {
+fun ContactListScreen(
+    accountViewModel: AccountViewModel,
+    chatViewModel: ChatViewModel
+) {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val nostrViewModel = LocalNostrViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
-    val chatViewModel = LocalChatViewModel.current
-
     val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
     var openAddContactDialog by remember { mutableStateOf(false) }
     var contactToDelete by remember { mutableStateOf<PublicKey?>(null) }
@@ -192,7 +189,10 @@ fun ContactListScreen() {
     )
 
     if (openAddContactDialog) {
-        AddContactDialog(onDismissRequest = { openAddContactDialog = false })
+        AddContactDialog(
+            accountViewModel = accountViewModel,
+            onDismissRequest = { openAddContactDialog = false }
+        )
     }
 
     if (contactToDelete != null) {
@@ -221,15 +221,14 @@ fun ContactListScreen() {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AddContactDialog(onDismissRequest: () -> Unit) {
+fun AddContactDialog(
+    accountViewModel: AccountViewModel,
+    onDismissRequest: () -> Unit,
+) {
     val snackbarHostState = LocalSnackbarHostState.current
-    val nostrViewModel = LocalNostrViewModel.current
-    val accountViewModel = LocalAccountViewModel.current
     val focusRequester = remember { FocusRequester() }
     var contact by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
-
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -326,8 +325,8 @@ fun ContactListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val nostrViewModel = LocalNostrViewModel.current
-    val profileFlow = remember(pubkey) { nostrViewModel.getMetadata(pubkey) }
+    val profileCache = LocalProfileCache.current
+    val profileFlow = remember(pubkey) { profileCache.getMetadata(pubkey) }
     val profile by profileFlow.collectAsStateWithLifecycle(initialValue = null)
 
     SegmentedListItem(

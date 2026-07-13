@@ -50,23 +50,20 @@ import coop.composeapp.generated.resources.ic_scanner
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.Keys
 import rust.nostr.sdk.NostrConnectUri
-import su.reya.coop.LocalAccountViewModel
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalScanResult
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Screen
+import su.reya.coop.viewmodel.AccountViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ImportScreen() {
+fun ImportScreen(viewModel: AccountViewModel) {
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
     val focusManager = LocalFocusManager.current
-    val accountViewModel = LocalAccountViewModel.current
-
-    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
-
+    val accountState by viewModel.state.collectAsStateWithLifecycle()
     var secret by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var requirePassword by remember { mutableStateOf(false) }
@@ -250,7 +247,7 @@ fun ImportScreen() {
                         Spacer(modifier = Modifier.size(16.dp))
                         Button(
                             onClick = {
-                                accountViewModel.importIdentity(secret, password)
+                                viewModel.importIdentity(secret, password)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
