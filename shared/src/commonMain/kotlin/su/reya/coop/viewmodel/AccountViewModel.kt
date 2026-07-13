@@ -19,9 +19,8 @@ class AccountViewModel(
     val currentUserProfile: StateFlow<Profile?> = repository.currentUserProfile
     val contactList: StateFlow<Set<PublicKey>> = repository.contactList
     val isRelayListEmpty: StateFlow<Boolean> = repository.isRelayListEmpty
-    val currentUserRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> =
-        repository.currentUserRelayList
-    val currentUserMsgRelayList: StateFlow<List<RelayUrl>> = repository.currentUserMsgRelayList
+    val userRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> = repository.userRelayList
+    val userMsgRelayList: StateFlow<List<RelayUrl>> = repository.userMsgRelayList
 
     fun logout(onLogout: () -> Unit = {}) = repository.logout(onLogout)
     fun dismissNotificationBanner() = repository.dismissNotificationBanner()
@@ -35,16 +34,14 @@ class AccountViewModel(
         bio: String?,
         picture: ByteArray?,
         contentType: String? = null
-    ) =
-        repository.createIdentity(name, bio, picture, contentType)
+    ) = repository.createIdentity(name, bio, picture, contentType)
 
     fun updateProfile(
         name: String? = null,
         bio: String? = null,
         picture: ByteArray? = null,
         contentType: String? = null
-    ) =
-        repository.updateProfile(name, bio, picture, contentType)
+    ) = repository.updateProfile(name, bio, picture, contentType)
 
     fun resetInternalState() = repository.resetInternalState()
     fun addContact(address: String) = repository.addContact(address)

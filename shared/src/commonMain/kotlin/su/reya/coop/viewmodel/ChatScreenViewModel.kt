@@ -29,7 +29,6 @@ class ChatScreenViewModel(
     var loading by mutableStateOf(true)
     var newOtherMessages by mutableIntStateOf(0)
     var requireScreening by mutableStateOf(screening)
-
     val messages = mutableStateListOf<UnsignedEvent>()
 
     init {

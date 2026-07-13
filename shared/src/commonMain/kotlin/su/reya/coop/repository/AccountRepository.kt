@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -84,12 +83,11 @@ class AccountRepository(
     private val _isRelayListEmpty = MutableStateFlow(false)
     val isRelayListEmpty: StateFlow<Boolean> = _isRelayListEmpty.asStateFlow()
 
-    private val _currentUserRelayList = MutableStateFlow<Map<RelayUrl, RelayMetadata?>>(emptyMap())
-    val currentUserRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> =
-        _currentUserRelayList.asStateFlow()
+    private val _userRelayList = MutableStateFlow<Map<RelayUrl, RelayMetadata?>>(emptyMap())
+    val userRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> = _userRelayList.asStateFlow()
 
-    private val _currentUserMsgRelayList = MutableStateFlow<List<RelayUrl>>(emptyList())
-    val currentUserMsgRelayList: StateFlow<List<RelayUrl>> = _currentUserMsgRelayList.asStateFlow()
+    private val _userMsgRelayList = MutableStateFlow<List<RelayUrl>>(emptyList())
+    val userMsgRelayList: StateFlow<List<RelayUrl>> = _userMsgRelayList.asStateFlow()
 
     init {
         checkNotificationBannerDismissedStatus()
@@ -103,9 +101,22 @@ class AccountRepository(
             nostr.signer.publicKeyFlow
                 .filterNotNull()
                 .distinctUntilChanged()
-                .collectLatest {
-                    getUserMetadata()
-                    checkRelayList()
+                .collectLatest { pubkey ->
+                    // Refresh metadata
+                    nostr.profiles.getUserMetadata()
+
+                    // Verify messaging relays exist (wait up to 10s for initial fetch)
+                    val relays = withTimeoutOrNull(10.seconds) {
+                        var list = nostr.relays.getMsgRelays(pubkey)
+                        while (list.isEmpty()) {
+                            delay(500.milliseconds)
+                            list = nostr.relays.getMsgRelays(pubkey)
+                        }
+                        list
+                    } ?: emptyList()
+
+                    // Automatically update the warning state
+                    _isRelayListEmpty.value = relays.isEmpty()
                 }
         }
     }
@@ -315,12 +326,6 @@ class AccountRepository(
             .map { (p, m) -> Profile(p, m) }
     )
 
-    private fun getUserMetadata() {
-        scope.launch {
-            nostr.profiles.getUserMetadata()
-        }
-    }
-
     fun updateProfile(
         name: String? = null,
         bio: String? = null,
@@ -454,24 +459,6 @@ class AccountRepository(
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun checkRelayList() {
-        scope.launch {
-            val currentUser = nostr.signer.publicKeyFlow.filterNotNull().first()
-
-            val relays = withTimeoutOrNull(10.seconds) {
-                var result = nostr.relays.getMsgRelays(currentUser)
-                while (result.isEmpty()) {
-                    delay(500.milliseconds)
-                    result = nostr.relays.getMsgRelays(currentUser)
-                }
-                result
-            } ?: emptyList()
-
-            if (relays.isEmpty()) _isRelayListEmpty.value = true
-        }
-    }
-
     fun dismissRelayWarning() {
         _isRelayListEmpty.value = false
     }
@@ -499,9 +486,8 @@ class AccountRepository(
     fun loadCurrentUserRelayList() {
         scope.launch {
             try {
-                val currentUser =
-                    nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-                _currentUserRelayList.value = nostr.relays.getRelayList(currentUser)
+                val user = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+                _userRelayList.value = nostr.relays.getRelayList(user)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -563,16 +549,15 @@ class AccountRepository(
     fun loadCurrentUserMsgRelayList() {
         scope.launch {
             try {
-                val currentUser =
-                    nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-                _currentUserMsgRelayList.value = nostr.relays.getMsgRelays(currentUser)
+                val user = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
+                _userMsgRelayList.value = nostr.relays.getMsgRelays(user)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
         }
     }
 
-    private suspend fun currentUserMsgRelayListInternal(): List<RelayUrl> {
+    private suspend fun userLatestMsgRelayList(): List<RelayUrl> {
         try {
             val currentUser = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
             return nostr.relays.getMsgRelays(currentUser)
@@ -586,7 +571,7 @@ class AccountRepository(
         scope.launch {
             try {
                 val relayUrl = RelayUrl.parse(relay)
-                val relays = currentUserMsgRelayListInternal().toMutableSet()
+                val relays = userLatestMsgRelayList().toMutableSet()
                 relays.add(relayUrl)
 
                 nostr.relays.setMsgRelays(relays.toList())
@@ -600,7 +585,7 @@ class AccountRepository(
         scope.launch {
             try {
                 val relayUrl = RelayUrl.parse(relay)
-                val relays = currentUserMsgRelayListInternal().toMutableSet()
+                val relays = userLatestMsgRelayList().toMutableSet()
                 relays.remove(relayUrl)
 
                 nostr.relays.setMsgRelays(relays.toList())
