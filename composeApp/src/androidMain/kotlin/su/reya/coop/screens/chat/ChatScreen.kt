@@ -39,6 +39,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -47,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
@@ -479,6 +481,7 @@ fun ChatScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContextMenu(onAction: (String) -> Unit) {
     val menuItems = listOf(
@@ -487,29 +490,31 @@ private fun ContextMenu(onAction: (String) -> Unit) {
         Triple("Info", Res.drawable.ic_info, false),
     )
 
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.tertiaryContainer,
+    DropdownMenuGroup(
+        shapes = MenuDefaults.groupShape(1, 1),
+        containerColor = MenuDefaults.groupVibrantContainerColor,
         modifier = Modifier.width(220.dp)
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            menuItems.forEach { (label, icon, hasDivider) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = { onAction(label) },
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(icon),
-                            contentDescription = label,
-                        )
-                    }
-                )
-                if (hasDivider) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        val itemCount = menuItems.size
+
+        menuItems.forEachIndexed { index, (label, icon, hasDivider) ->
+            DropdownMenuItem(
+                shapes = MenuDefaults.itemShape(index, itemCount),
+                colors = MenuDefaults.selectableItemVibrantColors(),
+                text = { Text(label) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(icon),
+                        contentDescription = label,
                     )
-                }
+                },
+                checked = false,
+                onCheckedChange = { _ -> onAction(label) },
+            )
+            if (hasDivider) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
             }
         }
     }
