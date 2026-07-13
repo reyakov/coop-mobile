@@ -64,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -277,8 +278,14 @@ fun ChatScreen(
                                                 currentUserPublicKey = currentUser?.publicKey,
                                                 contentColor = if (isMine) mineColor else otherColor
                                             )
+                                            val isHighlighted =
+                                                selectedMessage?.first?.id == uiModel.id
+
                                             ChatMessage(
                                                 model = uiModel,
+                                                modifier = Modifier.graphicsLayer {
+                                                    alpha = if (isHighlighted) 0f else 1f
+                                                },
                                                 onLongClick = { rect ->
                                                     selectedMessage = uiModel to rect
                                                 }
@@ -419,27 +426,27 @@ fun ChatScreen(
                 val contentBottomDp = with(density) { (bounds.bottom + totalExtraHeightPx).toDp() }
                 Spacer(modifier = Modifier.height(contentBottomDp + 200.dp))
 
-                Column(
+                ChatMessage(
+                    model = model,
                     modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                0,
-                                if (showAbove) (bounds.top - totalExtraHeightPx).toInt()
-                                    .coerceAtLeast(0) else bounds.top.toInt()
-                            )
-                        }
+                        .offset { IntOffset(0, bounds.top.toInt()) }
+                        .padding(horizontal = 16.dp)
+                )
+
+                val menuOffset = if (showAbove) {
+                    bounds.top - totalExtraHeightPx
+                } else {
+                    bounds.bottom + with(density) { 12.dp.toPx() } // 12dp spacing below
+                }
+
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(0, menuOffset.toInt().coerceAtLeast(0)) }
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
-                    if (showAbove) {
-                        ContextMenu { selectedMessage = null }
-                        ChatMessage(model = model)
-                    } else {
-                        ChatMessage(model = model)
-                        ContextMenu { selectedMessage = null }
-                    }
+                    ContextMenu { selectedMessage = null }
                 }
             }
         }

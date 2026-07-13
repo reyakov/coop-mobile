@@ -107,7 +107,11 @@ fun rememberMessageUiModel(
 }
 
 @Composable
-fun ChatMessage(model: MessageUiModel, onLongClick: (Rect) -> Unit = {}) {
+fun ChatMessage(
+    model: MessageUiModel,
+    modifier: Modifier = Modifier,
+    onLongClick: (Rect) -> Unit = {}
+) {
     var isMessageClicked by remember { mutableStateOf(false) }
     var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
@@ -124,10 +128,10 @@ fun ChatMessage(model: MessageUiModel, onLongClick: (Rect) -> Unit = {}) {
         if (!model.isMine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
-        modifier = Modifier
+        modifier = modifier
+            .onGloballyPositioned { layoutCoordinates = it }
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .onGloballyPositioned { layoutCoordinates = it },
+            .padding(vertical = 4.dp),
         contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Column(
