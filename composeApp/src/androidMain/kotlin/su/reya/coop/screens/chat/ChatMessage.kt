@@ -5,7 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,8 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -103,8 +107,9 @@ fun rememberMessageUiModel(
 }
 
 @Composable
-fun ChatMessage(model: MessageUiModel) {
+fun ChatMessage(model: MessageUiModel, onLongClick: (Rect) -> Unit = {}) {
     var isMessageClicked by remember { mutableStateOf(false) }
+    var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val bubbleShape = if (model.isMine) {
         RoundedCornerShape(topStart = 20.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
@@ -121,16 +126,21 @@ fun ChatMessage(model: MessageUiModel) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 4.dp)
+            .onGloballyPositioned { layoutCoordinates = it },
         contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Column(
-            modifier = Modifier.clickable(
+            modifier = Modifier.combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                isMessageClicked = !isMessageClicked
-            },
+                indication = null,
+                onClick = { isMessageClicked = !isMessageClicked },
+                onLongClick = {
+                    layoutCoordinates?.let { coords ->
+                        onLongClick(coords.boundsInWindow())
+                    }
+                }
+            ),
             horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
