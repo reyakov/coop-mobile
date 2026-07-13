@@ -1,6 +1,7 @@
 package su.reya.coop.screens.chat
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.speech.RecognizerIntent
@@ -38,8 +39,10 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
@@ -55,6 +58,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,6 +69,9 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -74,6 +81,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
+import coop.composeapp.generated.resources.ic_copy
+import coop.composeapp.generated.resources.ic_info
+import coop.composeapp.generated.resources.ic_reply
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -100,6 +110,7 @@ fun ChatScreen(
 ) {
     val context = LocalContext.current
     val snackbarHostState = LocalSnackbarHostState.current
+    val clipboardManager = LocalClipboard.current
     val navigator = LocalNavigator.current
     val profileCache = LocalProfileCache.current
     val scope = rememberCoroutineScope()
@@ -410,11 +421,10 @@ fun ChatScreen(
             val windowHeight = windowInfo.containerSize.height
             val scrollState = rememberScrollState()
 
-            val menuHeightDp = 336.dp
-            val spacingDp = 12.dp
-            val totalExtraHeightPx = with(density) { (menuHeightDp + spacingDp).toPx() }
+            var menuHeight by remember { mutableFloatStateOf(0f) }
+            val spacing = with(density) { 12.dp.toPx() }
             val showAbove =
-                (windowHeight - bounds.bottom) < totalExtraHeightPx && bounds.top > totalExtraHeightPx
+                (windowHeight - bounds.bottom) < (menuHeight + spacing) && bounds.top > (menuHeight + spacing)
 
             Box(
                 modifier = Modifier
@@ -423,8 +433,10 @@ fun ChatScreen(
                     .clickable { selectedMessage = null }
                     .verticalScroll(scrollState),
             ) {
-                val contentBottomDp = with(density) { (bounds.bottom + totalExtraHeightPx).toDp() }
-                Spacer(modifier = Modifier.height(contentBottomDp + 200.dp))
+                val totalExtraHeight = if (menuHeight > 0) menuHeight + spacing else 300f
+                val contentBottom = with(density) { (bounds.bottom + totalExtraHeight).toDp() }
+
+                Spacer(modifier = Modifier.height(contentBottom + 200.dp))
 
                 ChatMessage(
                     model = model,
@@ -434,19 +446,33 @@ fun ChatScreen(
                 )
 
                 val menuOffset = if (showAbove) {
-                    bounds.top - totalExtraHeightPx
+                    bounds.top - menuHeight - spacing
                 } else {
-                    bounds.bottom + with(density) { 12.dp.toPx() } // 12dp spacing below
+                    bounds.bottom + spacing
                 }
 
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(0, menuOffset.toInt().coerceAtLeast(0)) }
+                        .onGloballyPositioned { menuHeight = it.size.height.toFloat() }
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
-                    ContextMenu { selectedMessage = null }
+                    ContextMenu { action ->
+                        when (action) {
+                            "Copy" -> {
+                                scope.launch {
+                                    val content = model.annotatedContent
+                                    val data = ClipData.newPlainText(content, content)
+                                    clipboardManager.setClipEntry(ClipEntry(data))
+                                }
+                            }
+
+                            else -> {}
+                        }
+                        selectedMessage = null
+                    }
                 }
             }
         }
@@ -455,29 +481,35 @@ fun ChatScreen(
 
 @Composable
 private fun ContextMenu(onAction: (String) -> Unit) {
+    val menuItems = listOf(
+        Triple("Copy", Res.drawable.ic_copy, false),
+        Triple("Reply", Res.drawable.ic_reply, false),
+        Triple("Info", Res.drawable.ic_info, false),
+    )
+
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
         modifier = Modifier.width(220.dp)
     ) {
-        Column {
-            listOf(
-                "Reply",
-                "Forward",
-                "Copy",
-                "Select",
-                "Info",
-                "Pin",
-                "Delete"
-            ).forEach { action ->
-                Text(
-                    text = action,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onAction(action) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyLarge
+        Column(modifier = Modifier.padding(8.dp)) {
+            menuItems.forEach { (label, icon, hasDivider) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = { onAction(label) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(icon),
+                            contentDescription = label,
+                        )
+                    }
                 )
+                if (hasDivider) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
             }
         }
     }
