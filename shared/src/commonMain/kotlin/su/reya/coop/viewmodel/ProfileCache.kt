@@ -17,17 +17,6 @@ import su.reya.coop.Profile
 import su.reya.coop.nostr.Nostr
 import kotlin.time.Duration.Companion.milliseconds
 
-/**
- * Application-level singleton cache for Nostr user profiles.
- *
- * Replaces [NostrViewModel] as a non-ViewModel component with its own lifecycle scope.
- * This is appropriate because profile caching is not screen-specific — it's a shared
- * concern used by every screen that displays user metadata.
- *
- * Long-running tasks ([runObserver], [runMetadataBatching]) run in a dedicated
- * [CoroutineScope] that outlives any individual screen, ensuring continuous operation
- * regardless of navigation.
- */
 class ProfileCache(
     private val nostr: Nostr,
 ) : ErrorHost by createErrorHost() {

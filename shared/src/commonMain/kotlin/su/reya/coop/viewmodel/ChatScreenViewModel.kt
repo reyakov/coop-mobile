@@ -9,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import rust.nostr.sdk.EventId
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.Profile
 import su.reya.coop.Room
@@ -19,8 +18,8 @@ import su.reya.coop.roomId
 
 class ChatScreenViewModel(
     val id: Long,
-    val screening: Boolean,
-    private val accountRepository: AccountRepository,
+    screening: Boolean,
+    accountRepository: AccountRepository,
     private val chatRepository: ChatRepository,
 ) : ViewModel(), ErrorHost by chatRepository {
     val currentUser: StateFlow<Profile?> = accountRepository.currentUserProfile
@@ -69,9 +68,5 @@ class ChatScreenViewModel(
 
     fun sendFileMessage(file: ByteArray?, type: String?) {
         chatRepository.sendFileMessage(id, file, type)
-    }
-
-    fun isMessageSent(id: EventId): Boolean {
-        return chatRepository.isMessageSent(id)
     }
 }
