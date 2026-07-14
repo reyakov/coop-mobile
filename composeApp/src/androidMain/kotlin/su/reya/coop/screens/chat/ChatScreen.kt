@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,7 +44,6 @@ import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
@@ -84,20 +84,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
 import coop.composeapp.generated.resources.ic_copy
-import coop.composeapp.generated.resources.ic_info
 import coop.composeapp.generated.resources.ic_reply
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
-import su.reya.coop.formatAsGroupHeader
+import su.reya.coop.formatAsGroup
 import su.reya.coop.shared.Avatar
 import su.reya.coop.uiStateFlow
 import su.reya.coop.viewmodel.AccountViewModel
@@ -138,19 +138,20 @@ fun ChatScreen(
         return
     }
 
+    val loading = viewModel.loading
+    val newOtherMessages = viewModel.newOtherMessages
+    val requireScreening = viewModel.requireScreening
+    val messages = viewModel.messages
+
+    val groupedMessages =
+        remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroup() } } }
+
     val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
         .collectAsStateWithLifecycle(RoomUiState())
 
     var text by remember { mutableStateOf("") }
-    var selectedMessage by remember { mutableStateOf<Pair<MessageUiModel, Rect>?>(null) }
-
-    val loading = viewModel.loading
-    val newOtherMessages = viewModel.newOtherMessages
-    val requireScreening = viewModel.requireScreening
-
-    val messages = viewModel.messages
-    val groupedMessages =
-        remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroupHeader() } } }
+    var selectedMessage by remember { mutableStateOf<Pair<MessageModel, Rect>?>(null) }
+    var replyingTo by remember { mutableStateOf<MessageModel?>(null) }
 
     val blurAmount by animateDpAsState(
         targetValue = if (selectedMessage != null) 8.dp else 0.dp,
@@ -267,42 +268,48 @@ fun ChatScreen(
                             room?.let { ScreenerCard(accountViewModel, it) }
                         }
 
-                        val mineColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        val otherColor = MaterialTheme.colorScheme.onSurface
-
                         when (messages.isNotEmpty()) {
                             true -> {
                                 LazyColumn(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxWidth(),
-                                    contentPadding = PaddingValues(16.dp),
-                                    reverseLayout = true,
                                     state = listState,
+                                    reverseLayout = true,
+                                    contentPadding = PaddingValues(16.dp),
                                 ) {
                                     groupedMessages.value.forEach { (dateHeader, messagesInGroup) ->
                                         items(
                                             items = messagesInGroup,
-                                            key = { it.id()?.toHex() ?: it.hashCode().toString() }
+                                            key = { it.ensureId().id()?.toHex()!! }
                                         ) { event ->
-                                            val isMine = currentUser?.publicKey == event.author()
-                                            val uiModel = rememberMessageUiModel(
-                                                event = event,
-                                                currentUserPublicKey = currentUser?.publicKey,
-                                                contentColor = if (isMine) mineColor else otherColor
-                                            )
-                                            val isHighlighted =
-                                                selectedMessage?.first?.id == uiModel.id
+                                            val model =
+                                                rememberMessageModel(event, currentUser?.publicKey)
 
-                                            ChatMessage(
-                                                model = uiModel,
-                                                modifier = Modifier.graphicsLayer {
-                                                    alpha = if (isHighlighted) 0f else 1f
-                                                },
-                                                onLongClick = { rect ->
-                                                    selectedMessage = uiModel to rect
+                                            val replyPreview =
+                                                remember(model.replyEventIds, messages.size) {
+                                                    model.replyEventIds.firstOrNull()
+                                                        ?.let { replyId ->
+                                                            messages.find { it.id() == replyId }
+                                                        }
                                                 }
-                                            )
+
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                replyPreview?.let { ReplyPreview(it, model.isMine) }
+                                                ChatMessage(
+                                                    model = model,
+                                                    modifier = Modifier.graphicsLayer {
+                                                        alpha =
+                                                            if (selectedMessage?.first?.id == model.id) 0f else 1f
+                                                    },
+                                                    onLongClick = { rect ->
+                                                        selectedMessage = model to rect
+                                                    }
+                                                )
+                                            }
                                         }
                                         item {
                                             DateSeparator(dateHeader)
@@ -373,6 +380,9 @@ fun ChatScreen(
                             }
 
                             else -> {
+                                replyingTo?.let {
+                                    ReplyBox(it) { replyingTo = null }
+                                }
                                 ChatInput(
                                     value = text,
                                     onValueChange = { text = it },
@@ -471,6 +481,10 @@ fun ChatScreen(
                                 }
                             }
 
+                            "Reply" -> {
+                                replyingTo = model
+                            }
+
                             else -> {}
                         }
                         selectedMessage = null
@@ -481,13 +495,98 @@ fun ChatScreen(
     }
 }
 
+@Composable
+private fun ReplyBox(model: MessageModel, onDismiss: () -> Unit) {
+    val profileCache = LocalProfileCache.current
+    val profileFlow = remember(model) { profileCache.getMetadata(model.author) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDismiss() },
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = "Replying to ${profile?.name}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                        alpha = 0.6f
+                    ),
+                )
+                Text(
+                    text = model.annotatedContent.toString().ifBlank {
+                        if (model.images.isNotEmpty()) "[Image]" else ""
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyPreview(event: UnsignedEvent, isMine: Boolean = false) {
+    val profileCache = LocalProfileCache.current
+    val profileFlow = remember(event) { profileCache.getMetadata(event.author()) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
+
+    val bubbleShape = if (isMine) {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+    }
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 280.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+            shape = bubbleShape,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = profile?.name ?: "Unknown",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                        alpha = 0.6f
+                    ),
+                )
+                Text(
+                    text = event.content(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ContextMenu(onAction: (String) -> Unit) {
     val menuItems = listOf(
-        Triple("Copy", Res.drawable.ic_copy, false),
-        Triple("Reply", Res.drawable.ic_reply, false),
-        Triple("Info", Res.drawable.ic_info, false),
+        "Copy" to Res.drawable.ic_copy,
+        "Reply" to Res.drawable.ic_reply
     )
 
     DropdownMenuGroup(
@@ -497,7 +596,7 @@ private fun ContextMenu(onAction: (String) -> Unit) {
     ) {
         val itemCount = menuItems.size
 
-        menuItems.forEachIndexed { index, (label, icon, hasDivider) ->
+        menuItems.forEachIndexed { index, (label, icon) ->
             DropdownMenuItem(
                 shapes = MenuDefaults.itemShape(index, itemCount),
                 colors = MenuDefaults.selectableItemVibrantColors(),
@@ -511,11 +610,6 @@ private fun ContextMenu(onAction: (String) -> Unit) {
                 checked = false,
                 onCheckedChange = { _ -> onAction(label) },
             )
-            if (hasDivider) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
         }
     }
 }

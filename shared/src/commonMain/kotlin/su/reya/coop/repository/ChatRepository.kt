@@ -1,7 +1,9 @@
 package su.reya.coop.repository
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,7 @@ class ChatRepository(
     private val nostr: Nostr,
     private val mediaRepository: MediaRepository,
     private val scope: CoroutineScope,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ErrorHost by createErrorHost() {
     private val _state = MutableStateFlow(ChatState())
     val state = _state.stateIn(
@@ -58,7 +61,7 @@ class ChatRepository(
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
-        scope.launch {
+        scope.launch(defaultDispatcher) {
             nostr.waitUntilInitialized()
 
             // Observe message sync progress
@@ -137,7 +140,7 @@ class ChatRepository(
     }
 
     fun refreshChatRooms() {
-        scope.launch {
+        scope.launch(defaultDispatcher) {
             try {
                 val rooms = nostr.messages.getChatRooms() ?: emptySet()
                 _state.update { currentState ->
@@ -166,7 +169,7 @@ class ChatRepository(
     }
 
     fun chatRoomConnect(roomId: Long) {
-        scope.launch {
+        scope.launch(defaultDispatcher) {
             try {
                 val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
                 val members = room.members
@@ -183,7 +186,7 @@ class ChatRepository(
             showError("Message cannot be empty")
             return
         }
-        scope.launch {
+        scope.launch(defaultDispatcher) {
             try {
                 val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
                 nostr.messages.sendMessage(
@@ -193,7 +196,7 @@ class ChatRepository(
                     replies = replies,
                     onRumorCreated = { event ->
                         updateRoomList(roomId, event)
-                        scope.launch { _newEvents.tryEmit(event) }
+                        scope.launch(defaultDispatcher) { _newEvents.tryEmit(event) }
                     },
                 )
             } catch (e: Exception) {

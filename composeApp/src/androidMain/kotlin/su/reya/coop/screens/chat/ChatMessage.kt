@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -41,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import rust.nostr.sdk.EventId
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.URL_REGEX
@@ -49,27 +49,25 @@ import su.reya.coop.isImageUrl
 import su.reya.coop.removeImageUrls
 
 @Immutable
-data class MessageUiModel(
-    val id: String,
+data class MessageModel(
+    val id: EventId,
+    val author: PublicKey,
     val annotatedContent: AnnotatedString,
     val images: List<String>,
     val timestamp: String,
-    val isMine: Boolean
+    val isMine: Boolean,
+    val replyEventIds: List<EventId>
 )
 
 @Composable
-fun rememberMessageUiModel(
-    event: UnsignedEvent,
-    currentUserPublicKey: PublicKey?,
-    contentColor: Color
-): MessageUiModel {
-    return remember(event, currentUserPublicKey, contentColor) {
+fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): MessageModel {
+    return remember(event, currentUser) {
+        val id = event.ensureId().id()!!
+        val isMine = currentUser == event.author()
         val content = event.content()
-        val images = URL_REGEX.findAll(content)
-            .map { it.value }
-            .filter { it.isImageUrl() }
-            .toList()
+        val replyEventIds = event.tags().eventIds()
 
+        val images = URL_REGEX.findAll(content).map { it.value }.filter { it.isImageUrl() }.toList()
         val cleanedContent = content.removeImageUrls()
 
         val annotatedString = buildAnnotatedString {
@@ -82,7 +80,6 @@ fun rememberMessageUiModel(
                         url = url,
                         styles = TextLinkStyles(
                             style = SpanStyle(
-                                color = contentColor,
                                 textDecoration = TextDecoration.Underline,
                                 fontWeight = FontWeight.Medium
                             )
@@ -96,19 +93,21 @@ fun rememberMessageUiModel(
             append(cleanedContent.substring(lastIndex))
         }
 
-        MessageUiModel(
-            id = event.id()?.toHex() ?: event.hashCode().toString(),
+        MessageModel(
+            id = id,
+            author = event.author(),
             annotatedContent = annotatedString,
             images = images,
             timestamp = event.createdAt().formatAsTime(),
-            isMine = event.author() == currentUserPublicKey
+            isMine = isMine,
+            replyEventIds = replyEventIds
         )
     }
 }
 
 @Composable
 fun ChatMessage(
-    model: MessageUiModel,
+    model: MessageModel,
     modifier: Modifier = Modifier,
     onLongClick: (Rect) -> Unit = {}
 ) {
@@ -146,14 +145,14 @@ fun ChatMessage(
                 }
             ),
             horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (model.annotatedContent.isNotBlank()) {
                 Surface(
+                    modifier = Modifier.widthIn(max = 280.dp),
                     color = containerColor,
                     contentColor = contentColor,
                     shape = bubbleShape,
-                    modifier = Modifier.widthIn(max = 280.dp)
                 ) {
                     Text(
                         text = model.annotatedContent,

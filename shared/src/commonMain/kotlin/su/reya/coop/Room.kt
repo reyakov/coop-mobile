@@ -150,7 +150,7 @@ fun Timestamp.ago(): String {
     }
 }
 
-fun Timestamp.formatAsGroupHeader(): String {
+fun Timestamp.formatAsGroup(): String {
     val timeZone = TimeZone.currentSystemDefault()
     val inputInstant = Instant.fromEpochSeconds(this.asSecs().toLong())
     val inputDate = inputInstant.toLocalDateTime(timeZone).date
