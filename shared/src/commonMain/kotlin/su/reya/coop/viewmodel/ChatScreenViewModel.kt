@@ -39,7 +39,7 @@ class ChatScreenViewModel(
     private fun loadMessages() {
         chatRepository.loadChatRoomMessages(id) { initialMessages ->
             messages.clear()
-            messages.addAll(initialMessages)
+            messages.addAll(initialMessages.distinctBy { it.id() })
             loading = false
         }
     }
@@ -52,7 +52,7 @@ class ChatScreenViewModel(
         viewModelScope.launch {
             chatRepository.newEvents.collect { event ->
                 if (event.roomId() == id) {
-                    if (event.id() !in messages.map { it.id() }) {
+                    if (messages.none { it.id() == event.id() }) {
                         messages.add(0, event)
                     }
                 } else {
