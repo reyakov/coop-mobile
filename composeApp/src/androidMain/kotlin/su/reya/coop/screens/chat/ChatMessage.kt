@@ -55,7 +55,8 @@ data class MessageModel(
     val annotatedContent: AnnotatedString,
     val images: List<String>,
     val timestamp: String,
-    val isMine: Boolean
+    val isMine: Boolean,
+    val replyEventIds: List<EventId>
 )
 
 @Composable
@@ -64,6 +65,7 @@ fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): 
         val id = event.ensureId().id()!!
         val isMine = currentUser == event.author()
         val content = event.content()
+        val replyEventIds = event.tags().eventIds()
 
         val images = URL_REGEX.findAll(content).map { it.value }.filter { it.isImageUrl() }.toList()
         val cleanedContent = content.removeImageUrls()
@@ -98,6 +100,7 @@ fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): 
             images = images,
             timestamp = event.createdAt().formatAsTime(),
             isMine = isMine,
+            replyEventIds = replyEventIds
         )
     }
 }
@@ -142,14 +145,14 @@ fun ChatMessage(
                 }
             ),
             horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (model.annotatedContent.isNotBlank()) {
                 Surface(
+                    modifier = Modifier.widthIn(max = 280.dp),
                     color = containerColor,
                     contentColor = contentColor,
                     shape = bubbleShape,
-                    modifier = Modifier.widthIn(max = 280.dp)
                 ) {
                     Text(
                         text = model.annotatedContent,

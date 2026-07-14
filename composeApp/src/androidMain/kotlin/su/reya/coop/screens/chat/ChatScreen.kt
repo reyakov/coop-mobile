@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -89,6 +90,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
@@ -272,28 +274,42 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxWidth(),
-                                    contentPadding = PaddingValues(16.dp),
-                                    reverseLayout = true,
                                     state = listState,
+                                    reverseLayout = true,
+                                    contentPadding = PaddingValues(16.dp),
                                 ) {
                                     groupedMessages.value.forEach { (dateHeader, messagesInGroup) ->
                                         items(
                                             items = messagesInGroup,
                                             key = { it.ensureId().id()?.toHex()!! }
-                                        ) {
+                                        ) { event ->
                                             val model =
-                                                rememberMessageModel(it, currentUser?.publicKey)
+                                                rememberMessageModel(event, currentUser?.publicKey)
 
-                                            ChatMessage(
-                                                model = model,
-                                                modifier = Modifier.graphicsLayer {
-                                                    alpha =
-                                                        if (selectedMessage?.first?.id == model.id) 0f else 1f
-                                                },
-                                                onLongClick = { rect ->
-                                                    selectedMessage = model to rect
+                                            val replyPreview =
+                                                remember(model.replyEventIds, messages.size) {
+                                                    model.replyEventIds.firstOrNull()
+                                                        ?.let { replyId ->
+                                                            messages.find { it.id() == replyId }
+                                                        }
                                                 }
-                                            )
+
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                replyPreview?.let { ReplyPreview(it, model.isMine) }
+                                                ChatMessage(
+                                                    model = model,
+                                                    modifier = Modifier.graphicsLayer {
+                                                        alpha =
+                                                            if (selectedMessage?.first?.id == model.id) 0f else 1f
+                                                    },
+                                                    onLongClick = { rect ->
+                                                        selectedMessage = model to rect
+                                                    }
+                                                )
+                                            }
                                         }
                                         item {
                                             DateSeparator(dateHeader)
@@ -515,6 +531,50 @@ private fun ReplyBox(model: MessageModel, onDismiss: () -> Unit) {
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyPreview(event: UnsignedEvent, isMine: Boolean = false) {
+    val profileCache = LocalProfileCache.current
+    val profileFlow = remember(event) { profileCache.getMetadata(event.author()) }
+    val profile by profileFlow.collectAsStateWithLifecycle()
+
+    val bubbleShape = if (isMine) {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp)
+    }
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 280.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+            shape = bubbleShape,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = profile?.name ?: "Unknown",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                        alpha = 0.6f
+                    ),
+                )
+                Text(
+                    text = event.content(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    maxLines = 1,
                 )
             }
         }
