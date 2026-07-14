@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import rust.nostr.sdk.EventId
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.Profile
 import su.reya.coop.Room
@@ -62,8 +63,9 @@ class ChatScreenViewModel(
         }
     }
 
-    fun sendMessage(text: String) {
-        chatRepository.sendMessage(id, text)
+    fun sendMessage(text: String, replyTo: EventId? = null) {
+        val replyToList = if (replyTo != null) listOf(replyTo) else emptyList()
+        chatRepository.sendMessage(id, text, replyToList)
     }
 
     fun sendFileMessage(file: ByteArray?, type: String?) {
