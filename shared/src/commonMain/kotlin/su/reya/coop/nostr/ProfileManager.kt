@@ -27,6 +27,7 @@ import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.SendEventTarget
 import rust.nostr.sdk.SubscribeAutoCloseOptions
 import rust.nostr.sdk.Timestamp
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 
 class ProfileManager(private val nostr: Nostr) {
@@ -80,6 +81,8 @@ class ProfileManager(private val nostr: Nostr) {
             val opts = SubscribeAutoCloseOptions().exitPolicy(ReqExitPolicy.ExitOnEose)
 
             client?.subscribe(target = target, id = "user-metadata", closeOn = opts)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user metadata: ${e.message}", e)
         }
@@ -92,6 +95,8 @@ class ProfileManager(private val nostr: Nostr) {
             val relays = RelayManager.BOOTSTRAP_RELAYS.map { RelayUrl.parse(it) }
 
             client?.sync(filter, relays)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             println("Failed to sync mutual contacts: ${e.message}")
         }
@@ -174,6 +179,8 @@ class ProfileManager(private val nostr: Nostr) {
             )
 
             return newMetadata
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to update identity: ${e.message}", e)
         }
@@ -186,6 +193,8 @@ class ProfileManager(private val nostr: Nostr) {
             val event = client?.database()?.query(filter)?.first() ?: return null
 
             Metadata.fromJson(event.content())
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             println("Failed to get latest metadata: ${e.message}")
             null
@@ -208,6 +217,8 @@ class ProfileManager(private val nostr: Nostr) {
             }
 
             return results
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             println("Failed to get all cache metadata: ${e.message}")
             return emptyMap()
@@ -232,6 +243,8 @@ class ProfileManager(private val nostr: Nostr) {
             }
 
             client?.subscribe(target = ReqTarget.manual(target), closeOn = opts)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch metadata batch: ${e.message}", e)
         }
@@ -247,6 +260,8 @@ class ProfileManager(private val nostr: Nostr) {
                 target = SendEventTarget.broadcast(),
                 ackPolicy = AckPolicy.none(),
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to set contact list: ${e.message}", e)
         }
@@ -258,6 +273,8 @@ class ProfileManager(private val nostr: Nostr) {
             val bodyString: String = response.body()
 
             return Nip05Profile.fromJson(address, bodyString)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch profile from address: ${e.message}", e)
         }
@@ -269,6 +286,8 @@ class ProfileManager(private val nostr: Nostr) {
             val profile = profileFromAddress(httpClient, address)
 
             return profile.publicKey()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search address: ${e.message}", e)
         }
@@ -304,6 +323,8 @@ class ProfileManager(private val nostr: Nostr) {
             }
 
             return results
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to search nostr: ${e.message}", e)
         }
@@ -323,6 +344,8 @@ class ProfileManager(private val nostr: Nostr) {
             )
 
             return events?.first()?.createdAt()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get latest activity: ${e.message}", e)
         }
@@ -340,6 +363,8 @@ class ProfileManager(private val nostr: Nostr) {
             val pubkeys = events?.first()?.tags()?.publicKeys() ?: listOf()
 
             return pubkeys.contains(pubkey)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
         }
@@ -361,6 +386,8 @@ class ProfileManager(private val nostr: Nostr) {
             }
 
             return contacts.toSet()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get mutual contacts: ${e.message}", e)
         }

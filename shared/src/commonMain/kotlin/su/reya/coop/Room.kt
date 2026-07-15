@@ -112,13 +112,8 @@ fun UnsignedEvent.roomId(): Long {
     val pubkeys: MutableList<PublicKey> = mutableListOf()
     pubkeys.add(this.author())
     pubkeys.addAll(this.tags().publicKeys())
-
-    // Sort and hash the list of public keys
-    val sortedUniqueKeys = pubkeys
-        .distinctBy { it.toBech32() }
-        .sortedBy { it.toBech32() }
-
-    return sortedUniqueKeys.hashCode().toLong()
+    
+    return pubkeys.map { it.toBech32() }.distinct().sorted().hashCode().toLong()
 }
 
 fun Timestamp.formatAsTime(): String {

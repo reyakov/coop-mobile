@@ -51,13 +51,16 @@ class ChatRepository(
     )
     val newEvents = _newEvents.asSharedFlow()
 
-    val chatRooms = state.map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
+    val chatRooms = state
+        .map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val isSyncing = nostr.messages.messageSyncState.map { it.isSyncing }
+    val isSyncing = nostr.messages.messageSyncState
+        .map { it.isSyncing }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), false)
 
-    val isPartialProcessedGiftWrap = state.map { it.isPartialProcessedGiftWrap }
+    val isPartialProcessedGiftWrap = state
+        .map { it.isPartialProcessedGiftWrap }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), false)
 
     init {

@@ -18,7 +18,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class ProfileCache(
     private val nostr: Nostr,
-    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ErrorHost by createErrorHost() {
     private val scope = CoroutineScope(SupervisorJob() + defaultDispatcher)
     private val profiles = MutableStateFlow<Map<PublicKey, MutableStateFlow<Profile?>>>(emptyMap())
