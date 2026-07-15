@@ -6,11 +6,14 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -24,6 +27,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.util.Consumer
 import androidx.lifecycle.ViewModel
@@ -230,26 +235,34 @@ fun App(
                         NewIdentityScreen(accountViewModel)
                     }
                     entry<Screen.Chat> { key ->
-                        val factory = remember(key) {
-                            object : ViewModelProvider.Factory {
-                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    @Suppress("UNCHECKED_CAST")
-                                    return ChatScreenViewModel(
-                                        key.id,
-                                        key.screening,
-                                        accountRepository,
-                                        chatRepository
-                                    ) as T
+                        val initialRoom = remember(key.id) { chatRepository.getChatRoom(key.id) }
+                        
+                        if (initialRoom != null) {
+                            val factory = remember(initialRoom) {
+                                object : ViewModelProvider.Factory {
+                                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                        return ChatScreenViewModel(
+                                            initialRoom,
+                                            key.screening,
+                                            accountRepository,
+                                            chatRepository
+                                        ) as T
+                                    }
                                 }
                             }
+                            ChatScreen(
+                                viewModel<ChatScreenViewModel>(
+                                    key = key.id.toString(),
+                                    factory = factory
+                                ),
+                                accountViewModel
+                            )
+                        } else {
+                            // Handle the rare case where the room isn't in DB (e.g., invalid deep link)
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Room not found")
+                            }
                         }
-                        ChatScreen(
-                            viewModel<ChatScreenViewModel>(
-                                key = key.id.toString(),
-                                factory = factory
-                            ),
-                            accountViewModel
-                        )
                     }
                     entry<Screen.NewChat> {
                         NewChatScreen(accountViewModel, chatViewModel)
