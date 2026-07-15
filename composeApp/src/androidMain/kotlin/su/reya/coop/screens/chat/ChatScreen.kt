@@ -94,11 +94,12 @@ import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
 import su.reya.coop.LocalSnackbarHostState
+import su.reya.coop.Room
 import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
-import su.reya.coop.flow
 import su.reya.coop.formatAsGroup
 import su.reya.coop.shared.Avatar
+import su.reya.coop.uiStateFlow
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatScreenViewModel
 
@@ -117,11 +118,25 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    val id = viewModel.id
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
-    val pubkey = currentUser?.publicKey
+    val chatRooms by viewModel.chatRooms.collectAsStateWithLifecycle()
+    val room by remember(id) { derivedStateOf { chatRooms.firstOrNull { it.id == id } } }
 
-    val room by viewModel.room.collectAsStateWithLifecycle()
-    val roomState by room.flow(profileCache, pubkey).collectAsStateWithLifecycle(RoomUiState())
+    // Show empty screen
+    if (room == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Something went wrong.",
+                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        return
+    }
 
     val loading = viewModel.loading
     val newOtherMessages = viewModel.newOtherMessages
@@ -130,6 +145,9 @@ fun ChatScreen(
 
     val groupedMessages =
         remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroup() } } }
+
+    val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
+        .collectAsStateWithLifecycle(RoomUiState())
 
     var text by remember { mutableStateOf("") }
     var selectedMessage by remember { mutableStateOf<Pair<MessageModel, Rect>?>(null) }
@@ -175,7 +193,9 @@ fun ChatScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
         Scaffold(
             modifier = Modifier.blur(blurAmount),
             contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
@@ -187,7 +207,7 @@ fun ChatScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable {
-                                room.members.firstOrNull()?.let { pubkey ->
+                                room?.members?.firstOrNull()?.let { pubkey ->
                                     navigator.navigate(Screen.Profile(pubkey.toBech32()))
                                 }
                             }
@@ -245,7 +265,7 @@ fun ChatScreen(
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
                         if (requireScreening) {
-                            ScreenerCard(accountViewModel, room)
+                            room?.let { ScreenerCard(accountViewModel, it) }
                         }
 
                         when (messages.isNotEmpty()) {
@@ -263,7 +283,8 @@ fun ChatScreen(
                                             items = messagesInGroup,
                                             key = { it.ensureId().id()?.toHex()!! }
                                         ) { event ->
-                                            val model = rememberMessageModel(event, pubkey)
+                                            val model =
+                                                rememberMessageModel(event, currentUser?.publicKey)
 
                                             val replyPreview =
                                                 remember(model.replyEventIds, messages.size) {
@@ -277,9 +298,7 @@ fun ChatScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
-                                                replyPreview?.let {
-                                                    ReplyPreview(it, model.isMine)
-                                                }
+                                                replyPreview?.let { ReplyPreview(it, model.isMine) }
                                                 ChatMessage(
                                                     model = model,
                                                     modifier = Modifier.graphicsLayer {

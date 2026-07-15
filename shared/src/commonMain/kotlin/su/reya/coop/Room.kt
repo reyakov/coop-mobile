@@ -71,7 +71,7 @@ data class RoomUiState(
     val isGroup: Boolean = false
 )
 
-fun Room.flow(
+fun Room.uiStateFlow(
     profileCache: ProfileCache,
     currentUser: PublicKey? = null
 ): Flow<RoomUiState> {
