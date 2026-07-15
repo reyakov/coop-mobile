@@ -98,9 +98,9 @@ import su.reya.coop.RoomKind
 import su.reya.coop.RoomUiState
 import su.reya.coop.Screen
 import su.reya.coop.ago
+import su.reya.coop.flow
 import su.reya.coop.shared.Avatar
 import su.reya.coop.shared.getExpressiveFontFamily
-import su.reya.coop.uiStateFlow
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 
@@ -620,9 +620,9 @@ fun NewRequests(requests: List<Room>) {
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstRoomState by (firstRoom as Room).uiStateFlow(profileCache)
+    val firstRoomState by (firstRoom as Room).flow(profileCache)
         .collectAsStateWithLifecycle(RoomUiState())
-    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(profileCache)
+    val secondRoomState by (secondRoom ?: firstRoom).flow(profileCache)
         .collectAsStateWithLifecycle(RoomUiState())
 
     val supportingText = when {
@@ -695,8 +695,7 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val profileCache = LocalProfileCache.current
-    val roomState by room.uiStateFlow(profileCache)
-        .collectAsStateWithLifecycle(RoomUiState())
+    val roomState by room.flow(profileCache).collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
