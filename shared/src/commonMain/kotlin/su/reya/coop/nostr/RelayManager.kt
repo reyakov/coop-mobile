@@ -130,7 +130,7 @@ class RelayManager(private val nostr: Nostr) {
         }
     }
 
-    suspend fun setRelaylist(relays: Map<RelayUrl, RelayMetadata?>) {
+    suspend fun setRelayList(relays: Map<RelayUrl, RelayMetadata?>) {
         try {
             val event = EventBuilder.relayList(relays).finalizeAsync(signer)
 
@@ -143,7 +143,7 @@ class RelayManager(private val nostr: Nostr) {
             throw IllegalStateException("Failed to set msg relays: ${e.message}", e)
         }
     }
-    
+
     suspend fun setMsgRelays(urls: List<RelayUrl>) {
         try {
             val event = EventBuilder.nip17RelayList(urls).finalizeAsync(signer)

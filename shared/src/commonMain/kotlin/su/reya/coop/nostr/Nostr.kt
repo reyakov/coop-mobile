@@ -174,8 +174,6 @@ class Nostr(
 
             when (notification) {
                 is ClientNotification.Message -> {
-                    val relayUrl = notification.relayUrl
-
                     when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
@@ -226,14 +224,6 @@ class Nostr(
                                 if (giftWrapQueue.isEmpty) {
                                     messages.updateSyncState { it.copy(isSyncing = false) }
                                 }
-                            }
-                        }
-
-                        is RelayMessageEnum.Ok -> {
-                            if (messages.sentEvents.containsKey(message.eventId)) {
-                                val currentRelays =
-                                    messages.sentEvents[message.eventId] ?: emptyList()
-                                messages.sentEvents[message.eventId] = currentRelays + relayUrl
                             }
                         }
 

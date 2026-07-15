@@ -39,11 +39,10 @@ class MessageManager(private val nostr: Nostr) {
     private val client: Client? get() = nostr.client
     private val signer: UniversalSigner get() = nostr.signer
 
-    val sentEvents: MutableMap<EventId, List<RelayUrl>> = mutableMapOf()
-    val rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
-
     private val _messageSyncState = MutableStateFlow(MessageSyncState())
     val messageSyncState = _messageSyncState.asStateFlow()
+
+    val rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
 
     fun updateSyncState(update: (MessageSyncState) -> MessageSyncState) {
         _messageSyncState.update(update)
@@ -333,9 +332,6 @@ class MessageManager(private val nostr: Nostr) {
                 )
 
                 if (output != null) {
-                    // Keep track of sent events
-                    sentEvents[output.id] = emptyList()
-
                     // Keep track of rumor IDs
                     val id = rumor.id() ?: throw IllegalStateException("Rumor ID is null")
                     rumorMap[id] = output.id
