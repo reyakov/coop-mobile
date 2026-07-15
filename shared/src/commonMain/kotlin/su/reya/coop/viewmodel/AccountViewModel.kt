@@ -13,7 +13,6 @@ import su.reya.coop.repository.AccountState
 class AccountViewModel(
     private val repository: AccountRepository,
 ) : ViewModel(), ErrorHost by repository {
-
     val state: StateFlow<AccountState> = repository.state
     val isUpdatingProfile: StateFlow<Boolean> = repository.isUpdatingProfile
     val currentUserProfile: StateFlow<Profile?> = repository.currentUserProfile

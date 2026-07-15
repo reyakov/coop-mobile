@@ -397,7 +397,7 @@ fun ContactListItem(
         supportingContent = { Text(text = pubkey.short()) },
         content = {
             Text(
-                text = profile?.name ?: "",
+                text = profile?.name ?: "Unknown",
                 style = MaterialTheme.typography.titleMediumEmphasized,
             )
         }

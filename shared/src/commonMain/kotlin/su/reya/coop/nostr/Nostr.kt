@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
 import rust.nostr.sdk.AsyncNostrSigner
 import rust.nostr.sdk.Client
 import rust.nostr.sdk.ClientBuilder
@@ -108,14 +108,6 @@ class Nostr(
         relays.connectBootstrapRelays()
     }
 
-    suspend fun reconnect() {
-        relays.reconnect()
-    }
-
-    suspend fun disconnect() {
-        relays.disconnect()
-    }
-
     suspend fun prune() {
         try {
             client?.database()?.wipe()
@@ -182,8 +174,6 @@ class Nostr(
 
             when (notification) {
                 is ClientNotification.Message -> {
-                    val relayUrl = notification.relayUrl
-
                     when (val message = notification.message.asEnum()) {
                         is RelayMessageEnum.EventMsg -> {
                             val event = message.event
@@ -234,14 +224,6 @@ class Nostr(
                                 if (giftWrapQueue.isEmpty) {
                                     messages.updateSyncState { it.copy(isSyncing = false) }
                                 }
-                            }
-                        }
-
-                        is RelayMessageEnum.Ok -> {
-                            if (messages.sentEvents.containsKey(message.eventId)) {
-                                val currentRelays =
-                                    messages.sentEvents[message.eventId] ?: emptyList()
-                                messages.sentEvents[message.eventId] = currentRelays + relayUrl
                             }
                         }
 

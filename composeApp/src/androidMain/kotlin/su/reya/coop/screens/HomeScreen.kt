@@ -695,8 +695,7 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val profileCache = LocalProfileCache.current
-    val roomState by room.uiStateFlow(profileCache)
-        .collectAsStateWithLifecycle(RoomUiState())
+    val roomState by room.uiStateFlow(profileCache).collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

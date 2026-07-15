@@ -39,11 +39,10 @@ class MessageManager(private val nostr: Nostr) {
     private val client: Client? get() = nostr.client
     private val signer: UniversalSigner get() = nostr.signer
 
-    val sentEvents: MutableMap<EventId, List<RelayUrl>> = mutableMapOf()
-    val rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
-
     private val _messageSyncState = MutableStateFlow(MessageSyncState())
     val messageSyncState = _messageSyncState.asStateFlow()
+
+    val rumorMap: MutableMap<EventId, EventId> = mutableMapOf()
 
     fun updateSyncState(update: (MessageSyncState) -> MessageSyncState) {
         _messageSyncState.update(update)
@@ -73,6 +72,8 @@ class MessageManager(private val nostr: Nostr) {
                 target = ReqTarget.manual(target),
                 id = "gift-wraps"
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch user messages: ${e.message}", e)
         }
@@ -225,6 +226,8 @@ class MessageManager(private val nostr: Nostr) {
                 // Filter out events without public keys (receivers)
                 ?.filter { it.tags().publicKeys().isNotEmpty() }
                 ?.sortedByDescending { it.createdAt().asSecs() } ?: emptyList()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to get chat room messages: ${e.message}", e)
         }
@@ -248,6 +251,8 @@ class MessageManager(private val nostr: Nostr) {
                     connectMsgRelays(event)
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to fetch relays: ${e.message}", e)
         }
@@ -327,9 +332,6 @@ class MessageManager(private val nostr: Nostr) {
                 )
 
                 if (output != null) {
-                    // Keep track of sent events
-                    sentEvents[output.id] = emptyList()
-
                     // Keep track of rumor IDs
                     val id = rumor.id() ?: throw IllegalStateException("Rumor ID is null")
                     rumorMap[id] = output.id
@@ -340,6 +342,8 @@ class MessageManager(private val nostr: Nostr) {
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to send message: ${e.message}", e)
         }

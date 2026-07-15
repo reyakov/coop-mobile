@@ -511,7 +511,7 @@ class AccountRepository(
                 val relays = currentUserRelayListInternal().toMutableMap()
                 relays[relayUrl] = RelayMetadata.WRITE
 
-                nostr.relays.setRelaylist(relays)
+                nostr.relays.setRelayList(relays)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -525,7 +525,7 @@ class AccountRepository(
                 val relays = currentUserRelayListInternal().toMutableMap()
                 relays[relayUrl] = RelayMetadata.READ
 
-                nostr.relays.setRelaylist(relays)
+                nostr.relays.setRelayList(relays)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -539,7 +539,7 @@ class AccountRepository(
                 val relays = currentUserRelayListInternal().toMutableMap()
                 relays.remove(relayUrl)
 
-                nostr.relays.setRelaylist(relays)
+                nostr.relays.setRelayList(relays)
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }

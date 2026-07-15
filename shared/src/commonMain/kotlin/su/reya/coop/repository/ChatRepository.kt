@@ -51,13 +51,16 @@ class ChatRepository(
     )
     val newEvents = _newEvents.asSharedFlow()
 
-    val chatRooms = state.map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
+    val chatRooms = state
+        .map { it.rooms.values.sortedByDescending { it.createdAt.asSecs() } }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val isSyncing = nostr.messages.messageSyncState.map { it.isSyncing }
+    val isSyncing = nostr.messages.messageSyncState
+        .map { it.isSyncing }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), false)
 
-    val isPartialProcessedGiftWrap = state.map { it.isPartialProcessedGiftWrap }
+    val isPartialProcessedGiftWrap = state
+        .map { it.isPartialProcessedGiftWrap }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
@@ -82,18 +85,7 @@ class ChatRepository(
             // Observe new messages
             launch {
                 nostr.newEvents.collect { event ->
-                    val roomId = event.roomId()
-                    val existingRoom = _state.value.rooms[roomId]
-
-                    if (existingRoom == null) {
-                        val currentUser = nostr.signer.getPublicKeyAsync() ?: return@collect
-                        val newRoom = Room.new(event, currentUser)
-                        _state.update { it.copy(rooms = it.rooms + (newRoom.id to newRoom)) }
-                    } else {
-                        updateRoomList(roomId, event)
-                    }
-
-                    _newEvents.tryEmit(event)
+                    updateRoomState(event)
                 }
             }
         }
@@ -194,9 +186,10 @@ class ChatRepository(
                     content = message,
                     subject = room.subject,
                     replies = replies,
-                    onRumorCreated = { event ->
-                        updateRoomList(roomId, event)
-                        scope.launch(defaultDispatcher) { _newEvents.tryEmit(event) }
+                    onRumorCreated = {
+                        scope.launch(defaultDispatcher) {
+                            updateRoomState(it, roomId)
+                        }
                     },
                 )
             } catch (e: Exception) {
@@ -223,26 +216,32 @@ class ChatRepository(
         }
     }
 
-    fun isMessageSent(id: EventId): Boolean {
-        val giftWrapId = nostr.messages.rumorMap[id]
+    private suspend fun updateRoomState(event: UnsignedEvent, roomId: Long = event.roomId()) {
+        val currentUser = nostr.signer.getPublicKeyAsync() ?: return
 
-        if (giftWrapId != null) {
-            val isSent = nostr.messages.sentEvents[giftWrapId]?.isNotEmpty() ?: false
-            return isSent
-        } else {
-            return false
-        }
-    }
-
-    private fun updateRoomList(roomId: Long, newMessage: UnsignedEvent) {
         _state.update { currentState ->
-            val room = currentState.rooms[roomId] ?: return@update currentState
-            val updatedRoom = room.copy(
-                lastMessage = newMessage.content(),
-                createdAt = newMessage.createdAt()
-            )
-            currentState.copy(rooms = currentState.rooms + (roomId to updatedRoom))
+            val rooms = currentState.rooms.toMutableMap()
+            val existingRoom = rooms[roomId]
+
+            if (existingRoom == null) {
+                // New room discovery
+                val newRoom = Room.new(event, currentUser, roomId)
+                rooms[newRoom.id] = newRoom
+            } else if (event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
+                // Only update preview if message is newer (handles sync/late arrivals)
+                rooms[roomId] = existingRoom.copy(
+                    lastMessage = event.content(),
+                    createdAt = event.createdAt()
+                )
+            } else {
+                // Don't update the room list state for older messages
+                return@update currentState
+            }
+            currentState.copy(rooms = rooms)
         }
+
+        // Notify subscribers about the new event (for the active chat screen)
+        _newEvents.tryEmit(event)
     }
 
     fun resetInternalState() {
