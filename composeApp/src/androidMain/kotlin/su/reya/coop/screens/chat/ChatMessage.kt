@@ -1,10 +1,5 @@
 package su.reya.coop.screens.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -177,11 +172,7 @@ fun ChatMessage(
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = isMessageClicked,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
+            if (isMessageClicked) {
                 Text(
                     text = model.timestamp,
                     style = MaterialTheme.typography.labelSmall,

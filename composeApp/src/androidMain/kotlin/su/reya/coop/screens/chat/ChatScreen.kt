@@ -383,8 +383,10 @@ fun ChatScreen(
                             }
 
                             else -> {
-                                replyingTo?.let {
-                                    ReplyBox(it) { replyingTo = null }
+                                AnimatedVisibility(visible = replyingTo != null) {
+                                    replyingTo?.let {
+                                        ReplyBox(it) { replyingTo = null }
+                                    }
                                 }
                                 ChatInput(
                                     value = text,
@@ -423,7 +425,6 @@ fun ChatScreen(
                 }
             }
         )
-
         AnimatedVisibility(
             visible = selectedMessage != null,
             enter = fadeIn(),
