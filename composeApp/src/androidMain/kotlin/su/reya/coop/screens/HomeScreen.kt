@@ -86,6 +86,7 @@ import coop.composeapp.generated.resources.ic_new_chat
 import coop.composeapp.generated.resources.ic_qr
 import coop.composeapp.generated.resources.ic_request
 import coop.composeapp.generated.resources.ic_scanner
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.PublicKey
@@ -372,10 +373,14 @@ fun HomeScreen(
                                 }
 
                                 items(ongoing, key = { it.id }) { room ->
-                                    ChatRoom(
-                                        room = room,
-                                        onClick = { navigator.navigate(Screen.Chat(room.id)) }
-                                    )
+                                    Row(
+                                        modifier = Modifier.animateItem()
+                                    ) {
+                                        ChatRoom(
+                                            room = room,
+                                            onClick = { navigator.navigate(Screen.Chat(room.id)) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -620,13 +625,16 @@ fun NewRequests(requests: List<Room>) {
     val firstRoom = requests.getOrNull(0)
     val secondRoom = requests.getOrNull(1)
 
-    val firstRoomState by (firstRoom as Room).uiStateFlow(profileCache)
-        .collectAsStateWithLifecycle(RoomUiState())
-    val secondRoomState by (secondRoom ?: firstRoom).uiStateFlow(profileCache)
-        .collectAsStateWithLifecycle(RoomUiState())
+    val firstRoomState by remember(firstRoom?.id) {
+        firstRoom?.uiStateFlow(profileCache) ?: flowOf(RoomUiState())
+    }.collectAsStateWithLifecycle(RoomUiState())
+
+    val secondRoomState by remember(secondRoom?.id) {
+        (secondRoom ?: firstRoom)?.uiStateFlow(profileCache) ?: flowOf(RoomUiState())
+    }.collectAsStateWithLifecycle(RoomUiState())
 
     val supportingText = when {
-        total == 1 -> {
+        total == 1 && firstRoom != null -> {
             val message = firstRoom.lastMessage ?: ""
             "${firstRoomState.name}: $message"
         }
@@ -695,7 +703,8 @@ fun NewRequests(requests: List<Room>) {
 @Composable
 fun ChatRoom(room: Room, onClick: () -> Unit) {
     val profileCache = LocalProfileCache.current
-    val roomState by room.uiStateFlow(profileCache).collectAsStateWithLifecycle(RoomUiState())
+    val roomState by remember(room.id) { room.uiStateFlow(profileCache) }
+        .collectAsStateWithLifecycle(RoomUiState())
 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

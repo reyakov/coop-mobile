@@ -146,8 +146,9 @@ fun ChatScreen(
     val groupedMessages =
         remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroup() } } }
 
-    val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
-        .collectAsStateWithLifecycle(RoomUiState())
+    val roomState by remember(id, currentUser?.publicKey) {
+        (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
+    }.collectAsStateWithLifecycle(RoomUiState())
 
     var text by remember { mutableStateOf("") }
     var selectedMessage by remember { mutableStateOf<Pair<MessageModel, Rect>?>(null) }
