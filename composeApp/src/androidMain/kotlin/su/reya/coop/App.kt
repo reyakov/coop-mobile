@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -132,10 +131,6 @@ fun App(
         darkMode -> darkColorScheme()
         // Fallback to the light color scheme
         else -> expressiveLightColorScheme()
-    }
-
-    BackHandler(enabled = backStack.size > 1) {
-        navigator.goBack()
     }
 
     LaunchedEffect(Unit) {
