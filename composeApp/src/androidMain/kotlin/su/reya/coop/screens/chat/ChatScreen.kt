@@ -296,7 +296,9 @@ fun ChatScreen(
                                                 }
 
                                             Column(
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .animateItem(),
                                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
                                                 replyPreview?.let { ReplyPreview(it, model.isMine) }
