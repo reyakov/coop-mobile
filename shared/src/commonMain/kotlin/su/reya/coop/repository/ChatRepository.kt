@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -21,6 +22,7 @@ import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.Tag
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.Room
+import su.reya.coop.RoomKind
 import su.reya.coop.nostr.Nostr
 import su.reya.coop.roomId
 import su.reya.coop.viewmodel.ErrorHost
@@ -38,11 +40,7 @@ class ChatRepository(
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ErrorHost by createErrorHost() {
     private val _state = MutableStateFlow(ChatState())
-    val state = _state.stateIn(
-        scope,
-        SharingStarted.WhileSubscribed(5000),
-        ChatState()
-    )
+    val state = _state.asStateFlow()
 
     private val _newEvents = MutableSharedFlow<UnsignedEvent>(
         replay = 0,
@@ -134,10 +132,19 @@ class ChatRepository(
     fun refreshChatRooms() {
         scope.launch(defaultDispatcher) {
             try {
-                val rooms = nostr.messages.getChatRooms() ?: emptySet()
+                val dbRooms = nostr.messages.getChatRooms() ?: emptySet()
                 _state.update { currentState ->
                     val newMap = currentState.rooms.toMutableMap()
-                    rooms.forEach { room -> newMap[room.id] = room }
+                    dbRooms.forEach { dbRoom ->
+                        val existing = newMap[dbRoom.id]
+                        // Only update if the database version is newer or equal
+                        if (existing == null || dbRoom.createdAt.asSecs() >= existing.createdAt.asSecs()) {
+                            // Preserve Ongoing kind if already marked as such in memory
+                            val mergedKind =
+                                if (existing?.kind == RoomKind.Ongoing) RoomKind.Ongoing else dbRoom.kind
+                            newMap[dbRoom.id] = dbRoom.copy(kind = mergedKind)
+                        }
+                    }
                     currentState.copy(rooms = newMap)
                 }
             } catch (e: CancellationException) {
@@ -223,16 +230,24 @@ class ChatRepository(
             val rooms = currentState.rooms.toMutableMap()
             val existingRoom = rooms[roomId]
 
+            val isFromMe = event.author() == currentUser
+            val newKind =
+                if (isFromMe) RoomKind.Ongoing else (existingRoom?.kind ?: RoomKind.Request)
+
             if (existingRoom == null) {
                 // New room discovery
-                val newRoom = Room.new(event, currentUser, roomId)
+                val newRoom = Room.new(event, currentUser, roomId).copy(kind = newKind)
                 rooms[newRoom.id] = newRoom
             } else if (event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
                 // Only update preview if message is newer (handles sync/late arrivals)
                 rooms[roomId] = existingRoom.copy(
                     lastMessage = event.content(),
-                    createdAt = event.createdAt()
+                    createdAt = event.createdAt(),
+                    kind = newKind
                 )
+            } else if (isFromMe && existingRoom.kind != RoomKind.Ongoing) {
+                // Even if it's an older message, if it's from me, the room is ongoing
+                rooms[roomId] = existingRoom.copy(kind = RoomKind.Ongoing)
             } else {
                 // Don't update the room list state for older messages
                 return@update currentState

@@ -146,8 +146,9 @@ fun ChatScreen(
     val groupedMessages =
         remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroup() } } }
 
-    val roomState by (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
-        .collectAsStateWithLifecycle(RoomUiState())
+    val roomState by remember(id, currentUser?.publicKey) {
+        (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
+    }.collectAsStateWithLifecycle(RoomUiState())
 
     var text by remember { mutableStateOf("") }
     var selectedMessage by remember { mutableStateOf<Pair<MessageModel, Rect>?>(null) }
@@ -295,7 +296,9 @@ fun ChatScreen(
                                                 }
 
                                             Column(
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .animateItem(),
                                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
                                                 replyPreview?.let { ReplyPreview(it, model.isMine) }
@@ -380,8 +383,10 @@ fun ChatScreen(
                             }
 
                             else -> {
-                                replyingTo?.let {
-                                    ReplyBox(it) { replyingTo = null }
+                                AnimatedVisibility(visible = replyingTo != null) {
+                                    replyingTo?.let {
+                                        ReplyBox(it) { replyingTo = null }
+                                    }
                                 }
                                 ChatInput(
                                     value = text,
@@ -420,7 +425,6 @@ fun ChatScreen(
                 }
             }
         )
-
         AnimatedVisibility(
             visible = selectedMessage != null,
             enter = fadeIn(),
