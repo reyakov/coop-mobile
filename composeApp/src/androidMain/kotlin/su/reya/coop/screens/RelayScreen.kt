@@ -100,8 +100,9 @@ fun RelayScreen(viewModel: AccountViewModel) {
         viewModel.loadCurrentUserMsgRelayList()
     }
 
-    val loadedRelayList by viewModel.userRelayList.collectAsStateWithLifecycle()
-    val loadedMsgRelayList by viewModel.userMsgRelayList.collectAsStateWithLifecycle()
+    val accountState by viewModel.state.collectAsStateWithLifecycle()
+    val loadedRelayList = accountState.userRelayList
+    val loadedMsgRelayList = accountState.userMsgRelayList
 
     LaunchedEffect(loadedRelayList) {
         if (loadedRelayList.isNotEmpty()) {

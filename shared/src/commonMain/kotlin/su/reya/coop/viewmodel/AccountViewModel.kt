@@ -3,8 +3,6 @@ package su.reya.coop.viewmodel
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.StateFlow
 import rust.nostr.sdk.PublicKey
-import rust.nostr.sdk.RelayMetadata
-import rust.nostr.sdk.RelayUrl
 import rust.nostr.sdk.Timestamp
 import su.reya.coop.Profile
 import su.reya.coop.repository.AccountRepository
@@ -16,10 +14,6 @@ class AccountViewModel(
     val state: StateFlow<AccountState> = repository.state
     val isUpdatingProfile: StateFlow<Boolean> = repository.isUpdatingProfile
     val currentUserProfile: StateFlow<Profile?> = repository.currentUserProfile
-    val contactList: StateFlow<Set<PublicKey>> = repository.contactList
-    val isRelayListEmpty: StateFlow<Boolean> = repository.isRelayListEmpty
-    val userRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> = repository.userRelayList
-    val userMsgRelayList: StateFlow<List<RelayUrl>> = repository.userMsgRelayList
 
     fun logout(onLogout: () -> Unit = {}) = repository.logout(onLogout)
     fun dismissNotificationBanner() = repository.dismissNotificationBanner()
