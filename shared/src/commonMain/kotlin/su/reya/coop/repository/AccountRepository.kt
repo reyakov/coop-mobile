@@ -57,6 +57,7 @@ class AccountRepository(
     private val nostr: Nostr,
     private val storage: AppStorage,
     private val mediaRepository: MediaRepository,
+    private val settingsRepository: SettingsRepository,
     private val scope: CoroutineScope,
     private val externalSignerHandler: ExternalSignerHandler? = null,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -75,9 +76,7 @@ class AccountRepository(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentUserProfile: StateFlow<Profile?> = nostr.signer.publicKeyFlow
-        .flatMapLatest { pubkey ->
-            if (pubkey != null) currentUserProfileFlow(pubkey) else flowOf(null)
-        }
+        .flatMapLatest { if (it != null) currentUserProfileFlow(it) else flowOf(null) }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
