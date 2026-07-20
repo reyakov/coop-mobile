@@ -760,7 +760,7 @@ fun BottomMenuList(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
         "Contact List" to { navigator.navigate(Screen.ContactList) },
         "Relay Management" to { navigator.navigate(Screen.Relay) },
-        "Settings" to { }
+        "Settings" to { navigator.navigate(Screen.Settings) }
     )
 
     Column(

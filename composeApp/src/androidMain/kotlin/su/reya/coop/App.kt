@@ -51,6 +51,7 @@ import su.reya.coop.screens.ProfileScreen
 import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
+import su.reya.coop.screens.SettingsScreen
 import su.reya.coop.screens.UpdateProfileScreen
 import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.viewmodel.AccountViewModel
@@ -292,6 +293,9 @@ fun App(
                     }
                     entry<Screen.Relay> {
                         RelayScreen(accountViewModel)
+                    }
+                    entry<Screen.Settings> {
+                        SettingsScreen(settingsViewModel)
                     }
                 }
             )
