@@ -11,10 +11,10 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,8 +28,6 @@ private const val GROUP_KEY_MESSAGES = "su.reya.coop.MESSAGES"
 
 class NostrForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     private val nostr by lazy { NostrManager.instance }
     private var notificationJob: Job? = null
 
@@ -190,5 +188,14 @@ class NostrForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            Log.d("Coop", "Stopping service on task removed because notifications are disabled")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 }
