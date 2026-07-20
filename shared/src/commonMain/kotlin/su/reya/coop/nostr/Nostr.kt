@@ -154,7 +154,10 @@ class Nostr(
 
                 // Trigger new message notification
                 if (rumor != null) {
-                    if (rumor.createdAt().asSecs() >= now.asSecs()) {
+                    val isSelfMessage = rumor.author() == signer.publicKeyFlow.value
+                    val isNew = rumor.createdAt().asSecs() >= now.asSecs()
+
+                    if (isNew && !isSelfMessage) {
                         onNewMessage(rumor)
                     }
                 }
