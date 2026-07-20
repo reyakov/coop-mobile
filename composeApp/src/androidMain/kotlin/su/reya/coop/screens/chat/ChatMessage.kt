@@ -38,6 +38,9 @@ import coil3.compose.AsyncImage
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.UnsignedEvent
+import su.reya.coop.LocalConnectivity
+import su.reya.coop.LocalSettings
+import su.reya.coop.MediaConfig
 import su.reya.coop.URL_REGEX
 import su.reya.coop.formatAsTime
 import su.reya.coop.isImageUrl
@@ -56,14 +59,27 @@ data class MessageModel(
 
 @Composable
 fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): MessageModel {
-    return remember(event, currentUser) {
+    val settings = LocalSettings.current
+    val isMobileData = LocalConnectivity.current
+
+    return remember(event, currentUser, settings, isMobileData) {
         val id = event.ensureId().id()!!
         val isMine = currentUser == event.author()
         val content = event.content()
         val replyEventIds = event.tags().eventIds()
 
-        val images = URL_REGEX.findAll(content).map { it.value }.filter { it.isImageUrl() }.toList()
-        val cleanedContent = content.removeImageUrls()
+        val showMedia = when (settings.media) {
+            MediaConfig.AlwaysEnabled -> true
+            MediaConfig.Disabled -> false
+            MediaConfig.DisabledForMobileData -> !isMobileData
+        }
+
+        val images = if (showMedia) {
+            URL_REGEX.findAll(content).map { it.value }.filter { it.isImageUrl() }.toList()
+        } else {
+            emptyList()
+        }
+        val cleanedContent = if (showMedia) content.removeImageUrls() else content
 
         val annotatedString = buildAnnotatedString {
             var lastIndex = 0

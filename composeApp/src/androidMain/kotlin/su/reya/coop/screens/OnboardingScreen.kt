@@ -70,13 +70,6 @@ fun OnboardingScreen(viewModel: AccountViewModel) {
         }
     }
 
-    // Show connection errors
-    LaunchedEffect(accountState.importError) {
-        accountState.importError?.let {
-            snackbarHostState.showSnackbar(it)
-        }
-    }
-
     val logoPainter = painterResource(Res.drawable.coop)
     val expressiveFont = getExpressiveFontFamily()
 

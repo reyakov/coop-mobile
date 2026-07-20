@@ -39,6 +39,7 @@ import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.launch
 import su.reya.coop.repository.AccountRepository
 import su.reya.coop.repository.ChatRepository
+import su.reya.coop.repository.SettingsRepository
 import su.reya.coop.screens.ContactListScreen
 import su.reya.coop.screens.HomeScreen
 import su.reya.coop.screens.ImportScreen
@@ -50,15 +51,25 @@ import su.reya.coop.screens.ProfileScreen
 import su.reya.coop.screens.RelayScreen
 import su.reya.coop.screens.RequestListScreen
 import su.reya.coop.screens.ScanScreen
+import su.reya.coop.screens.SettingsScreen
 import su.reya.coop.screens.UpdateProfileScreen
 import su.reya.coop.screens.chat.ChatScreen
 import su.reya.coop.viewmodel.AccountViewModel
 import su.reya.coop.viewmodel.ChatScreenViewModel
 import su.reya.coop.viewmodel.ChatViewModel
 import su.reya.coop.viewmodel.ProfileCache
+import su.reya.coop.viewmodel.SettingsViewModel
 
 val LocalProfileCache = staticCompositionLocalOf<ProfileCache> {
     error("No ProfileCache provided")
+}
+
+val LocalSettings = staticCompositionLocalOf<Settings> {
+    error("No Settings provided")
+}
+
+val LocalConnectivity = staticCompositionLocalOf<Boolean> {
+    false
 }
 
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
@@ -79,6 +90,8 @@ fun App(
     profileCache: ProfileCache,
     accountRepository: AccountRepository,
     chatRepository: ChatRepository,
+    settingsRepository: SettingsRepository,
+    connectivityMonitor: ConnectivityMonitor,
 ) {
     val viewModelFactory = remember {
         object : ViewModelProvider.Factory {
@@ -92,6 +105,10 @@ fun App(
                         accountRepository
                     )
 
+                    modelClass.isAssignableFrom(SettingsViewModel::class.java) -> SettingsViewModel(
+                        settingsRepository
+                    )
+
                     else -> throw IllegalArgumentException("Unknown ViewModel class")
                 }
                 @Suppress("UNCHECKED_CAST")
@@ -102,6 +119,7 @@ fun App(
 
     val accountViewModel: AccountViewModel = viewModel(factory = viewModelFactory)
     val chatViewModel: ChatViewModel = viewModel(factory = viewModelFactory)
+    val settingsViewModel: SettingsViewModel = viewModel(factory = viewModelFactory)
 
     val context = LocalContext.current
     val activity = context as? ComponentActivity
@@ -113,19 +131,27 @@ fun App(
     val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val signerRequired = accountState.signerRequired
 
+    // Get the settings
+    val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+
+    // Get connectivity status
+    val isMobileData by connectivityMonitor.isMobileData.collectAsStateWithLifecycle()
+
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Check if dark theme enabled
-    val darkMode = isSystemInDarkTheme()
+    val darkMode = when (settings.theme) {
+        Theme.Light -> false
+        Theme.Dark -> true
+        Theme.System -> isSystemInDarkTheme()
+    }
 
     // Enabled the dynamic color scheme
     val colorScheme = when {
         // Enable the dynamic color scheme for Android 12+
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(
-                context
-            )
+        settings.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (darkMode) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         // When dark mode is enabled, use the dark color scheme
         darkMode -> darkColorScheme()
@@ -190,11 +216,12 @@ fun App(
     ) {
         CompositionLocalProvider(
             LocalProfileCache provides profileCache,
+            LocalSettings provides settings,
+            LocalConnectivity provides isMobileData,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,
         ) {
-
             NavDisplay(
                 backStack = backStack,
                 onBack = {
@@ -266,6 +293,9 @@ fun App(
                     }
                     entry<Screen.Relay> {
                         RelayScreen(accountViewModel)
+                    }
+                    entry<Screen.Settings> {
+                        SettingsScreen(settingsViewModel)
                     }
                 }
             )

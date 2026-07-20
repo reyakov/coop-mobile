@@ -47,13 +47,17 @@ data class AccountState(
     val signerRequired: Boolean? = null,
     val isNotificationBannerDismissed: Boolean = false,
     val isImporting: Boolean = false,
-    val importError: String? = null,
+    val isRelayListEmpty: Boolean = false,
+    val contactList: Set<PublicKey> = emptySet(),
+    val userRelayList: Map<RelayUrl, RelayMetadata?> = emptyMap(),
+    val userMsgRelayList: List<RelayUrl> = emptyList(),
 )
 
 class AccountRepository(
     private val nostr: Nostr,
     private val storage: AppStorage,
     private val mediaRepository: MediaRepository,
+    private val settingsRepository: SettingsRepository,
     private val scope: CoroutineScope,
     private val externalSignerHandler: ExternalSignerHandler? = null,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -72,22 +76,8 @@ class AccountRepository(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentUserProfile: StateFlow<Profile?> = nostr.signer.publicKeyFlow
-        .flatMapLatest { pubkey ->
-            if (pubkey != null) currentUserProfileFlow(pubkey) else flowOf(null)
-        }
+        .flatMapLatest { if (it != null) currentUserProfileFlow(it) else flowOf(null) }
         .stateIn(scope, SharingStarted.WhileSubscribed(5000), null)
-
-    private val _contactList = MutableStateFlow<Set<PublicKey>>(emptySet())
-    val contactList: StateFlow<Set<PublicKey>> = _contactList.asStateFlow()
-
-    private val _isRelayListEmpty = MutableStateFlow(false)
-    val isRelayListEmpty: StateFlow<Boolean> = _isRelayListEmpty.asStateFlow()
-
-    private val _userRelayList = MutableStateFlow<Map<RelayUrl, RelayMetadata?>>(emptyMap())
-    val userRelayList: StateFlow<Map<RelayUrl, RelayMetadata?>> = _userRelayList.asStateFlow()
-
-    private val _userMsgRelayList = MutableStateFlow<List<RelayUrl>>(emptyList())
-    val userMsgRelayList: StateFlow<List<RelayUrl>> = _userMsgRelayList.asStateFlow()
 
     init {
         checkNotificationBannerDismissedStatus()
@@ -116,7 +106,7 @@ class AccountRepository(
                     } ?: emptyList()
 
                     // Automatically update the warning state
-                    _isRelayListEmpty.value = relays.isEmpty()
+                    _state.update { it.copy(isRelayListEmpty = relays.isEmpty()) }
                 }
         }
     }
@@ -229,7 +219,7 @@ class AccountRepository(
 
     fun importIdentity(secret: String, password: String? = null) {
         scope.launch {
-            _state.update { it.copy(isImporting = true, importError = null) }
+            _state.update { it.copy(isImporting = true) }
             try {
                 val (signer, decryptedSecret) = createSigner(secret, password)
 
@@ -239,14 +229,14 @@ class AccountRepository(
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
             } catch (e: Exception) {
                 showError("Import failed: ${e.message}")
-                _state.update { it.copy(isImporting = false, importError = e.message) }
+                _state.update { it.copy(isImporting = false) }
             }
         }
     }
 
     fun connectExternalSigner() {
         scope.launch {
-            _state.update { it.copy(isImporting = true, importError = null) }
+            _state.update { it.copy(isImporting = true) }
             try {
                 val handler =
                     externalSignerHandler ?: throw IllegalStateException("Signer not available")
@@ -276,7 +266,7 @@ class AccountRepository(
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
             } catch (e: Exception) {
                 showError("External signer connection failed: ${e.message}")
-                _state.update { it.copy(isImporting = false, importError = e.message) }
+                _state.update { it.copy(isImporting = false) }
             }
         }
     }
@@ -288,7 +278,7 @@ class AccountRepository(
         contentType: String? = null
     ) {
         scope.launch {
-            _state.update { it.copy(isImporting = true, importError = null) }
+            _state.update { it.copy(isImporting = true) }
             try {
                 val keys = Keys.generate()
                 val secret = keys.secretKey().toBech32()
@@ -307,7 +297,7 @@ class AccountRepository(
                 _state.update { it.copy(signerRequired = false, isImporting = false) }
             } catch (e: Exception) {
                 showError("Identity creation failed: ${e.message}")
-                _state.update { it.copy(isImporting = false, importError = e.message) }
+                _state.update { it.copy(isImporting = false) }
             }
         }
     }
@@ -355,14 +345,13 @@ class AccountRepository(
         scope.launch {
             nostr.waitUntilInitialized()
             nostr.profiles.contactListUpdates.collect { contacts ->
-                _contactList.value = contacts.toSet()
+                _state.update { it.copy(contactList = contacts.toSet()) }
             }
         }
     }
 
     fun resetInternalState() {
-        _contactList.value = emptySet()
-        _isRelayListEmpty.value = false
+        _state.update { it.copy(contactList = emptySet(), isRelayListEmpty = false) }
     }
 
     fun addContact(address: String) {
@@ -378,12 +367,12 @@ class AccountRepository(
                 return@launch
             }
 
-            if (pubkey in _contactList.value) return@launch
+            if (pubkey in _state.value.contactList) return@launch
 
             try {
-                val updated = _contactList.value + pubkey
+                val updated = _state.value.contactList + pubkey
                 nostr.profiles.setContactList(updated.toList())
-                _contactList.update { it + pubkey }
+                _state.update { it.copy(contactList = it.contactList + pubkey) }
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -392,12 +381,12 @@ class AccountRepository(
 
     fun removeContact(publicKey: PublicKey) {
         scope.launch {
-            if (publicKey !in _contactList.value) return@launch
+            if (publicKey !in _state.value.contactList) return@launch
 
             try {
-                val updated = _contactList.value - publicKey
+                val updated = _state.value.contactList - publicKey
                 nostr.profiles.setContactList(updated.toList())
-                _contactList.update { it - publicKey }
+                _state.update { it.copy(contactList = it.contactList - publicKey) }
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -460,7 +449,7 @@ class AccountRepository(
     }
 
     fun dismissRelayWarning() {
-        _isRelayListEmpty.value = false
+        _state.update { it.copy(isRelayListEmpty = false) }
     }
 
     fun refetchMsgRelays() {
@@ -487,7 +476,8 @@ class AccountRepository(
         scope.launch {
             try {
                 val user = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-                _userRelayList.value = nostr.relays.getRelayList(user)
+                val relayList = nostr.relays.getRelayList(user)
+                _state.update { it.copy(userRelayList = relayList) }
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
@@ -550,7 +540,8 @@ class AccountRepository(
         scope.launch {
             try {
                 val user = nostr.signer.getPublicKeyAsync() ?: throw Exception("User not found")
-                _userMsgRelayList.value = nostr.relays.getMsgRelays(user)
+                val msgRelays = nostr.relays.getMsgRelays(user)
+                _state.update { it.copy(userMsgRelayList = msgRelays) }
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }

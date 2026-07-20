@@ -73,7 +73,8 @@ fun ContactListScreen(
 ) {
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
-    val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val contactList = accountState.contactList
     var openAddContactDialog by remember { mutableStateOf(false) }
     var contactToDelete by remember { mutableStateOf<PublicKey?>(null) }
 

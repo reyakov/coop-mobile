@@ -36,6 +36,7 @@ data class ChatState(
 class ChatRepository(
     private val nostr: Nostr,
     private val mediaRepository: MediaRepository,
+    private val settingsRepository: SettingsRepository,
     private val scope: CoroutineScope,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ErrorHost by createErrorHost() {

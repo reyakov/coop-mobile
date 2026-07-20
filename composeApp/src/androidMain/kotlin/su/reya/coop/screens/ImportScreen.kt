@@ -101,13 +101,6 @@ fun ImportScreen(viewModel: AccountViewModel) {
         }
     }
 
-    // Show import errors via snackbar
-    LaunchedEffect(accountState.importError) {
-        accountState.importError?.let {
-            snackbarHostState.showSnackbar(it)
-        }
-    }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },

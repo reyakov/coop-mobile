@@ -14,6 +14,7 @@ import su.reya.coop.nostr.NostrManager
 import su.reya.coop.repository.AccountRepository
 import su.reya.coop.repository.ChatRepository
 import su.reya.coop.repository.MediaRepository
+import su.reya.coop.repository.SettingsRepository
 import su.reya.coop.viewmodel.ProfileCache
 import kotlin.system.exitProcess
 
@@ -25,16 +26,30 @@ class MainActivity : ComponentActivity() {
     private val profileCache by lazy { ProfileCache(NostrManager.instance) }
     private val scope = MainScope()
 
+    private val connectivityMonitor by lazy { AndroidConnectivityMonitor(this@MainActivity) }
+
+    private val settingsRepository by lazy {
+        val storage = AppStore(this@MainActivity)
+        SettingsRepository(storage, scope)
+    }
+
     private val accountRepository by lazy {
         val storage = AppStore(this@MainActivity)
-        val mediaRepository = MediaRepository()
+        val mediaRepository = MediaRepository(settingsRepository)
         val androidSigner = AndroidExternalSigner(this@MainActivity, externalSignerLauncher)
-        AccountRepository(NostrManager.instance, storage, mediaRepository, scope, androidSigner)
+        AccountRepository(
+            NostrManager.instance,
+            storage,
+            mediaRepository,
+            settingsRepository,
+            scope,
+            androidSigner
+        )
     }
 
     private val chatRepository by lazy {
-        val mediaRepository = MediaRepository()
-        ChatRepository(NostrManager.instance, mediaRepository, scope)
+        val mediaRepository = MediaRepository(settingsRepository)
+        ChatRepository(NostrManager.instance, mediaRepository, settingsRepository, scope)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,6 +97,8 @@ class MainActivity : ComponentActivity() {
                 profileCache = profileCache,
                 accountRepository = accountRepository,
                 chatRepository = chatRepository,
+                settingsRepository = settingsRepository,
+                connectivityMonitor = connectivityMonitor,
             )
         }
     }

@@ -75,7 +75,8 @@ fun NewChatScreen(
     val snackbarHostState = LocalSnackbarHostState.current
     val navigator = LocalNavigator.current
     val qrScanResult = LocalScanResult.current
-    val contactList by accountViewModel.contactList.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val contactList = accountState.contactList
     var query by remember { mutableStateOf("") }
 
     val createGroup = remember { mutableStateOf(false) }

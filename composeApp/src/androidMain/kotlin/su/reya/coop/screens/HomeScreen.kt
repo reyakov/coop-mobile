@@ -126,12 +126,12 @@ fun HomeScreen(
     val userProfile by accountViewModel.currentUserProfile.collectAsStateWithLifecycle()
     val chatRooms by chatViewModel.chatRooms.collectAsStateWithLifecycle()
 
-    val isRelayListEmpty by accountViewModel.isRelayListEmpty.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
+    val isRelayListEmpty = accountState.isRelayListEmpty
+    val isBannerDismissed = accountState.isNotificationBannerDismissed
+
     val isSyncing by chatViewModel.isSyncing.collectAsStateWithLifecycle()
     val isPartialProcessedGiftWrap by chatViewModel.isPartialProcessedGiftWrap.collectAsStateWithLifecycle()
-
-    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
-    val isBannerDismissed = accountState.isNotificationBannerDismissed
 
     val expandedFab by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -760,7 +760,7 @@ fun BottomMenuList(
         "Update Profile" to { navigator.navigate(Screen.UpdateProfile) },
         "Contact List" to { navigator.navigate(Screen.ContactList) },
         "Relay Management" to { navigator.navigate(Screen.Relay) },
-        "Settings" to { }
+        "Settings" to { navigator.navigate(Screen.Settings) }
     )
 
     Column(

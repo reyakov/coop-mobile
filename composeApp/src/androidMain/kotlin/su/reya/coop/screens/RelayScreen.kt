@@ -95,13 +95,14 @@ fun RelayScreen(viewModel: AccountViewModel) {
     var openAddRelayDialog by remember { mutableStateOf(false) }
     var relayToDelete by remember { mutableStateOf<String?>(null) }
 
+    val accountState by viewModel.state.collectAsStateWithLifecycle()
+    val loadedRelayList = accountState.userRelayList
+    val loadedMsgRelayList = accountState.userMsgRelayList
+
     LaunchedEffect(Unit) {
         viewModel.loadCurrentUserRelayList()
         viewModel.loadCurrentUserMsgRelayList()
     }
-
-    val loadedRelayList by viewModel.userRelayList.collectAsStateWithLifecycle()
-    val loadedMsgRelayList by viewModel.userMsgRelayList.collectAsStateWithLifecycle()
 
     LaunchedEffect(loadedRelayList) {
         if (loadedRelayList.isNotEmpty()) {

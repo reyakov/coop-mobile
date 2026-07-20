@@ -8,7 +8,9 @@ import kotlinx.serialization.json.Json
 import rust.nostr.sdk.AsyncNostrSigner
 import su.reya.coop.blossom.BlossomClient
 
-class MediaRepository {
+class MediaRepository(
+    private val settingsRepository: SettingsRepository
+) {
     private val httpClient = HttpClient {
         install(ContentNegotiation) {
             json(Json {
@@ -25,12 +27,9 @@ class MediaRepository {
         contentType: String? = "image/jpeg"
     ): String? {
         return try {
-            val blossom = BlossomClient(url = "https://blossom.band", client = httpClient)
-            val descriptor = blossom.upload(
-                file = file,
-                contentType = contentType,
-                signer = signer,
-            )
+            val url = settingsRepository.settings.value.blossomServer ?: "https://blossom.band"
+            val blossom = BlossomClient(url, httpClient)
+            val descriptor = blossom.upload(file = file, contentType = contentType, signer = signer)
             descriptor?.url
         } catch (e: CancellationException) {
             throw e
