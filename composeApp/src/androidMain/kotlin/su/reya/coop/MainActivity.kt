@@ -26,6 +26,8 @@ class MainActivity : ComponentActivity() {
     private val profileCache by lazy { ProfileCache(NostrManager.instance) }
     private val scope = MainScope()
 
+    private val connectivityMonitor by lazy { AndroidConnectivityMonitor(this@MainActivity) }
+
     private val settingsRepository by lazy {
         val storage = AppStore(this@MainActivity)
         SettingsRepository(storage, scope)
@@ -96,6 +98,7 @@ class MainActivity : ComponentActivity() {
                 accountRepository = accountRepository,
                 chatRepository = chatRepository,
                 settingsRepository = settingsRepository,
+                connectivityMonitor = connectivityMonitor,
             )
         }
     }

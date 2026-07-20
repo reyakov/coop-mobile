@@ -1,5 +1,6 @@
 package su.reya.coop.shared
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -13,6 +14,9 @@ import coil3.compose.AsyncImage
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.avatar
 import org.jetbrains.compose.resources.painterResource
+import su.reya.coop.LocalConnectivity
+import su.reya.coop.LocalSettings
+import su.reya.coop.MediaConfig
 
 @Composable
 fun Avatar(
@@ -22,17 +26,36 @@ fun Avatar(
     size: Dp = 48.dp,
     shape: Shape = CircleShape
 ) {
+    val settings = LocalSettings.current
+    val isMobileData = LocalConnectivity.current
     val placeholder = painterResource(Res.drawable.avatar)
 
-    AsyncImage(
-        model = picture,
-        contentDescription = description,
-        modifier = modifier
-            .size(size)
-            .clip(shape),
-        contentScale = ContentScale.Crop,
-        fallback = placeholder,
-        error = placeholder,
-        placeholder = placeholder
-    )
+    val showMedia = when (settings.media) {
+        MediaConfig.AlwaysEnabled -> true
+        MediaConfig.Disabled -> false
+        MediaConfig.DisabledForMobileData -> !isMobileData
+    }
+
+    if (showMedia) {
+        AsyncImage(
+            model = picture,
+            contentDescription = description,
+            modifier = modifier
+                .size(size)
+                .clip(shape),
+            contentScale = ContentScale.Crop,
+            fallback = placeholder,
+            error = placeholder,
+            placeholder = placeholder
+        )
+    } else {
+        Image(
+            painter = placeholder,
+            contentDescription = description,
+            modifier = modifier
+                .size(size)
+                .clip(shape),
+            contentScale = ContentScale.Crop
+        )
+    }
 }

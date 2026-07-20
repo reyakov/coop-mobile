@@ -93,6 +93,7 @@ import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
+import su.reya.coop.LocalSettings
 import su.reya.coop.LocalSnackbarHostState
 import su.reya.coop.Room
 import su.reya.coop.RoomUiState
@@ -115,6 +116,7 @@ fun ChatScreen(
     val clipboardManager = LocalClipboard.current
     val navigator = LocalNavigator.current
     val profileCache = LocalProfileCache.current
+    val settings = LocalSettings.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
@@ -265,7 +267,7 @@ fun ChatScreen(
                             .fillMaxSize()
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
-                        if (requireScreening) {
+                        if (requireScreening && settings.screening) {
                             room?.let { ScreenerCard(accountViewModel, it) }
                         }
 
@@ -349,7 +351,7 @@ fun ChatScreen(
                             }
                         }
 
-                        when (requireScreening) {
+                        when (requireScreening && settings.screening) {
                             true -> {
                                 Row(
                                     modifier = Modifier

@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class Settings(
     val theme: Theme = Theme.System,
     val dynamicColor: Boolean = true,
-    val media: Media = Media.AlwaysEnabled,
+    val media: MediaConfig = MediaConfig.AlwaysEnabled,
     val screening: Boolean = true,
     val blossomServer: String? = "https://blossom.band",
 )
@@ -17,6 +17,6 @@ enum class Theme {
 }
 
 @Serializable
-enum class Media {
+enum class MediaConfig {
     Disabled, DisabledForMobileData, AlwaysEnabled
 }

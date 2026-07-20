@@ -67,6 +67,10 @@ val LocalSettings = staticCompositionLocalOf<Settings> {
     error("No Settings provided")
 }
 
+val LocalConnectivity = staticCompositionLocalOf<Boolean> {
+    false
+}
+
 val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
     error("No SnackbarHostState provided")
 }
@@ -86,6 +90,7 @@ fun App(
     accountRepository: AccountRepository,
     chatRepository: ChatRepository,
     settingsRepository: SettingsRepository,
+    connectivityMonitor: ConnectivityMonitor,
 ) {
     val viewModelFactory = remember {
         object : ViewModelProvider.Factory {
@@ -127,6 +132,9 @@ fun App(
 
     // Get the settings
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+
+    // Get connectivity status
+    val isMobileData by connectivityMonitor.isMobileData.collectAsStateWithLifecycle()
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -208,6 +216,7 @@ fun App(
         CompositionLocalProvider(
             LocalProfileCache provides profileCache,
             LocalSettings provides settings,
+            LocalConnectivity provides isMobileData,
             LocalSnackbarHostState provides snackbarHostState,
             LocalNavigator provides navigator,
             LocalScanResult provides qrScanResult,
