@@ -42,6 +42,8 @@ class ChatScreenViewModel(
             messages.clear()
             messages.addAll(initialMessages.distinctBy { it.id() })
             loading = false
+            // Mark the room as read once messages are loaded
+            chatRepository.markAsRead(id)
         }
     }
 
@@ -55,6 +57,7 @@ class ChatScreenViewModel(
                 if (event.roomId() == id) {
                     if (messages.none { it.id() == event.id() }) {
                         messages.add(0, event)
+                        chatRepository.markAsRead(id)
                     }
                 } else {
                     newOtherMessages++

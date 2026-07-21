@@ -130,6 +130,19 @@ class ChatRepository(
         return _state.value.rooms[id]
     }
 
+    fun markAsRead(roomId: Long) {
+        _state.update { currentState ->
+            val rooms = currentState.rooms.toMutableMap()
+            val room = rooms[roomId]
+            if (room != null && room.unreadCount > 0) {
+                rooms[roomId] = room.copy(unreadCount = 0)
+                currentState.copy(rooms = rooms)
+            } else {
+                currentState
+            }
+        }
+    }
+
     fun refreshChatRooms() {
         scope.launch(defaultDispatcher) {
             try {
@@ -140,10 +153,14 @@ class ChatRepository(
                         val existing = newMap[dbRoom.id]
                         // Only update if the database version is newer or equal
                         if (existing == null || dbRoom.createdAt.asSecs() >= existing.createdAt.asSecs()) {
-                            // Preserve Ongoing kind if already marked as such in memory
+                            // Preserve Ongoing kind and unreadCount status if already marked as such in memory
                             val mergedKind =
                                 if (existing?.kind == RoomKind.Ongoing) RoomKind.Ongoing else dbRoom.kind
-                            newMap[dbRoom.id] = dbRoom.copy(kind = mergedKind)
+                            val mergedUnreadCount = existing?.unreadCount ?: 0
+                            newMap[dbRoom.id] = dbRoom.copy(
+                                kind = mergedKind,
+                                unreadCount = mergedUnreadCount
+                            )
                         }
                     }
                     currentState.copy(rooms = newMap)
@@ -237,14 +254,18 @@ class ChatRepository(
 
             if (existingRoom == null) {
                 // New room discovery
-                val newRoom = Room.new(event, currentUser, roomId).copy(kind = newKind)
+                val newRoom = Room.new(event, currentUser, roomId).copy(
+                    kind = newKind,
+                    unreadCount = if (isFromMe) 0 else 1
+                )
                 rooms[newRoom.id] = newRoom
             } else if (event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
                 // Only update preview if message is newer (handles sync/late arrivals)
                 rooms[roomId] = existingRoom.copy(
                     lastMessage = event.content(),
                     createdAt = event.createdAt(),
-                    kind = newKind
+                    kind = newKind,
+                    unreadCount = if (isFromMe) existingRoom.unreadCount else existingRoom.unreadCount + 1
                 )
             } else if (isFromMe && existingRoom.kind != RoomKind.Ongoing) {
                 // Even if it's an older message, if it's from me, the room is ongoing

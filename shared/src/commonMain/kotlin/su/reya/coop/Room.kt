@@ -30,7 +30,8 @@ data class Room(
     val subject: String?,
     val members: Set<PublicKey>,
     val kind: RoomKind = RoomKind.default(),
-    val lastMessage: String? = null
+    val lastMessage: String? = null,
+    val unreadCount: Int = 0
 ) : Comparable<Room> {
     override fun compareTo(other: Room): Int {
         return this.createdAt.asSecs().compareTo(other.createdAt.asSecs())
