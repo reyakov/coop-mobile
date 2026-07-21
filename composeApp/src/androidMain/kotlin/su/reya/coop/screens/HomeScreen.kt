@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -662,22 +664,32 @@ fun NewRequests(requests: List<Room>) {
             navigator.navigate(Screen.RequestList)
         },
         leadingContent = {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialShapes.Clover4Leaf.toShape()),
-                contentAlignment = Alignment.Center
+            BadgedBox(
+                badge = {
+                    if (totalUnread > 0) {
+                        Badge {
+                            Text(totalUnread.toString())
+                        }
+                    }
+                }
             ) {
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(MaterialShapes.Clover4Leaf.toShape()),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(Res.drawable.ic_request),
-                            contentDescription = "Requests",
-                            tint = MaterialTheme.colorScheme.onTertiaryFixed
-                        )
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(Res.drawable.ic_request),
+                                contentDescription = "Requests",
+                                tint = MaterialTheme.colorScheme.onTertiaryFixed
+                            )
+                        }
                     }
                 }
             }
@@ -703,13 +715,6 @@ fun NewRequests(requests: List<Room>) {
                 )
             }
         },
-        trailingContent = {
-            if (totalUnread > 0) {
-                androidx.compose.material3.Badge {
-                    Text(totalUnread.toString())
-                }
-            }
-        },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -726,12 +731,22 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
-            Avatar(picture = roomState.picture, description = roomState.picture)
+            BadgedBox(
+                badge = {
+                    if (room.unreadCount > 0) {
+                        Badge {
+                            Text(room.unreadCount.toString())
+                        }
+                    }
+                }
+            ) {
+                Avatar(picture = roomState.picture, description = roomState.picture)
+            }
         },
         headlineContent = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = roomState.name,
@@ -743,7 +758,8 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
                 Text(
                     text = room.createdAt.ago(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (room.unreadCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.End,
                 )
             }
         },
@@ -758,13 +774,6 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
                 )
-            }
-        },
-        trailingContent = {
-            if (room.unreadCount > 0) {
-                androidx.compose.material3.Badge {
-                    Text(room.unreadCount.toString())
-                }
             }
         },
         colors = ListItemDefaults.colors(
