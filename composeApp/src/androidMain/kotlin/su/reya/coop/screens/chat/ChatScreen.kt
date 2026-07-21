@@ -394,8 +394,9 @@ fun ChatScreen(
                                     value = text,
                                     onValueChange = { text = it },
                                     onSend = {
-                                        viewModel.sendMessage(text)
+                                        viewModel.sendMessage(text, replyingTo?.id)
                                         text = ""
+                                        replyingTo = null
                                     },
                                     onUpload = {
                                         fileLauncher.launch("image/*")
