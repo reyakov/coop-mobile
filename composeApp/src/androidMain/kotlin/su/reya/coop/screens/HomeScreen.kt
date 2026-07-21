@@ -655,6 +655,8 @@ fun NewRequests(requests: List<Room>) {
         else -> ""
     }
 
+    val totalUnread = requests.sumOf { it.unreadCount }
+
     ListItem(
         modifier = Modifier.clickable {
             navigator.navigate(Screen.RequestList)
@@ -683,17 +685,29 @@ fun NewRequests(requests: List<Room>) {
         headlineContent = {
             Text(
                 text = "Requests",
-                style = MaterialTheme.typography.titleMediumEmphasized
+                style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                    fontWeight = if (totalUnread > 0) FontWeight.SemiBold else FontWeight.Normal
+                )
             )
         },
         supportingContent = {
             if (supportingText.isNotEmpty()) {
                 Text(
                     text = supportingText,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (totalUnread > 0) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (totalUnread > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        },
+        trailingContent = {
+            if (totalUnread > 0) {
+                androidx.compose.material3.Badge {
+                    Text(totalUnread.toString())
+                }
             }
         },
         colors = ListItemDefaults.colors(
@@ -721,13 +735,15 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
             ) {
                 Text(
                     text = roomState.name,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                        fontWeight = if (room.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal
+                    ),
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = room.createdAt.ago(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = if (room.unreadCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                 )
             }
         },
@@ -735,10 +751,20 @@ fun ChatRoom(room: Room, onClick: () -> Unit) {
             if (!room.lastMessage.isNullOrBlank()) {
                 Text(
                     text = room.lastMessage ?: "",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = if (room.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (room.unreadCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                    ),
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
                 )
+            }
+        },
+        trailingContent = {
+            if (room.unreadCount > 0) {
+                androidx.compose.material3.Badge {
+                    Text(room.unreadCount.toString())
+                }
             }
         },
         colors = ListItemDefaults.colors(
