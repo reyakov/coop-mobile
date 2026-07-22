@@ -90,6 +90,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import rust.nostr.sdk.EventId
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
@@ -161,6 +162,29 @@ fun ChatScreen(
         label = "blurAnimation"
     )
 
+    val goToMessage = { eventId: EventId? ->
+        if (eventId != null) {
+            scope.launch {
+                var targetIndex = -1
+                var currentIndex = 0
+
+                for (group in groupedMessages.value) {
+                    val msgInGroup = group.value
+                    val idx = msgInGroup.indexOfFirst { it.id() == eventId }
+                    if (idx != -1) {
+                        targetIndex = currentIndex + idx
+                        break
+                    }
+                    currentIndex += msgInGroup.size + 1
+                }
+
+                if (targetIndex != -1) {
+                    listState.animateScrollToItem(targetIndex)
+                }
+            }
+        }
+    }
+
     val sendFile = { uri: Uri ->
         scope.launch {
             // Read file on IO dispatcher
@@ -196,9 +220,7 @@ fun ChatScreen(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.blur(blurAmount),
             contentWindowInsets = ScaffoldDefaults.contentWindowInsets.union(WindowInsets.ime),
@@ -303,7 +325,13 @@ fun ChatScreen(
                                                     .animateItem(),
                                                 verticalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
-                                                replyPreview?.let { ReplyPreview(it, model.isMine) }
+                                                replyPreview?.let { previewEvent ->
+                                                    ReplyPreview(
+                                                        event = previewEvent,
+                                                        isMine = model.isMine,
+                                                        onClick = { goToMessage(previewEvent.id()) }
+                                                    )
+                                                }
                                                 ChatMessage(
                                                     model = model,
                                                     modifier = Modifier.graphicsLayer {
@@ -545,7 +573,11 @@ private fun ReplyBox(model: MessageModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ReplyPreview(event: UnsignedEvent, isMine: Boolean = false) {
+private fun ReplyPreview(
+    event: UnsignedEvent,
+    isMine: Boolean = false,
+    onClick: () -> Unit
+) {
     val profileCache = LocalProfileCache.current
     val profileFlow = remember(event) { profileCache.getMetadata(event.author()) }
     val profile by profileFlow.collectAsStateWithLifecycle()
@@ -561,7 +593,9 @@ private fun ReplyPreview(event: UnsignedEvent, isMine: Boolean = false) {
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Surface(
-            modifier = Modifier.widthIn(max = 280.dp),
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .clickable(onClick = onClick),
             color = MaterialTheme.colorScheme.tertiaryContainer,
             shape = bubbleShape,
         ) {
@@ -569,13 +603,13 @@ private fun ReplyPreview(event: UnsignedEvent, isMine: Boolean = false) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = profile?.name ?: "Unknown",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(
-                        alpha = 0.6f
-                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Text(
                     text = event.content(),
