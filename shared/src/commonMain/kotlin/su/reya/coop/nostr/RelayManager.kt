@@ -22,13 +22,15 @@ import kotlin.time.Duration
 class RelayManager(private val nostr: Nostr) {
     companion object {
         val BOOTSTRAP_RELAYS = listOf(
-            "wss://relay.primal.net",
             "wss://relay.ditto.pub",
-            "wss://user.kindpag.es",
+            "wss://relay.primal.net",
+            "wss://relay.nostr.net",
+            "wss://profiles.nostr1.com",
         )
 
         val INDEXER_RELAY = listOf(
             "wss://indexer.coracle.social",
+            "wss://user.kindpag.es",
         )
 
         val ALL_RELAYS = BOOTSTRAP_RELAYS + INDEXER_RELAY
