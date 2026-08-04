@@ -22,6 +22,7 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "Shared"
             isStatic = true
+            binaryOptions["objcExportSuspendFunctionLaunchThreadRestriction"] = "none"
         }
     }
 

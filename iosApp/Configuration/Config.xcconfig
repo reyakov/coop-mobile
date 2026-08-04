@@ -5,3 +5,6 @@ PRODUCT_BUNDLE_IDENTIFIER=su.reya.coop.Coop$(TEAM_ID)
 
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0
+
+FRAMEWORK_SEARCH_PATHS=$(inherited) "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+OTHER_LDFLAGS=$(inherited) -framework Shared

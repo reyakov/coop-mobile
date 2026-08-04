@@ -4,5 +4,18 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Coop uses the camera to scan QR codes for adding contacts and importing identities.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>su.reya.coop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>coop</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

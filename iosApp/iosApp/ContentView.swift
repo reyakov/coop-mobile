@@ -2,32 +2,80 @@ import SwiftUI
 import Shared
 
 struct ContentView: View {
-    @State private var showContent = false
-    var body: some View {
-        VStack {
-            Button("Click me!") {
-                withAnimation {
-                    showContent = !showContent
-                }
-            }
+    @Environment(AppState.self) private var appState
 
-            if showContent {
-                VStack(spacing: 16) {
-                    Image(systemName: "swift")
-                        .font(.system(size: 200))
-                        .foregroundColor(.accentColor)
-                    Text("SwiftUI: \(Greeting().greet())")
+    var body: some View {
+        Group {
+            switch appState.signerRequired {
+            case .none:
+                SplashView()
+            case .some(true):
+                OnboardingView()
+            case .some(false):
+                NavigationStack(path: Bindable(appState).path) {
+                    HomeView()
+                        .navigationDestination(for: AppRoute.self) { route in
+                            destination(for: route)
+                        }
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding()
+        .alert("Error", isPresented: Binding(
+            get: { appState.errorMessage != nil },
+            set: { if !$0 { appState.errorMessage = nil } }
+        )) {
+            Button("OK") { appState.errorMessage = nil }
+        } message: {
+            Text(appState.errorMessage ?? "")
+        }
+        .preferredColorScheme(colorScheme)
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch appState.settings?.theme {
+        case Theme.light:
+            return .light
+        case Theme.dark:
+            return .dark
+        default:
+            return nil
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: AppRoute) -> some View {
+        switch route {
+        case .home:
+            HomeView()
+        case .requestList:
+            RequestListView()
+        case .contactList:
+            ContactListView()
+        case .updateProfile:
+            UpdateProfileView()
+        case .newChat:
+            NewChatView()
+        case .myQr:
+            MyQrView()
+        case .relay:
+            RelayView()
+        case .settings:
+            SettingsView()
+        case .chat(let id, let screening):
+            ChatView(roomId: id, screening: screening)
+        case .profile(let pubkey):
+            ProfileView(pubkey: pubkey)
+        }
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+struct SplashView: View {
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(.tint)
+        }
     }
 }
