@@ -10,9 +10,13 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import rust.nostr.sdk.EventId
+import rust.nostr.sdk.Filter
+import rust.nostr.sdk.Kind
+import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.PublicKey
 import rust.nostr.sdk.RelayMetadata
 import rust.nostr.sdk.RelayUrl
+import rust.nostr.sdk.ReqTarget
 import rust.nostr.sdk.Timestamp
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.nostr.Nostr
@@ -37,7 +41,7 @@ data class RelayLists(
     val outbox: List<RelayUrl>,
 )
 
-class IosBootstrap private constructor(
+class Bootstrap private constructor(
     val scope: CoroutineScope,
     val nostr: Nostr,
     val settingsRepository: SettingsRepository,
@@ -46,7 +50,7 @@ class IosBootstrap private constructor(
     val profileCache: ProfileCache,
 ) {
     companion object {
-        fun create(storage: AppStorage): IosBootstrap {
+        fun create(storage: AppStorage): Bootstrap {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val nostr = NostrManager.instance
             val settingsRepository = SettingsRepository(storage, scope)
@@ -61,7 +65,7 @@ class IosBootstrap private constructor(
             )
             val chatRepository = ChatRepository(nostr, mediaRepository, settingsRepository, scope)
             val profileCache = ProfileCache(nostr)
-            return IosBootstrap(
+            return Bootstrap(
                 scope = scope,
                 nostr = nostr,
                 settingsRepository = settingsRepository,
@@ -73,11 +77,23 @@ class IosBootstrap private constructor(
     }
 
     private var notificationsJob: Job? = null
+    private var dbPath: String? = null
+    private var onNewMessage: ((UnsignedEvent) -> Unit)? = null
+
     fun start(dbPath: String, onNewMessage: (UnsignedEvent) -> Unit) {
+        this.dbPath = dbPath
+        this.onNewMessage = onNewMessage
+        startNotificationLoop()
+    }
+
+    private fun startNotificationLoop() {
         if (notificationsJob?.isActive == true) return
+        val path = dbPath ?: return
+        val messageCallback = onNewMessage ?: return
+
         notificationsJob = scope.launch {
             runCatching {
-                nostr.init(dbPath)
+                nostr.init(path)
                 nostr.connectBootstrapRelays()
                 nostr.handleNotifications(
                     onMetadataUpdate = { pubkey, metadata ->
@@ -88,13 +104,40 @@ class IosBootstrap private constructor(
                     },
                     onNewMessage = { event ->
                         nostr.emitNewEvent(event)
-                        onNewMessage(event)
+                        messageCallback(event)
                     },
                 )
             }.onFailure {
                 accountRepository.showError("Failed to start Nostr: ${it.message}")
             }
         }
+    }
+
+    suspend fun resume() {
+        startNotificationLoop()
+        nostr.waitUntilInitialized()
+        nostr.client?.connect()
+
+        val pubkey = nostr.signer.publicKeyFlow.value ?: return
+
+        runCatching { nostr.profiles.getUserMetadata() }
+
+        val relays = nostr.relays.getMsgRelays(pubkey)
+        if (relays.isEmpty()) return
+
+        relays.forEach { relay ->
+            nostr.client?.addRelay(relay)
+            nostr.client?.connectRelay(relay)
+        }
+
+        nostr.messages.updateSyncState { it.copy(isSyncing = true) }
+        val filter = Filter().kind(Kind.fromStd(KindStandard.GIFT_WRAP)).pubkey(pubkey)
+        val target = relays.associateWith { listOf(filter) }
+        nostr.client?.subscribe(target = ReqTarget.manual(target), id = "gift-wraps")
+    }
+
+    suspend fun pause() {
+        nostr.client?.disconnect()
     }
 
     private fun <T> Flow<T>.watch(onEach: (T) -> Unit): FlowSubscription {

@@ -12,10 +12,14 @@ struct ChatView: View {
     @State private var viewModel: ChatViewModel?
     @State private var input = ""
     @State private var photoItem: PhotosPickerItem?
-    @State private var authorNames: [String: String] = [:]
+    @State private var authorProfiles: [String: Profile] = [:]
 
     private var showScreener: Bool {
         (viewModel?.requireScreening ?? false) && appState.settings?.screening == true
+    }
+
+    private var isGroup: Bool {
+        viewModel?.room?.isGroup() == true
     }
 
     var body: some View {
@@ -32,7 +36,6 @@ struct ChatView: View {
                 inputBar
             }
         }
-        .navigationTitle(viewModel?.roomUi?.name ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -44,7 +47,7 @@ struct ChatView: View {
                             AvatarView(
                                 name: viewModel?.roomUi?.name ?? "?",
                                 picture: viewModel?.roomUi?.picture,
-                                size: 28
+                                size: 30
                             )
                             Text(viewModel?.roomUi?.name ?? "Chat")
                                 .font(.caption)
@@ -75,33 +78,31 @@ struct ChatView: View {
 
     private var messageList: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 2) {
                 ForEach(groupedMessages, id: \.0) { group, messages in
-                    Text(group)
-                        .font(.caption)
+                    Text(headerTitle(group: group, first: messages.first))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 14)
 
-                    ForEach(messages, id: \.stableId) { event in
-                        let isMine = event.author().toHex() == appState.bootstrap.currentPublicKey()?.toHex()
-                        let replyId = event.tags().eventIds().first
-                        let replied = replyId.flatMap { id in
-                            viewModel?.messages.first { $0.id()?.toHex() == id.toHex() }
-                        }
-                        MessageBubble(
-                            event: event,
-                            isMine: isMine,
-                            showImages: showImages,
-                            repliedMessage: replied,
-                            repliedAuthorName: replied.flatMap { authorName(for: $0) },
-                            onReply: { viewModel?.replyingTo = event }
-                        )
+                    ForEach(Array(messages.enumerated()), id: \.element.stableId) { index, event in
+                        messageCell(event: event, at: index, in: messages)
                     }
                 }
+
+                if let last = viewModel?.messages.last, isMine(last) {
+                    Text("Delivered")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.top, 2)
+                }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
         }
         .defaultScrollAnchor(.bottom)
+        .scrollDismissesKeyboard(.interactively)
         .overlay {
             if viewModel?.loading == true {
                 ProgressView()
@@ -109,8 +110,42 @@ struct ChatView: View {
         }
     }
 
+    @ViewBuilder
+    private func messageCell(
+        event: Nostr_sdk_kmpUnsignedEvent,
+        at index: Int,
+        in messages: [Nostr_sdk_kmpUnsignedEvent]
+    ) -> some View {
+        let mine = isMine(event)
+        let authorHex = event.author().toHex()
+        let nextIsSameAuthor = index + 1 < messages.count &&
+            messages[index + 1].author().toHex() == authorHex
+        let prevIsSameAuthor = index > 0 &&
+            messages[index - 1].author().toHex() == authorHex
+        let replyId = event.tags().eventIds().first
+        let replied = replyId.flatMap { id in
+            viewModel?.messages.first { $0.id()?.toHex() == id.toHex() }
+        }
+
+        MessageBubble(
+            event: event,
+            isMine: mine,
+            showImages: showImages,
+            isFirstOfRun: !prevIsSameAuthor,
+            isLastOfRun: !nextIsSameAuthor,
+            showAuthorName: isGroup && !mine && !prevIsSameAuthor,
+            showAuthorAvatar: isGroup && !mine,
+            authorName: authorName(for: event),
+            authorPicture: authorProfiles[authorHex]?.picture,
+            repliedMessage: replied,
+            repliedAuthorName: replied.flatMap { authorName(for: $0) },
+            onReply: { viewModel?.replyingTo = event }
+        )
+        .padding(.bottom, nextIsSameAuthor ? 0 : 8)
+    }
+
     private var inputBar: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             if let replyingTo = viewModel?.replyingTo {
                 HStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: 2)
@@ -132,37 +167,47 @@ struct ChatView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.bar)
             }
 
-            HStack(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 10) {
                 PhotosPicker(selection: $photoItem, matching: .images) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.tint)
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, height: 34)
+                        .background(Color(.secondarySystemFill), in: Circle())
                 }
 
                 TextField("Message", text: $input, axis: .vertical)
-                    .lineLimit(1...5)
-                    .padding(.horizontal, 12)
+                    .lineLimit(1...6)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Color(.secondarySystemBackground), in: Capsule())
+                    .background {
+                        Capsule()
+                            .strokeBorder(Color(.systemGray4), lineWidth: 1)
+                    }
 
-                Button {
-                    viewModel?.send(input, appState: appState)
-                    input = ""
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(input.isEmpty ? Color(.systemGray3) : Color.accentColor)
+                if !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        viewModel?.send(input, appState: appState)
+                        input = ""
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(Color(.systemBlue))
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .background(.bar)
+            .animation(.snappy(duration: 0.2), value: input.isEmpty)
         }
-        .background(.bar)
     }
 
     private var groupedMessages: [(String, [Nostr_sdk_kmpUnsignedEvent])] {
@@ -182,6 +227,11 @@ struct ChatView: View {
         return groups
     }
 
+    private func headerTitle(group: String, first: Nostr_sdk_kmpUnsignedEvent?) -> String {
+        guard let first else { return group }
+        return "\(group) \(first.createdAt().formatAsTime())"
+    }
+
     private var showImages: Bool {
         guard let media = appState.settings?.media else { return true }
         switch media {
@@ -194,6 +244,10 @@ struct ChatView: View {
         }
     }
 
+    private func isMine(_ event: Nostr_sdk_kmpUnsignedEvent) -> Bool {
+        event.author().toHex() == appState.bootstrap.currentPublicKey()?.toHex()
+    }
+
     private func otherMember(of room: Room) -> Nostr_sdk_kmpPublicKey? {
         let selfHex = appState.bootstrap.currentPublicKey()?.toHex()
         return room.members.first { $0.toHex() != selfHex } ?? room.members.first
@@ -204,21 +258,19 @@ struct ChatView: View {
         if hex == appState.bootstrap.currentPublicKey()?.toHex() {
             return appState.currentUserProfile?.name ?? "You"
         }
-        if let cached = authorNames[hex] {
-            return cached
+        if let profile = authorProfiles[hex] {
+            return profile.name
         }
-        let short = event.author().short()
-        loadAuthorName(pubkey: event.author(), hex: hex)
-        return short
+        loadAuthorProfile(pubkey: event.author(), hex: hex)
+        return event.author().short()
     }
 
-    private func loadAuthorName(pubkey: Nostr_sdk_kmpPublicKey, hex: String) {
-        guard authorNames[hex] == nil else { return }
-        authorNames[hex] = pubkey.short()
+    private func loadAuthorProfile(pubkey: Nostr_sdk_kmpPublicKey, hex: String) {
+        guard authorProfiles[hex] == nil else { return }
         let sub = appState.bootstrap.watchProfile(pubkey: pubkey) { profile in
             Task { @MainActor in
                 if let profile {
-                    authorNames[hex] = profile.name
+                    authorProfiles[hex] = profile
                 }
             }
         }

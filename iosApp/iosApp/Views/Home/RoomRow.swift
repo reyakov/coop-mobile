@@ -7,34 +7,37 @@ struct RoomRow: View {
     @State private var ui: RoomUiState?
     @State private var subscription: FlowSubscription?
 
+    private var unread: Bool { room.unreadCount > 0 }
+
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(name: ui?.name ?? "?", picture: ui?.picture)
+        HStack(spacing: 10) {
+            Circle()
+                .fill(unread ? Color.accentColor : .clear)
+                .frame(width: 10, height: 10)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(ui?.name ?? "Loading...")
-                    .font(.headline)
-                    .lineLimit(1)
-                Text(room.lastMessage ?? "")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            AvatarView(name: ui?.name ?? "?", picture: ui?.picture, size: 48)
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(ui?.name ?? "Loading...")
+                        .font(.body.weight(unread ? .semibold : .regular))
+                        .lineLimit(1)
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(room.createdAt.ago())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if room.unreadCount > 0 {
-                    Text("\(room.unreadCount)")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
+                    Spacer()
+
+                    Text(room.createdAt.ago())
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(.systemGray3))
                 }
+
+                Text(room.lastMessage ?? "")
+                    .font(.subheadline.weight(unread ? .semibold : .regular))
+                    .foregroundStyle(unread ? .primary : .secondary)
+                    .lineLimit(2)
             }
         }
         .padding(.vertical, 4)

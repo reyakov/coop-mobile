@@ -1,10 +1,11 @@
 import Foundation
 import Shared
+import UIKit
 
 @MainActor
 @Observable
 final class AppState {
-    let bootstrap: IosBootstrap
+    let bootstrap: Bootstrap
 
     private var subscriptions: [FlowSubscription] = []
 
@@ -22,7 +23,7 @@ final class AppState {
     let networkMonitor = NetworkMonitor()
 
     init() {
-        bootstrap = IosBootstrap.companion.create(storage: IosAppStorage())
+        bootstrap = Bootstrap.companion.create(storage: KeychainStorage())
     }
 
     func start() {
@@ -82,6 +83,18 @@ final class AppState {
         bootstrap.logout()
         bootstrap.resetState()
         path = []
+    }
+
+    func resume() {
+        Task { try? await bootstrap.resume() }
+    }
+
+    func pause() {
+        let taskId = UIApplication.shared.beginBackgroundTask()
+        Task {
+            try? await bootstrap.pause()
+            UIApplication.shared.endBackgroundTask(taskId)
+        }
     }
 
     private func handleNewMessage(_ event: Nostr_sdk_kmpUnsignedEvent) {

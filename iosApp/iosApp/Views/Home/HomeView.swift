@@ -4,7 +4,6 @@ import Shared
 struct HomeView: View {
     @Environment(AppState.self) private var appState
     @State private var showProfileSheet = false
-    @State private var showScanner = false
     @State private var showRelayWarning = false
 
     private var ongoingRooms: [Room] {
@@ -25,31 +24,32 @@ struct HomeView: View {
                 Button {
                     appState.path.append(.requestList)
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(requestUnread > 0 ? Color.accentColor : .clear)
+                            .frame(width: 10, height: 10)
+
                         Image(systemName: "tray.full")
                             .font(.title2)
-                            .foregroundStyle(.tint)
-                            .frame(width: 44)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, height: 48)
+                            .background(Color(.secondarySystemFill), in: Circle())
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("New Requests")
-                                .font(.headline)
-                            Text("\(requestRooms.count) request\(requestRooms.count == 1 ? "" : "s")")
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Message Requests")
+                                .font(.body.weight(requestUnread > 0 ? .semibold : .regular))
+                            Text("\(requestRooms.count)")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
 
                         Spacer()
 
-                        if requestUnread > 0 {
-                            Text("\(requestUnread)")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor, in: Capsule())
-                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(.systemGray3))
                     }
+                    .padding(.vertical, 4)
                 }
                 .tint(.primary)
             }
@@ -72,74 +72,41 @@ struct HomeView: View {
                 ProgressView()
             } else if appState.chatRooms.isEmpty {
                 ContentUnavailableView(
-                    "No chats yet",
+                    "No Messages",
                     systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Start a new chat to begin messaging")
+                    description: Text("Start a new conversation")
                 )
             }
         }
         .navigationTitle("Coop")
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    Text("Coop").font(.headline)
-                    if appState.isSyncing {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-            }
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showScanner = true
-                } label: {
-                    Image(systemName: "qrcode.viewfinder")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showProfileSheet = true
                 } label: {
                     AvatarView(
                         name: appState.currentUserProfile?.name ?? "?",
                         picture: appState.currentUserProfile?.picture,
-                        size: 32
+                        size: 30
                     )
                 }
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                appState.path.append(.newChat)
-            } label: {
-                Label("New Chat", systemImage: "square.and.pencil")
-                    .font(.headline)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 16) {
+                    if appState.isSyncing {
+                        ProgressView().controlSize(.small)
+                    }
+                    Button {
+                        appState.path.append(.newChat)
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing)
         }
         .sheet(isPresented: $showProfileSheet) {
             ProfileSheetView()
                 .presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $showScanner) {
-            ScanView { result in
-                showScanner = false
-                if let pubkey = appState.bootstrap.parsePublicKey(input: result) {
-                    do {
-                        let roomId = try appState.bootstrap.createChatRoom(recipients: [pubkey])
-                        appState.path.append(.chat(id: roomId, screening: false))
-                    } catch {
-                        appState.errorMessage = error.localizedDescription
-                    }
-                } else {
-                    appState.errorMessage = "Invalid public key"
-                }
-            }
         }
         .sheet(isPresented: $showRelayWarning) {
             RelayWarningSheet()

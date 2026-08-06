@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct iOSApp: App {
     @State private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +18,16 @@ struct iOSApp: App {
                 }
                 .onOpenURL { url in
                     appState.handle(url)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    switch phase {
+                    case .active:
+                        appState.resume()
+                    case .background:
+                        appState.pause()
+                    default:
+                        break
+                    }
                 }
         }
     }

@@ -2,7 +2,7 @@ import Foundation
 import Security
 import Shared
 
-final class IosAppStorage: AppStorage {
+final class KeychainStorage: AppStorage {
     private let defaults = UserDefaults.standard
     private let service = "su.reya.coop"
 
