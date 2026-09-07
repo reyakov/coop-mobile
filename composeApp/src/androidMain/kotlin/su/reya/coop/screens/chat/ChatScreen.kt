@@ -80,6 +80,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coop.composeapp.generated.resources.Res
 import coop.composeapp.generated.resources.ic_arrow_back
@@ -91,6 +92,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 import rust.nostr.sdk.EventId
+import rust.nostr.sdk.KindStandard
 import rust.nostr.sdk.UnsignedEvent
 import su.reya.coop.LocalNavigator
 import su.reya.coop.LocalProfileCache
@@ -144,10 +146,21 @@ fun ChatScreen(
     val loading = viewModel.loading
     val newOtherMessages = viewModel.newOtherMessages
     val requireScreening = viewModel.requireScreening
-    val messages = viewModel.messages
+    val allEvents = viewModel.messages
+
+    val displayMessages by remember {
+        derivedStateOf { allEvents.filter { it.kind().asStd() != KindStandard.REACTION } }
+    }
+
+    val reactionsByMessage by remember {
+        derivedStateOf {
+            allEvents.filter { it.kind().asStd() == KindStandard.REACTION }
+                .groupBy { it.tags().eventIds().firstOrNull() }
+        }
+    }
 
     val groupedMessages =
-        remember { derivedStateOf { messages.groupBy { it.createdAt().formatAsGroup() } } }
+        remember { derivedStateOf { displayMessages.groupBy { it.createdAt().formatAsGroup() } } }
 
     val roomState by remember(id, currentUser?.publicKey) {
         (room as Room).uiStateFlow(profileCache, currentUser?.publicKey)
@@ -170,7 +183,7 @@ fun ChatScreen(
 
                 for (group in groupedMessages.value) {
                     val msgInGroup = group.value
-                    val idx = msgInGroup.indexOfFirst { it.id() == eventId }
+                    val idx = msgInGroup.indexOfFirst { it.ensureId().id() == eventId }
                     if (idx != -1) {
                         targetIndex = currentIndex + idx
                         break
@@ -214,8 +227,8 @@ fun ChatScreen(
             }
         }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+    LaunchedEffect(allEvents.size) {
+        if (displayMessages.isNotEmpty()) {
             listState.animateScrollToItem(0)
         }
     }
@@ -293,7 +306,7 @@ fun ChatScreen(
                             room?.let { ScreenerCard(accountViewModel, it) }
                         }
 
-                        when (messages.isNotEmpty()) {
+                        when (displayMessages.isNotEmpty()) {
                             true -> {
                                 LazyColumn(
                                     modifier = Modifier
@@ -308,14 +321,15 @@ fun ChatScreen(
                                             items = messagesInGroup,
                                             key = { it.ensureId().id()?.toHex()!! }
                                         ) { event ->
+                                            val msgReactions = reactionsByMessage[event.id()] ?: emptyList()
                                             val model =
-                                                rememberMessageModel(event, currentUser?.publicKey)
+                                                rememberMessageModel(event, msgReactions, currentUser?.publicKey)
 
                                             val replyPreview =
-                                                remember(model.replyEventIds, messages.size) {
+                                                remember(model.replyEventIds, displayMessages.size) {
                                                     model.replyEventIds.firstOrNull()
                                                         ?.let { replyId ->
-                                                            messages.find { it.id() == replyId }
+                                                            displayMessages.find { it.ensureId().id() == replyId }
                                                         }
                                                 }
 
@@ -506,24 +520,30 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp),
                     contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
-                    ContextMenu { action ->
-                        when (action) {
-                            "Copy" -> {
-                                scope.launch {
-                                    val content = model.annotatedContent
-                                    val data = ClipData.newPlainText(content, content)
-                                    clipboardManager.setClipEntry(ClipEntry(data))
+                    ContextMenu(
+                        onAction = { action ->
+                            when (action) {
+                                "Copy" -> {
+                                    scope.launch {
+                                        val content = model.annotatedContent
+                                        val data = ClipData.newPlainText(content, content)
+                                        clipboardManager.setClipEntry(ClipEntry(data))
+                                    }
                                 }
-                            }
 
-                            "Reply" -> {
-                                replyingTo = model
-                            }
+                                "Reply" -> {
+                                    replyingTo = model
+                                }
 
-                            else -> {}
+                                else -> {}
+                            }
+                            selectedMessage = null
+                        },
+                        onReaction = { reaction ->
+                            viewModel.sendReaction(model.id, reaction)
+                            selectedMessage = null
                         }
-                        selectedMessage = null
-                    }
+                    )
                 }
             }
         }
@@ -624,17 +644,39 @@ private fun ReplyPreview(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ContextMenu(onAction: (String) -> Unit) {
+private fun ContextMenu(
+    onAction: (String) -> Unit,
+    onReaction: (String) -> Unit
+) {
     val menuItems = listOf(
         "Copy" to Res.drawable.ic_copy,
         "Reply" to Res.drawable.ic_reply
     )
 
+    val reactionEmojis = listOf("👍", "❤️", "👀", "🔥", "🚀", "🎉")
+
     DropdownMenuGroup(
         shapes = MenuDefaults.groupShape(1, 1),
         containerColor = MenuDefaults.groupVibrantContainerColor,
-        modifier = Modifier.width(220.dp)
+        modifier = Modifier.width(240.dp)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            reactionEmojis.forEach { emoji ->
+                Text(
+                    text = emoji,
+                    modifier = Modifier
+                        .clickable { onReaction(emoji) }
+                        .padding(horizontal = 4.dp),
+                    fontSize = 24.sp
+                )
+            }
+        }
+
         val itemCount = menuItems.size
 
         menuItems.forEachIndexed { index, (label, icon) ->

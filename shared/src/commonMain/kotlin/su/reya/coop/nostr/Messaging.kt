@@ -144,12 +144,15 @@ class MessageManager(private val nostr: Nostr) {
 
     private suspend fun setCachedRumor(giftId: EventId, rumor: UnsignedEvent) {
         try {
+            val isReaction = rumor.kind().asStd() == KindStandard.REACTION
+            val kValue = if (isReaction) "reaction" else "dm"
+
             // Construct reference tags
             val tags = listOf(
                 Tag.identifier(giftId.toHex()),
                 Tag.publicKey(rumor.author()),
                 Tag.custom("r", listOf(rumor.roomId().toString())),
-                Tag.custom("k", listOf("14"))
+                Tag.custom("k", listOf("14", kValue))
             )
 
             // Set event kind
@@ -346,6 +349,66 @@ class MessageManager(private val nostr: Nostr) {
             throw e
         } catch (e: Exception) {
             throw IllegalStateException("Failed to send message: ${e.message}", e)
+        }
+    }
+
+    suspend fun sendReaction(
+        to: Set<PublicKey>,
+        targetEventId: EventId,
+        reaction: String,
+        onRumorCreated: ((UnsignedEvent) -> Unit)? = null,
+    ) {
+        try {
+            val currentUser =
+                signer.getPublicKeyAsync() ?: throw IllegalStateException("User not signed in")
+
+            val tags = mutableListOf<Tag>()
+            tags.add(Tag.event(targetEventId))
+            // Add public key tags for each recipient (including me) to ensure roomId consistency
+            to.forEach { pubkey ->
+                tags.add(Tag.publicKey(pubkey))
+            }
+
+            for (receiver in setOf(currentUser) + to) {
+                // Construct the rumor event
+                val rumor = EventBuilder(Kind.fromStd(KindStandard.REACTION), reaction)
+                    .tags(tags)
+                    .finalizeUnsigned(currentUser)
+                    .ensureId()
+
+                // Emit the rumor to the chat screen
+                if (receiver == currentUser) {
+                    onRumorCreated?.invoke(rumor)
+                }
+
+                // Construct the gift wrap event
+                val gift = nip59MakeGiftWrapAsync(
+                    signer = signer,
+                    receiverPubkey = receiver,
+                    rumor = rumor,
+                    extraTags = listOf(
+                        Tag.custom("k", listOf("14"))
+                    )
+                )
+
+                // Send the event to receiver's NIP-17 relays
+                val output = client?.sendEvent(
+                    event = gift,
+                    target = SendEventTarget.toNip17(),
+                    ackPolicy = AckPolicy.none(),
+                    authenticationTimeout = Duration.parse("2s")
+                )
+
+                if (output != null) {
+                    // Keep track of rumor IDs
+                    val id = rumor.id() ?: throw IllegalStateException("Rumor ID is null")
+                    rumorMap[id] = output.id
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to send reaction: ${e.message}", e)
         }
     }
 }

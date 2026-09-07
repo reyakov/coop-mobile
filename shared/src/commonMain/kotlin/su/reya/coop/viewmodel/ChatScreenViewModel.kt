@@ -74,4 +74,8 @@ class ChatScreenViewModel(
     fun sendFileMessage(file: ByteArray?, type: String?) {
         chatRepository.sendFileMessage(id, file, type)
     }
+
+    fun sendReaction(targetEventId: EventId, reaction: String) {
+        chatRepository.sendReaction(id, targetEventId, reaction)
+    }
 }

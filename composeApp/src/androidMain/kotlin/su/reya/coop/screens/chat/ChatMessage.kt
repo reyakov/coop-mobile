@@ -5,9 +5,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -34,6 +40,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import rust.nostr.sdk.EventId
 import rust.nostr.sdk.PublicKey
@@ -47,6 +54,13 @@ import su.reya.coop.isImageUrl
 import su.reya.coop.removeImageUrls
 
 @Immutable
+data class ReactionGroup(
+    val emoji: String,
+    val authors: List<PublicKey>,
+    val containsMe: Boolean
+)
+
+@Immutable
 data class MessageModel(
     val id: EventId,
     val author: PublicKey,
@@ -54,15 +68,20 @@ data class MessageModel(
     val images: List<String>,
     val timestamp: String,
     val isMine: Boolean,
-    val replyEventIds: List<EventId>
+    val replyEventIds: List<EventId>,
+    val reactions: List<ReactionGroup> = emptyList()
 )
 
 @Composable
-fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): MessageModel {
+fun rememberMessageModel(
+    event: UnsignedEvent,
+    reactions: List<UnsignedEvent> = emptyList(),
+    currentUser: PublicKey? = null
+): MessageModel {
     val settings = LocalSettings.current
     val isMobileData = LocalConnectivity.current
 
-    return remember(event, currentUser, settings, isMobileData) {
+    return remember(event, reactions, currentUser, settings, isMobileData) {
         val id = event.ensureId().id()!!
         val isMine = currentUser == event.author()
         val content = event.content()
@@ -104,6 +123,16 @@ fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): 
             append(cleanedContent.substring(lastIndex))
         }
 
+        val groupedReactions = reactions.groupBy { it.content() }
+            .map { (emoji, events) ->
+                val authors = events.map { it.author() }
+                ReactionGroup(
+                    emoji = emoji,
+                    authors = authors,
+                    containsMe = authors.any { it == currentUser }
+                )
+            }
+
         MessageModel(
             id = id,
             author = event.author(),
@@ -111,7 +140,8 @@ fun rememberMessageModel(event: UnsignedEvent, currentUser: PublicKey? = null): 
             images = images,
             timestamp = event.createdAt().formatAsTime(),
             isMine = isMine,
-            replyEventIds = replyEventIds
+            replyEventIds = replyEventIds,
+            reactions = groupedReactions
         )
     }
 }
@@ -188,6 +218,14 @@ fun ChatMessage(
                     )
                 }
             }
+
+            if (model.reactions.isNotEmpty()) {
+                ReactionsRow(
+                    reactions = model.reactions,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
             if (isMessageClicked) {
                 Text(
                     text = model.timestamp,
@@ -196,6 +234,60 @@ fun ChatMessage(
                     modifier = Modifier.align(
                         if (model.isMine) Alignment.End else Alignment.Start
                     )
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReactionsRow(
+    reactions: List<ReactionGroup>,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        reactions.forEach { group ->
+            ReactionChip(group)
+        }
+    }
+}
+
+@Composable
+private fun ReactionChip(group: ReactionGroup) {
+    val backgroundColor = if (group.containsMe) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    }
+
+    val contentColor = if (group.containsMe) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        color = backgroundColor,
+        contentColor = contentColor,
+        shape = CircleShape,
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(text = group.emoji, fontSize = 14.sp)
+            if (group.authors.size > 1) {
+                Text(
+                    text = group.authors.size.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

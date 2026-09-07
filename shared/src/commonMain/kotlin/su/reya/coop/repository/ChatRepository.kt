@@ -241,8 +241,29 @@ class ChatRepository(
         }
     }
 
+    fun sendReaction(roomId: Long, targetEventId: EventId, reaction: String) {
+        scope.launch(defaultDispatcher) {
+            try {
+                val room = getChatRoom(roomId) ?: throw IllegalArgumentException("Room not found")
+                nostr.messages.sendReaction(
+                    to = room.members,
+                    targetEventId = targetEventId,
+                    reaction = reaction,
+                    onRumorCreated = {
+                        scope.launch(defaultDispatcher) {
+                            updateRoomState(it, roomId)
+                        }
+                    },
+                )
+            } catch (e: Exception) {
+                showError("Error: ${e.message}")
+            }
+        }
+    }
+
     private suspend fun updateRoomState(event: UnsignedEvent, roomId: Long = event.roomId()) {
         val currentUser = nostr.signer.getPublicKeyAsync() ?: return
+        val isReaction = event.kind().asStd() == KindStandard.REACTION
 
         _state.update { currentState ->
             val rooms = currentState.rooms.toMutableMap()
@@ -256,10 +277,11 @@ class ChatRepository(
                 // New room discovery
                 val newRoom = Room.new(event, currentUser, roomId).copy(
                     kind = newKind,
-                    unreadCount = if (isFromMe) 0 else 1
+                    unreadCount = if (isFromMe || isReaction) 0 else 1,
+                    lastMessage = if (isReaction) null else event.content()
                 )
                 rooms[newRoom.id] = newRoom
-            } else if (event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
+            } else if (!isReaction && event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
                 // Only update preview if message is newer (handles sync/late arrivals)
                 rooms[roomId] = existingRoom.copy(
                     lastMessage = event.content(),
@@ -268,10 +290,10 @@ class ChatRepository(
                     unreadCount = if (isFromMe) existingRoom.unreadCount else existingRoom.unreadCount + 1
                 )
             } else if (isFromMe && existingRoom.kind != RoomKind.Ongoing) {
-                // Even if it's an older message, if it's from me, the room is ongoing
+                // Even if it's an older message or reaction, if it's from me, the room is ongoing
                 rooms[roomId] = existingRoom.copy(kind = RoomKind.Ongoing)
             } else {
-                // Don't update the room list state for older messages
+                // Don't update the room list state for older messages or reactions that don't change preview
                 return@update currentState
             }
             currentState.copy(rooms = rooms)
