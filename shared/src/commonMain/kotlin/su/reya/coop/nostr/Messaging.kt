@@ -179,12 +179,13 @@ class MessageManager(private val nostr: Nostr) {
             val kind = Kind.fromStd(KindStandard.APPLICATION_SPECIFIC_DATA)
             val kTag = SingleLetterTag.lowercase(Alphabet.K)
 
-            // Get all DM events
-            val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm"))
+            // Get all rumors (DMs and Reactions)
+            val filter = Filter().kind(kind).customTags(kTag, listOf("14", "dm", "reaction"))
             val events = client?.database()?.query(filter)?.toVec() ?: return null
 
             // Collect rooms
             val roomsMap: MutableMap<Long, Room> = mutableMapOf()
+            val lastDmTimestampMap: MutableMap<Long, ULong> = mutableMapOf()
 
             events
                 .map { UnsignedEvent.fromJson(it.content()) }
@@ -192,18 +193,41 @@ class MessageManager(private val nostr: Nostr) {
                 .forEach { rumor ->
                     val id = rumor.roomId()
                     val isFromMe = rumor.author() == userPubkey
+                    val isReaction = rumor.kind().asStd() == KindStandard.REACTION
                     val existing = roomsMap[id]
                     val createdAt = rumor.createdAt()
 
-                    // If the room is new or the current rumor is newer than the existing one
-                    if (existing == null || createdAt.asSecs() > existing.createdAt.asSecs()) {
-                        // A room is "Ongoing" if it was already marked as such or if the current rumor is from the user
-                        val isOngoing = (existing?.kind == RoomKind.Ongoing) || isFromMe
+                    if (existing == null) {
                         val room = Room.new(rumor = rumor, userPubkey = userPubkey, id = id)
-                        roomsMap[id] = if (isOngoing) room.copy(kind = RoomKind.Ongoing) else room
-                    } else if (isFromMe && existing.kind != RoomKind.Ongoing) {
-                        // If it's an older rumor but sent by the user, mark the room as Ongoing
-                        roomsMap[id] = existing.copy(kind = RoomKind.Ongoing)
+                        // If the first event we see is a reaction, don't use it as lastMessage
+                        roomsMap[id] = if (isReaction) {
+                            room.copy(lastMessage = null)
+                        } else {
+                            lastDmTimestampMap[id] = createdAt.asSecs()
+                            room
+                        }
+                        if (isFromMe) {
+                            roomsMap[id] = roomsMap[id]!!.copy(kind = RoomKind.Ongoing)
+                        }
+                    } else {
+                        // Update the overall room timestamp (for sorting) if this event is newer
+                        if (createdAt.asSecs() > existing.createdAt.asSecs()) {
+                            roomsMap[id] = roomsMap[id]!!.copy(createdAt = createdAt)
+                        }
+
+                        // Update the last message content if this is a DM and it's newer than the last DM we've seen
+                        if (!isReaction) {
+                            val lastDmTs = lastDmTimestampMap[id] ?: 0uL
+                            if (createdAt.asSecs() >= lastDmTs) {
+                                lastDmTimestampMap[id] = createdAt.asSecs()
+                                roomsMap[id] = roomsMap[id]!!.copy(lastMessage = rumor.content())
+                            }
+                        }
+
+                        // If any event is from the user, mark the room as Ongoing
+                        if (isFromMe && roomsMap[id]?.kind != RoomKind.Ongoing) {
+                            roomsMap[id] = roomsMap[id]!!.copy(kind = RoomKind.Ongoing)
+                        }
                     }
                 }
 

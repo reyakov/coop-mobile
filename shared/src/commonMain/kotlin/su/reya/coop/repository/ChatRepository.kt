@@ -281,13 +281,14 @@ class ChatRepository(
                     lastMessage = if (isReaction) null else event.content()
                 )
                 rooms[newRoom.id] = newRoom
-            } else if (!isReaction && event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
-                // Only update preview if message is newer (handles sync/late arrivals)
+            } else if (event.createdAt().asSecs() >= existingRoom.createdAt.asSecs()) {
+                // Update timestamp for any newer event (DM or Reaction)
+                // But only update preview if it's a DM
                 rooms[roomId] = existingRoom.copy(
-                    lastMessage = event.content(),
+                    lastMessage = if (isReaction) existingRoom.lastMessage else event.content(),
                     createdAt = event.createdAt(),
                     kind = newKind,
-                    unreadCount = if (isFromMe) existingRoom.unreadCount else existingRoom.unreadCount + 1
+                    unreadCount = if (isFromMe || isReaction) existingRoom.unreadCount else existingRoom.unreadCount + 1
                 )
             } else if (isFromMe && existingRoom.kind != RoomKind.Ongoing) {
                 // Even if it's an older message or reaction, if it's from me, the room is ongoing
