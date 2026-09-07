@@ -478,14 +478,11 @@ fun ChatScreen(
             val (model, bounds) = selectedMessage ?: return@AnimatedVisibility
 
             val density = LocalDensity.current
-            val windowInfo = LocalWindowInfo.current
-            val windowHeight = windowInfo.containerSize.height
             val scrollState = rememberScrollState()
 
             var menuHeight by remember { mutableFloatStateOf(0f) }
-            val spacing = with(density) { 12.dp.toPx() }
-            val showAbove =
-                (windowHeight - bounds.bottom) < (menuHeight + spacing) && bounds.top > (menuHeight + spacing)
+            var toolbarHeight by remember { mutableFloatStateOf(0f) }
+            val spacing = with(density) { 6.dp.toPx() }
 
             Box(
                 modifier = Modifier
@@ -494,11 +491,30 @@ fun ChatScreen(
                     .clickable { selectedMessage = null }
                     .verticalScroll(scrollState),
             ) {
-                val totalExtraHeight = if (menuHeight > 0) menuHeight + spacing else 300f
+                val totalExtraHeight = (if (menuHeight > 0) menuHeight + spacing else 300f) +
+                        (if (toolbarHeight > 0) toolbarHeight + spacing else 100f)
                 val contentBottom = with(density) { (bounds.bottom + totalExtraHeight).toDp() }
 
                 Spacer(modifier = Modifier.height(contentBottom + 200.dp))
 
+                // Reaction Toolbar (Above)
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(0, (bounds.top - toolbarHeight - spacing).toInt().coerceAtLeast(0)) }
+                        .onGloballyPositioned { toolbarHeight = it.size.height.toFloat() }
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = if (model.isMine) Alignment.CenterEnd else Alignment.CenterStart
+                ) {
+                    ReactionToolbar(
+                        onReaction = { reaction ->
+                            viewModel.sendReaction(model.id, reaction)
+                            selectedMessage = null
+                        }
+                    )
+                }
+
+                // Message Preview
                 ChatMessage(
                     model = model,
                     modifier = Modifier
@@ -506,15 +522,10 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp)
                 )
 
-                val menuOffset = if (showAbove) {
-                    bounds.top - menuHeight - spacing
-                } else {
-                    bounds.bottom + spacing
-                }
-
+                // Action Menu (Below)
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(0, menuOffset.toInt().coerceAtLeast(0)) }
+                        .offset { IntOffset(0, (bounds.bottom + spacing).toInt()) }
                         .onGloballyPositioned { menuHeight = it.size.height.toFloat() }
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -537,10 +548,6 @@ fun ChatScreen(
 
                                 else -> {}
                             }
-                            selectedMessage = null
-                        },
-                        onReaction = { reaction ->
-                            viewModel.sendReaction(model.id, reaction)
                             selectedMessage = null
                         }
                     )
@@ -642,41 +649,53 @@ private fun ReplyPreview(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ContextMenu(
-    onAction: (String) -> Unit,
+private fun ReactionToolbar(
     onReaction: (String) -> Unit
 ) {
-    val menuItems = listOf(
-        "Copy" to Res.drawable.ic_copy,
-        "Reply" to Res.drawable.ic_reply
-    )
+    val reactionEmojis = listOf("👍", "❤️", "😂", "😮", "😢", "😡", "🎉")
 
-    val reactionEmojis = listOf("👍", "❤️", "👀", "🔥", "🚀", "🎉")
-
-    DropdownMenuGroup(
-        shapes = MenuDefaults.groupShape(1, 1),
-        containerColor = MenuDefaults.groupVibrantContainerColor,
-        modifier = Modifier.width(240.dp)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(24.dp),
+        shadowElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             reactionEmojis.forEach { emoji ->
                 Text(
                     text = emoji,
                     modifier = Modifier
                         .clickable { onReaction(emoji) }
-                        .padding(horizontal = 4.dp),
+                        .padding(4.dp),
                     fontSize = 24.sp
                 )
             }
         }
+    }
+}
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ContextMenu(
+    onAction: (String) -> Unit
+) {
+    val menuItems = listOf(
+        "Copy" to Res.drawable.ic_copy,
+        "Reply" to Res.drawable.ic_reply
+    )
+
+    DropdownMenuGroup(
+        shapes = MenuDefaults.groupShape(1, 1),
+        containerColor = MenuDefaults.groupVibrantContainerColor,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp,
+        modifier = Modifier.width(220.dp)
+    ) {
         val itemCount = menuItems.size
 
         menuItems.forEachIndexed { index, (label, icon) ->
