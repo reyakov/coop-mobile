@@ -5,10 +5,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -27,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
@@ -188,42 +186,53 @@ fun ChatMessage(
             horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (model.annotatedContent.isNotBlank()) {
-                Surface(
-                    modifier = Modifier.widthIn(max = 280.dp),
-                    color = containerColor,
-                    contentColor = contentColor,
-                    shape = bubbleShape,
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Column(
+                    modifier = Modifier.padding(
+                        bottom = if (model.reactions.isNotEmpty()) 4.dp else 0.dp,
+                        end = if (model.reactions.isNotEmpty() && !model.isMine) 8.dp else 0.dp
+                    ),
+                    horizontalAlignment = if (model.isMine) Alignment.End else Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = model.annotatedContent,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                    if (model.annotatedContent.isNotBlank()) {
+                        Surface(
+                            modifier = Modifier.widthIn(max = 280.dp),
+                            color = containerColor,
+                            contentColor = contentColor,
+                            shape = bubbleShape,
+                        ) {
+                            Text(
+                                text = model.annotatedContent,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                    model.images.forEach { imageUrl ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.widthIn(max = 280.dp)
+                        ) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = "Image from chat",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp)),
+                                contentScale = ContentScale.FillWidth
+                            )
+                        }
+                    }
                 }
-            }
-            model.images.forEach { imageUrl ->
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.widthIn(max = 280.dp)
-                ) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = "Image from chat",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        contentScale = ContentScale.FillWidth
-                    )
-                }
-            }
 
-            if (model.reactions.isNotEmpty()) {
-                ReactionsRow(
-                    reactions = model.reactions,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                if (model.reactions.isNotEmpty()) {
+                    MessageReactions(
+                        reactions = model.reactions,
+                        modifier = Modifier.offset(y = 12.dp)
+                    )
+                }
             }
 
             if (isMessageClicked) {
@@ -231,64 +240,53 @@ fun ChatMessage(
                     text = model.timestamp,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.align(
-                        if (model.isMine) Alignment.End else Alignment.Start
-                    )
+                    modifier = Modifier.padding(top = if (model.reactions.isNotEmpty()) 8.dp else 0.dp)
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReactionsRow(
+private fun MessageReactions(
     reactions: List<ReactionGroup>,
     modifier: Modifier = Modifier
 ) {
-    FlowRow(
+    val totalCount = reactions.sumOf { it.authors.size }
+    val displayEmojis = reactions.take(3).map { it.emoji }
+
+    Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        reactions.forEach { group ->
-            ReactionChip(group)
+        displayEmojis.forEach { emoji ->
+            Surface(
+                modifier = Modifier.size(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shape = CircleShape,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = emoji,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
         }
-    }
-}
-
-@Composable
-private fun ReactionChip(group: ReactionGroup) {
-    val backgroundColor = if (group.containsMe) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    }
-
-    val contentColor = if (group.containsMe) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        color = backgroundColor,
-        contentColor = contentColor,
-        shape = CircleShape,
-        modifier = Modifier.padding(vertical = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(text = group.emoji, fontSize = 14.sp)
-            if (group.authors.size > 1) {
-                Text(
-                    text = group.authors.size.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
+        if (totalCount > 2) {
+            Surface(
+                modifier = Modifier.size(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shape = CircleShape,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = totalCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                    )
+                }
             }
         }
     }
